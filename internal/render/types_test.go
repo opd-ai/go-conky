@@ -100,3 +100,51 @@ func TestTextLineZeroValues(t *testing.T) {
 		t.Errorf("Y = %v, want 0", line.Y)
 	}
 }
+
+func TestConfigValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  Config
+		wantErr bool
+	}{
+		{
+			name:    "valid config",
+			config:  DefaultConfig(),
+			wantErr: false,
+		},
+		{
+			name:    "zero width",
+			config:  Config{Width: 0, Height: 300},
+			wantErr: true,
+		},
+		{
+			name:    "negative width",
+			config:  Config{Width: -100, Height: 300},
+			wantErr: true,
+		},
+		{
+			name:    "zero height",
+			config:  Config{Width: 400, Height: 0},
+			wantErr: true,
+		},
+		{
+			name:    "negative height",
+			config:  Config{Width: 400, Height: -50},
+			wantErr: true,
+		},
+		{
+			name:    "both zero",
+			config:  Config{Width: 0, Height: 0},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

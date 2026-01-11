@@ -2,6 +2,7 @@
 package render
 
 import (
+	"fmt"
 	"image/color"
 	"time"
 )
@@ -31,11 +32,30 @@ func DefaultConfig() Config {
 	}
 }
 
+// Validate checks if the Config has valid values.
+// Returns an error if Width or Height are not positive.
+func (c Config) Validate() error {
+	if c.Width <= 0 {
+		return fmt.Errorf("width must be positive, got %d", c.Width)
+	}
+	if c.Height <= 0 {
+		return fmt.Errorf("height must be positive, got %d", c.Height)
+	}
+	return nil
+}
+
 // TextLine represents a line of text to be rendered.
 type TextLine struct {
-	Text  string
-	X     float64
-	Y     float64
+	// Text is the string content that will be rendered.
+	Text string
+	// X is the horizontal position of the text's origin, in pixels from the
+	// left edge of the window (or drawing surface).
+	X float64
+	// Y is the vertical position of the text's baseline, in pixels from the
+	// top edge of the window (or drawing surface).
+	Y float64
+	// Color is the text color in RGBA format. The alpha channel controls
+	// the text's opacity if the renderer supports transparency.
 	Color color.RGBA
 }
 

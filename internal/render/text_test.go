@@ -30,6 +30,28 @@ func TestTextRendererSetFontSize(t *testing.T) {
 	}
 }
 
+func TestTextRendererSetFontSizeNegative(t *testing.T) {
+	tr := NewTextRenderer()
+
+	// Set to negative value should reset to default
+	tr.SetFontSize(-5.0)
+
+	if tr.FontSize() != defaultFontSize {
+		t.Errorf("FontSize() after negative = %v, want %v", tr.FontSize(), defaultFontSize)
+	}
+}
+
+func TestTextRendererSetFontSizeZero(t *testing.T) {
+	tr := NewTextRenderer()
+
+	// Set to zero should reset to default
+	tr.SetFontSize(0)
+
+	if tr.FontSize() != defaultFontSize {
+		t.Errorf("FontSize() after zero = %v, want %v", tr.FontSize(), defaultFontSize)
+	}
+}
+
 func TestTextRendererFontSize(t *testing.T) {
 	tr := NewTextRenderer()
 

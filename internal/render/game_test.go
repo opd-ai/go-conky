@@ -3,7 +3,9 @@
 package render
 
 import (
+	"fmt"
 	"image/color"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 
 // mockTextRenderer implements TextRendererInterface for testing
 type mockTextRenderer struct {
+	mu               sync.RWMutex
 	drawTextCalls    int
 	measureTextCalls int
 	fontSize         float64
@@ -22,23 +25,33 @@ func newMockTextRenderer() *mockTextRenderer {
 }
 
 func (m *mockTextRenderer) DrawText(screen *ebiten.Image, textStr string, x, y float64, clr color.RGBA) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.drawTextCalls++
 }
 
 func (m *mockTextRenderer) MeasureText(textStr string) (width, height float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.measureTextCalls++
 	return float64(len(textStr)) * 10, 16
 }
 
 func (m *mockTextRenderer) LineHeight() float64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.fontSize * 1.2
 }
 
 func (m *mockTextRenderer) SetFontSize(size float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.fontSize = size
 }
 
 func (m *mockTextRenderer) FontSize() float64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.fontSize
 }
 
@@ -249,4 +262,53 @@ func TestGameLinesIsolation(t *testing.T) {
 		t.Error("SetLines should copy the slice, not share it")
 	}
 	game.mu.RUnlock()
+}
+
+func TestGameSetErrorHandler(t *testing.T) {
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(DefaultConfig(), renderer)
+
+	var capturedErr error
+	customHandler := func(err error) {
+		capturedErr = err
+	}
+
+	game.SetErrorHandler(customHandler)
+
+	// Test that the custom handler is called
+	testErr := fmt.Errorf("test error")
+	provider := &mockDataProvider{updateError: testErr}
+	game.SetDataProvider(provider)
+
+	game.mu.Lock()
+	game.lastUpdate = time.Now().Add(-2 * time.Second)
+	game.mu.Unlock()
+
+	game.Update()
+
+	if capturedErr != testErr {
+		t.Errorf("error handler did not capture error: got %v, want %v", capturedErr, testErr)
+	}
+}
+
+func TestGameNilErrorHandler(t *testing.T) {
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(DefaultConfig(), renderer)
+
+	// Set nil error handler - should not panic
+	game.SetErrorHandler(nil)
+
+	testErr := fmt.Errorf("test error")
+	provider := &mockDataProvider{updateError: testErr}
+	game.SetDataProvider(provider)
+
+	game.mu.Lock()
+	game.lastUpdate = time.Now().Add(-2 * time.Second)
+	game.mu.Unlock()
+
+	// Should not panic with nil handler
+	err := game.Update()
+	if err != nil {
+		t.Errorf("Update() error = %v", err)
+	}
 }

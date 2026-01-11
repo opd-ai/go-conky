@@ -35,9 +35,15 @@ func NewTextRenderer() *TextRenderer {
 }
 
 // SetFontSize sets the font size for text rendering.
+// If a non-positive size is provided, the font size is reset to defaultFontSize.
 func (tr *TextRenderer) SetFontSize(size float64) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
+
+	if size <= 0 {
+		tr.fontSize = defaultFontSize
+		return
+	}
 	tr.fontSize = size
 }
 

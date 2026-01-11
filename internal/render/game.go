@@ -6,11 +6,20 @@ package render
 import (
 	"fmt"
 	"image/color"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+// ErrorHandler is a function type for handling errors during game updates.
+type ErrorHandler func(err error)
+
+// DefaultErrorHandler writes errors to stderr.
+func DefaultErrorHandler(err error) {
+	fmt.Fprintf(os.Stderr, "update error: %v\n", err)
+}
 
 // TextRendererInterface defines the interface for text rendering.
 // This allows for mocking in tests.
@@ -27,6 +36,7 @@ type Game struct {
 	config       Config
 	textRenderer TextRendererInterface
 	dataProvider DataProvider
+	errorHandler ErrorHandler
 	lastUpdate   time.Time
 	lines        []TextLine
 	mu           sync.RWMutex
@@ -38,6 +48,7 @@ func NewGame(config Config) *Game {
 	return &Game{
 		config:       config,
 		textRenderer: NewTextRenderer(),
+		errorHandler: DefaultErrorHandler,
 		lastUpdate:   time.Now(),
 		lines:        make([]TextLine, 0),
 	}
@@ -49,9 +60,18 @@ func NewGameWithRenderer(config Config, renderer TextRendererInterface) *Game {
 	return &Game{
 		config:       config,
 		textRenderer: renderer,
+		errorHandler: DefaultErrorHandler,
 		lastUpdate:   time.Now(),
 		lines:        make([]TextLine, 0),
 	}
+}
+
+// SetErrorHandler sets a custom error handler for update errors.
+// If nil is passed, errors will be silently ignored.
+func (g *Game) SetErrorHandler(handler ErrorHandler) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.errorHandler = handler
 }
 
 // SetDataProvider sets the data provider for system monitoring updates.
@@ -92,8 +112,10 @@ func (g *Game) Update() error {
 	// Update system data at configured intervals
 	if g.dataProvider != nil && time.Since(g.lastUpdate) >= g.config.UpdateInterval {
 		if err := g.dataProvider.Update(); err != nil {
-			// Log error but continue running
-			fmt.Printf("update error: %v\n", err)
+			// Use error handler if configured
+			if g.errorHandler != nil {
+				g.errorHandler(err)
+			}
 		}
 		g.lastUpdate = time.Now()
 	}
