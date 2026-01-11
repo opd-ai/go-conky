@@ -81,7 +81,7 @@ Window Display (X11/Wayland)
 - [x] Project scaffolding and dependency management (8 hours)
 - [x] Implement core system monitoring for Linux `/proc` (16 hours)
 - [x] Create basic Ebiten window with text rendering (12 hours)
-- [ ] Establish CI/CD pipeline and testing framework (8 hours)
+- [x] Establish CI/CD pipeline and testing framework (8 hours)
 - [ ] Design configuration data structures (4 hours)
 
 ### Phase 2: Core System Monitoring (Weeks 4-6)

@@ -1,0 +1,52 @@
+# golangci-lint configuration for go-conky
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  # Timeout for the entire analysis run.
+  timeout: 5m
+  # Analyze test files as well.
+  tests: true
+
+linters:
+  # Enable a curated set of linters for code quality.
+  enable:
+    - errcheck      # Check for unchecked errors
+    - govet         # Report suspicious constructs
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Advanced static analysis
+    - unused        # Find unused code
+    - gosimple      # Simplify code
+    - gocritic      # Opinionated linter
+    - gofmt         # Check formatting
+    - goimports     # Check imports formatting
+    - misspell      # Find misspelled words
+    - unconvert     # Remove unnecessary type conversions
+    - unparam       # Find unused function parameters
+    - prealloc      # Find slice declarations that could be preallocated
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment  # Too noisy for minimal changes
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - hugeParam  # Sometimes large parameters are unavoidable
+
+issues:
+  # Fix found issues automatically when possible.
+  fix: false
+  # Maximum issues count per linter (0 = no limit).
+  max-issues-per-linter: 50
+  # Maximum count of issues with the same text (0 = no limit).
+  max-same-issues: 5
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
