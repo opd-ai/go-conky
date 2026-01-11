@@ -29,58 +29,76 @@ var (
 	TransparentColor = color.RGBA{R: 0, G: 0, B: 0, A: 0}
 )
 
+// defaultWindowConfig returns a WindowConfig with sensible default values.
+// It is used by DefaultConfig and DefaultWindowConfig to avoid duplicating logic.
+func defaultWindowConfig() WindowConfig {
+	return WindowConfig{
+		OwnWindow:   true,
+		Type:        WindowTypeNormal,
+		Transparent: false,
+		Hints:       nil,
+		Width:       DefaultWidth,
+		Height:      DefaultHeight,
+		X:           0,
+		Y:           0,
+		Alignment:   AlignmentTopLeft,
+	}
+}
+
+// defaultDisplayConfig returns a DisplayConfig with sensible default values.
+// It is used by DefaultConfig and DefaultDisplayConfig to avoid duplicating logic.
+func defaultDisplayConfig() DisplayConfig {
+	return DisplayConfig{
+		Background:     false,
+		DoubleBuffer:   true,
+		UpdateInterval: DefaultUpdateInterval,
+		Font:           DefaultFont,
+		FontSize:       DefaultFontSize,
+	}
+}
+
+// defaultColorConfig returns a ColorConfig with sensible default values.
+// It is used by DefaultConfig and DefaultColorConfig to avoid duplicating logic.
+func defaultColorConfig() ColorConfig {
+	return ColorConfig{
+		Default: DefaultTextColor,
+		Color0:  DefaultTextColor,
+		Color1:  DefaultGrey,
+		Color2:  TransparentColor,
+		Color3:  TransparentColor,
+		Color4:  TransparentColor,
+		Color5:  TransparentColor,
+		Color6:  TransparentColor,
+		Color7:  TransparentColor,
+		Color8:  TransparentColor,
+		Color9:  TransparentColor,
+	}
+}
+
 // DefaultConfig returns a Config with sensible default values.
 // These defaults mirror typical Conky configuration defaults.
 func DefaultConfig() Config {
 	return Config{
-		Window: WindowConfig{
-			OwnWindow:   true,
-			Type:        WindowTypeNormal,
-			Transparent: false,
-			Hints:       nil,
-			Width:       DefaultWidth,
-			Height:      DefaultHeight,
-			X:           0,
-			Y:           0,
-			Alignment:   AlignmentTopLeft,
-		},
-		Display: DisplayConfig{
-			Background:     false,
-			DoubleBuffer:   true,
-			UpdateInterval: DefaultUpdateInterval,
-			Font:           DefaultFont,
-			FontSize:       DefaultFontSize,
-		},
+		Window:  defaultWindowConfig(),
+		Display: defaultDisplayConfig(),
 		Text: TextConfig{
 			Template: nil,
 		},
-		Colors: ColorConfig{
-			Default: DefaultTextColor,
-			Color0:  DefaultTextColor,
-			Color1:  DefaultGrey,
-			Color2:  TransparentColor,
-			Color3:  TransparentColor,
-			Color4:  TransparentColor,
-			Color5:  TransparentColor,
-			Color6:  TransparentColor,
-			Color7:  TransparentColor,
-			Color8:  TransparentColor,
-			Color9:  TransparentColor,
-		},
+		Colors: defaultColorConfig(),
 	}
 }
 
 // DefaultWindowConfig returns a WindowConfig with default values.
 func DefaultWindowConfig() WindowConfig {
-	return DefaultConfig().Window
+	return defaultWindowConfig()
 }
 
 // DefaultDisplayConfig returns a DisplayConfig with default values.
 func DefaultDisplayConfig() DisplayConfig {
-	return DefaultConfig().Display
+	return defaultDisplayConfig()
 }
 
 // DefaultColorConfig returns a ColorConfig with default values.
 func DefaultColorConfig() ColorConfig {
-	return DefaultConfig().Colors
+	return defaultColorConfig()
 }
