@@ -75,7 +75,9 @@ func (tr *TextRenderer) MeasureText(textStr string) (width, height float64) {
 		Size:   tr.fontSize,
 	}
 
-	w, h := text.Measure(textStr, face, tr.fontSize)
+	// lineSpacingInPixels should be the line height for proper text measurement
+	lineSpacing := tr.fontSize * 1.2
+	w, h := text.Measure(textStr, face, lineSpacing)
 	return w, h
 }
 
