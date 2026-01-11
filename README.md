@@ -30,16 +30,18 @@ A 100% compatible reimplementation of [Conky](https://github.com/brndnmtthws/con
 
 ## Quick Start
 
+> **Note:** This project is in early development and is not yet functional. The commands below represent the planned workflow.
+
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/conky-go.git
 cd conky-go
 
-# Build the project
-make build
+# Once implemented, build with:
+# make build
 
-# Run with your existing Conky config
-./build/conky-go -c ~/.conkyrc
+# Once built, run with your existing Conky config:
+# ./build/conky-go -c ~/.conkyrc
 ```
 
 ## Configuration Compatibility
@@ -81,33 +83,33 @@ ${color grey}RAM Usage:$color $mem/$memmax
 
 ### Building
 
+> **Note:** Build infrastructure is not yet implemented. The commands below represent the planned build workflow.
+
 ```bash
-# Install dependencies
-make deps
-
-# Run tests
-make test
-
-# Build binary
-make build
-
-# Install system-wide
-sudo make install
+# Planned commands (not yet available):
+# make deps     # Install dependencies
+# make test     # Run tests
+# make build    # Build binary
+# make install  # Install system-wide
 ```
+
+See [PLAN.md](PLAN.md) section 5.2 for the planned Makefile implementation.
 
 ### Project Structure
 
+> **Note:** The following directory structure is planned but not yet implemented. See [PLAN.md](PLAN.md) for the complete implementation roadmap.
+
 ```
 conky-go/
-├── cmd/conky-go/          # Main executable
+├── cmd/conky-go/          # Main executable (planned)
 ├── internal/
-│   ├── config/            # Configuration parsing
-│   ├── monitor/           # System monitoring
-│   ├── render/            # Ebiten rendering engine  
-│   ├── lua/               # Golua integration
-│   └── window/            # Window management
-├── test/configs/          # Test configurations
-└── docs/                  # Documentation
+│   ├── config/            # Configuration parsing (planned)
+│   ├── monitor/           # System monitoring (planned)
+│   ├── render/            # Ebiten rendering engine (planned)
+│   ├── lua/               # Golua integration (planned)
+│   └── window/            # Window management (planned)
+├── test/configs/          # Test configurations (planned)
+└── docs/                  # Documentation (planned)
 ```
 
 ## Contributing
@@ -128,7 +130,7 @@ We welcome contributions! This project follows the "lazy programmer" philosophy 
 - ❌ Web frameworks (`echo`, `chi`, `gin`) - Use `net/http` directly
 - ❌ CGO bindings where pure Go alternatives exist
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+See [PLAN.md](PLAN.md) for detailed implementation guidelines and project architecture.
 
 ## License Compliance
 
@@ -149,7 +151,7 @@ All dependencies use permissive licenses compatible with commercial use:
 
 ## License
 
-Apache License 2.0 - see [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
