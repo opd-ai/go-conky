@@ -78,7 +78,7 @@ Window Display (X11/Wayland)
 - Simple Ebiten window displaying system stats
 
 **Tasks:**
-- [ ] Project scaffolding and dependency management (8 hours)
+- [x] Project scaffolding and dependency management (8 hours)
 - [ ] Implement core system monitoring for Linux `/proc` (16 hours)
 - [ ] Create basic Ebiten window with text rendering (12 hours)
 - [ ] Establish CI/CD pipeline and testing framework (8 hours)
