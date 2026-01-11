@@ -66,7 +66,7 @@ When declaring network variables, always use interface types:
 - Never use `net.UDPAddr`, `net.IPAddr`, or `net.TCPAddr`. Use `net.Addr` only instead.
 - Never use `net.UDPConn`, use `net.PacketConn` instead.
 - Never use `net.TCPConn`, use `net.Conn` instead.
-- Never use `net.UDPListener` or `net.TCPListener`, use `net.Listener` instead.
+- Never use `net.TCPListener`, use `net.Listener` instead.
 - Never use a type switch or type assertion to convert from an interface type to a concrete type. Use the interface methods instead.
 
 This approach enhances testability and flexibility when working with different network implementations or mocks.
