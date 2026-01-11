@@ -32,9 +32,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Verify config file exists
-	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Configuration file not found: %s\n", *configPath)
+	// Verify config file exists and is accessible
+	if _, err := os.Stat(*configPath); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "Configuration file not found: %s\n", *configPath)
+		} else {
+			fmt.Fprintf(os.Stderr, "Error accessing configuration file %s: %v\n", *configPath, err)
+		}
 		os.Exit(1)
 	}
 

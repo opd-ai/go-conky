@@ -2,7 +2,6 @@
 
 BINARY_NAME=conky-go
 BUILD_DIR=build
-GO_FILES=$(shell find . -name "*.go" -not -path "./vendor/*")
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS=-ldflags "-X main.Version=$(VERSION)"
 
