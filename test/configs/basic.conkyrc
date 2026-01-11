@@ -1,0 +1,18 @@
+# Sample legacy .conkyrc configuration for testing
+# This is a minimal test configuration
+
+background no
+font DejaVu Sans Mono:size=10
+update_interval 1.0
+double_buffer yes
+own_window yes
+own_window_type normal
+own_window_transparent yes
+own_window_hints undecorated,below,sticky,skip_taskbar,skip_pager
+
+TEXT
+${color grey}System Monitor$color
+${hr 2}
+${color grey}CPU Usage:$color $cpu%
+${color grey}RAM Usage:$color $mem/$memmax ($memperc%)
+${color grey}Uptime:$color $uptime

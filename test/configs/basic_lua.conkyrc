@@ -1,0 +1,29 @@
+-- Sample Lua configuration for testing
+-- This is a minimal test configuration in the modern Conky Lua format
+
+conky.config = {
+    background = false,
+    font = 'DejaVu Sans Mono:size=10',
+    update_interval = 1.0,
+    double_buffer = true,
+    own_window = true,
+    own_window_type = 'normal',
+    own_window_transparent = true,
+    own_window_hints = 'undecorated,below,sticky,skip_taskbar,skip_pager',
+    
+    -- Window size
+    minimum_width = 200,
+    minimum_height = 100,
+    
+    -- Colors
+    default_color = 'white',
+    color1 = 'grey',
+}
+
+conky.text = [[
+${color1}System Monitor$color
+${hr 2}
+${color1}CPU Usage:$color $cpu%
+${color1}RAM Usage:$color $mem/$memmax ($memperc%)
+${color1}Uptime:$color $uptime
+]]
