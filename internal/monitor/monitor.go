@@ -51,6 +51,10 @@ func (sm *SystemMonitor) Start() error {
 
 	// Perform initial update immediately
 	if err := sm.Update(); err != nil {
+		// Reset running state on failure
+		sm.mu.Lock()
+		sm.running = false
+		sm.mu.Unlock()
 		return fmt.Errorf("initial update failed: %w", err)
 	}
 
@@ -132,9 +136,15 @@ func (sm *SystemMonitor) Update() error {
 	return nil
 }
 
-// Data returns the current system data.
-func (sm *SystemMonitor) Data() *SystemData {
-	return sm.data
+// Data returns a snapshot of the current system data.
+func (sm *SystemMonitor) Data() SystemData {
+	sm.data.mu.RLock()
+	defer sm.data.mu.RUnlock()
+	return SystemData{
+		CPU:    sm.data.CPU,
+		Memory: sm.data.Memory,
+		Uptime: sm.data.Uptime,
+	}
 }
 
 // CPU returns the current CPU statistics.

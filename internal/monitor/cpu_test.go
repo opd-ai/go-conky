@@ -135,6 +135,20 @@ func TestCPUReaderCalculateUsage(t *testing.T) {
 			curr:     cpuTimes{user: 100, nice: 0, system: 0, idle: 100, iowait: 0, irq: 0, softirq: 0, steal: 0},
 			expected: 0.0,
 		},
+		{
+			name: "counter wrap-around (curr total < prev total)",
+			prev: cpuTimes{user: 1000, nice: 0, system: 0, idle: 1000, iowait: 0, irq: 0, softirq: 0, steal: 0},
+			curr: cpuTimes{user: 100, nice: 0, system: 0, idle: 100, iowait: 0, irq: 0, softirq: 0, steal: 0},
+			// Should return 0.0 for counter wrap-around
+			expected: 0.0,
+		},
+		{
+			name: "idle counter wrap-around",
+			prev: cpuTimes{user: 100, nice: 0, system: 0, idle: 1000, iowait: 0, irq: 0, softirq: 0, steal: 0},
+			curr: cpuTimes{user: 200, nice: 0, system: 0, idle: 100, iowait: 0, irq: 0, softirq: 0, steal: 0},
+			// Should return 0.0 for idle counter wrap-around
+			expected: 0.0,
+		},
 	}
 
 	for _, tt := range tests {

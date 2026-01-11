@@ -130,6 +130,37 @@ SwapFree:              0 kB
 	}
 }
 
+func TestMemoryReaderSwapUnderflowProtection(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create mock /proc/meminfo with SwapFree > SwapTotal (inconsistent data)
+	meminfoContent := `MemTotal:        8192000 kB
+MemFree:         2048000 kB
+MemAvailable:    4096000 kB
+Buffers:          512000 kB
+Cached:          1024000 kB
+SwapTotal:       1000000 kB
+SwapFree:        2000000 kB
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0644); err != nil {
+		t.Fatalf("failed to write mock meminfo: %v", err)
+	}
+
+	reader := &memoryReader{
+		procMemInfoPath: filepath.Join(tmpDir, "meminfo"),
+	}
+
+	stats, err := reader.ReadStats()
+	if err != nil {
+		t.Fatalf("ReadStats() error = %v", err)
+	}
+
+	// SwapUsed should be 0 due to underflow protection
+	if stats.SwapUsed != 0 {
+		t.Errorf("SwapUsed = %d, want 0 (underflow protection)", stats.SwapUsed)
+	}
+}
+
 func TestMemoryReaderMissingFile(t *testing.T) {
 	reader := &memoryReader{
 		procMemInfoPath: "/nonexistent/meminfo",

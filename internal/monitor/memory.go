@@ -8,6 +8,9 @@ import (
 	"strings"
 )
 
+// bytesPerKB is the number of bytes in a kilobyte.
+const bytesPerKB = 1024
+
 // memoryReader reads memory statistics from /proc filesystem.
 type memoryReader struct {
 	procMemInfoPath string
@@ -48,8 +51,13 @@ func (r *memoryReader) ReadStats() (MemoryStats, error) {
 			continue
 		}
 
-		// Convert kB to bytes
-		values[key] = value * 1024
+		// Convert kB to bytes with overflow check
+		maxBeforeMultiply := ^uint64(0) / bytesPerKB
+		if value > maxBeforeMultiply {
+			// Skip values that would overflow when converted to bytes
+			continue
+		}
+		values[key] = value * bytesPerKB
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -66,18 +74,8 @@ func (r *memoryReader) ReadStats() (MemoryStats, error) {
 		SwapFree:  values["SwapFree"],
 	}
 
-	// Calculate used memory (total - free - buffers - cached)
-	// Use safe subtraction to prevent underflow with unsigned integers
-	if stats.Total >= stats.Free+stats.Buffers+stats.Cached {
-		stats.Used = stats.Total - stats.Free - stats.Buffers - stats.Cached
-	} else if stats.Total >= stats.Free {
-		stats.Used = stats.Total - stats.Free
-	} else {
-		stats.Used = 0
-	}
-
-	// Calculate swap used
-	stats.SwapUsed = stats.SwapTotal - stats.SwapFree
+	stats.Used = calculateUsedMemory(stats.Total, stats.Free, stats.Buffers, stats.Cached)
+	stats.SwapUsed = safeSubtract(stats.SwapTotal, stats.SwapFree)
 
 	// Calculate percentages
 	if stats.Total > 0 {
@@ -88,4 +86,31 @@ func (r *memoryReader) ReadStats() (MemoryStats, error) {
 	}
 
 	return stats, nil
+}
+
+// calculateUsedMemory calculates used memory using safe stepwise subtraction
+// to prevent underflow and avoid overflow in additions.
+func calculateUsedMemory(total, free, buffers, cached uint64) uint64 {
+	if total < free {
+		return 0
+	}
+	remainingAfterFree := total - free
+
+	if remainingAfterFree < buffers {
+		return total - free
+	}
+	remainingAfterBuffers := remainingAfterFree - buffers
+
+	if remainingAfterBuffers < cached {
+		return total - free
+	}
+	return remainingAfterBuffers - cached
+}
+
+// safeSubtract performs subtraction with underflow protection.
+func safeSubtract(a, b uint64) uint64 {
+	if a >= b {
+		return a - b
+	}
+	return 0
 }

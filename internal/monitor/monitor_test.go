@@ -154,8 +154,9 @@ func TestSystemMonitorData(t *testing.T) {
 	_ = sm.Update()
 
 	data := sm.Data()
-	if data == nil {
-		t.Fatal("Data() returned nil")
+	// Verify we got a valid snapshot with non-zero CPU count
+	if data.CPU.CPUCount == 0 {
+		t.Error("Data() should return valid snapshot with CPU data")
 	}
 }
 

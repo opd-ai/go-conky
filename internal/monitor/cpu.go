@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // cpuTimes stores raw CPU time values from /proc/stat.
@@ -32,6 +33,8 @@ func (c cpuTimes) idleTime() uint64 {
 
 // cpuReader reads CPU statistics from /proc filesystem.
 type cpuReader struct {
+	// mu protects concurrent access to prevTimes and prevCoreTimes
+	mu            sync.Mutex
 	prevTimes     cpuTimes
 	prevCoreTimes []cpuTimes
 	procStatPath  string
@@ -48,6 +51,9 @@ func newCPUReader() *cpuReader {
 
 // ReadStats reads current CPU statistics.
 func (r *cpuReader) ReadStats() (CPUStats, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	currentTimes, coreTimes, err := r.readProcStat()
 	if err != nil {
 		return CPUStats{}, fmt.Errorf("reading /proc/stat: %w", err)
@@ -143,12 +149,30 @@ func parseCPULine(fields []string) (cpuTimes, error) {
 }
 
 // calculateUsage calculates CPU usage percentage from time deltas.
+// Handles counter wrap-around by returning 0 if current values are less than previous.
 func (r *cpuReader) calculateUsage(prev, curr cpuTimes) float64 {
-	totalDelta := curr.total() - prev.total()
+	currTotal := curr.total()
+	prevTotal := prev.total()
+
+	// Handle counter wrap-around or system reboot
+	if currTotal < prevTotal {
+		return 0.0
+	}
+
+	totalDelta := currTotal - prevTotal
 	if totalDelta == 0 {
 		return 0.0
 	}
-	idleDelta := curr.idleTime() - prev.idleTime()
+
+	currIdle := curr.idleTime()
+	prevIdle := prev.idleTime()
+
+	// Handle idle counter wrap-around
+	if currIdle < prevIdle {
+		return 0.0
+	}
+
+	idleDelta := currIdle - prevIdle
 	usage := float64(totalDelta-idleDelta) / float64(totalDelta) * 100.0
 	if usage < 0 {
 		return 0.0
