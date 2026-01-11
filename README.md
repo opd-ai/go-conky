@@ -22,7 +22,7 @@ A 100% compatible reimplementation of [Conky](https://github.com/brndnmtthws/con
 🚧 **Early Development Phase** - Not yet functional
 
 - [x] Project architecture and implementation plan
-- [ ] Basic system monitoring backend  
+- [x] Basic system monitoring backend (CPU, Memory, Uptime)
 - [ ] Ebiten rendering foundation
 - [ ] Golua integration and Conky API
 - [ ] Configuration parser (legacy + Lua)
