@@ -105,6 +105,46 @@ func TestFrameMetricsReset(t *testing.T) {
 	if got := fm.MaxFrameTime(); got != 0 {
 		t.Errorf("MaxFrameTime() after reset = %v, want 0", got)
 	}
+	if got := fm.TotalFrames(); got != 0 {
+		t.Errorf("TotalFrames() after reset = %v, want 0", got)
+	}
+}
+
+func TestFrameMetricsAverageFrameTime(t *testing.T) {
+	// Use a very short update period so FPS recalculation happens during the test
+	fm := NewFrameMetrics(1 * time.Millisecond)
+
+	// Record 10 frames of 10ms each
+	for i := 0; i < 10; i++ {
+		fm.RecordFrame(10 * time.Millisecond)
+	}
+
+	// Average should be 10ms regardless of FPS recalculation
+	avg := fm.AverageFrameTime()
+	if avg != 10*time.Millisecond {
+		t.Errorf("AverageFrameTime() = %v, want 10ms", avg)
+	}
+
+	// Total frames should be 10
+	if got := fm.TotalFrames(); got != 10 {
+		t.Errorf("TotalFrames() = %v, want 10", got)
+	}
+
+	// Record 10 more frames of 20ms each
+	for i := 0; i < 10; i++ {
+		fm.RecordFrame(20 * time.Millisecond)
+	}
+
+	// Average should now be 15ms (total 300ms / 20 frames)
+	avg = fm.AverageFrameTime()
+	if avg != 15*time.Millisecond {
+		t.Errorf("AverageFrameTime() after more frames = %v, want 15ms", avg)
+	}
+
+	// Total frames should be 20
+	if got := fm.TotalFrames(); got != 20 {
+		t.Errorf("TotalFrames() = %v, want 20", got)
+	}
 }
 
 func TestFrameMetricsConcurrency(t *testing.T) {

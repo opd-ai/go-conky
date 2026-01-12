@@ -16,6 +16,7 @@ import (
 // for performance optimization and debugging.
 type FrameMetrics struct {
 	frameCount    atomic.Int64
+	totalFrames   atomic.Int64  // Total frames recorded (not reset during FPS calc)
 	lastFPS       atomic.Int64  // Stored as int64 (FPS * 1000 for precision)
 	lastFrameTime atomic.Int64  // Stored as nanoseconds
 	minFrameTime  atomic.Int64  // Minimum frame time in nanoseconds
@@ -47,6 +48,7 @@ func (fm *FrameMetrics) RecordFrame(frameTime time.Duration) {
 
 	// Update atomic counters
 	fm.frameCount.Add(1)
+	fm.totalFrames.Add(1)
 	fm.lastFrameTime.Store(frameNanos)
 	fm.totalTime.Add(frameNanos)
 
@@ -101,19 +103,25 @@ func (fm *FrameMetrics) MaxFrameTime() time.Duration {
 	return time.Duration(fm.maxFrameTime.Load())
 }
 
-// AverageFrameTime returns the average frame time.
+// AverageFrameTime returns the average frame time since creation or last reset.
 func (fm *FrameMetrics) AverageFrameTime() time.Duration {
 	total := fm.totalTime.Load()
-	count := fm.frameCount.Load()
+	count := fm.totalFrames.Load()
 	if count == 0 {
 		return 0
 	}
 	return time.Duration(total / count)
 }
 
+// TotalFrames returns the total number of frames recorded since creation or last reset.
+func (fm *FrameMetrics) TotalFrames() int64 {
+	return fm.totalFrames.Load()
+}
+
 // Reset clears all metrics to their initial state.
 func (fm *FrameMetrics) Reset() {
 	fm.frameCount.Store(0)
+	fm.totalFrames.Store(0)
 	fm.lastFPS.Store(0)
 	fm.lastFrameTime.Store(0)
 	fm.minFrameTime.Store(int64(time.Hour))
