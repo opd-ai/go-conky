@@ -111,10 +111,17 @@ func (lg *LineGraph) SetMaxPoints(n int) {
 }
 
 // SetRange sets the minimum and maximum values for the Y axis.
-// This disables auto-scaling.
+// This disables auto-scaling. If maxVal <= minVal, the values are swapped
+// to ensure a valid range.
 func (lg *LineGraph) SetRange(minVal, maxVal float64) {
 	lg.mu.Lock()
 	defer lg.mu.Unlock()
+	if maxVal <= minVal {
+		minVal, maxVal = maxVal, minVal
+		if maxVal == minVal {
+			maxVal = minVal + 1
+		}
+	}
 	lg.minValue = minVal
 	lg.maxValue = maxVal
 	lg.autoScale = false
@@ -302,10 +309,17 @@ func (bg *BarGraph) SetHorizontal(horizontal bool) {
 }
 
 // SetRange sets the minimum and maximum values for the value axis.
-// This disables auto-scaling.
+// This disables auto-scaling. If maxVal <= minVal, the values are swapped
+// to ensure a valid range.
 func (bg *BarGraph) SetRange(minVal, maxVal float64) {
 	bg.mu.Lock()
 	defer bg.mu.Unlock()
+	if maxVal <= minVal {
+		minVal, maxVal = maxVal, minVal
+		if maxVal == minVal {
+			maxVal = minVal + 1
+		}
+	}
 	bg.minValue = minVal
 	bg.maxValue = maxVal
 	bg.autoScale = false
@@ -365,15 +379,23 @@ func (bg *BarGraph) Draw(screen *ebiten.Image) {
 	// Calculate value range
 	minVal, maxVal := bg.minValue, bg.maxValue
 	if bg.autoScale {
-		minVal = 0
+		// Auto-scale based on actual data range
+		minVal = bg.data[0]
 		maxVal = bg.data[0]
 		for _, v := range bg.data {
+			if v < minVal {
+				minVal = v
+			}
 			if v > maxVal {
 				maxVal = v
 			}
 		}
-		if maxVal == 0 {
-			maxVal = 1
+		// For purely positive datasets, keep baseline at zero
+		if minVal > 0 {
+			minVal = 0
+		}
+		if maxVal == minVal {
+			maxVal = minVal + 1
 		}
 	}
 
@@ -525,10 +547,17 @@ func (h *Histogram) SetBinCount(n int) {
 }
 
 // SetRange sets the value range for binning.
-// This disables auto-ranging.
+// This disables auto-ranging. If maxVal <= minVal, the values are swapped
+// to ensure a valid range.
 func (h *Histogram) SetRange(minVal, maxVal float64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if maxVal <= minVal {
+		minVal, maxVal = maxVal, minVal
+		if maxVal == minVal {
+			maxVal = minVal + 1
+		}
+	}
 	h.minValue = minVal
 	h.maxValue = maxVal
 	h.autoRange = false

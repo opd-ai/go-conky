@@ -725,3 +725,100 @@ func TestHistogramConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 }
+
+// Tests for SetRange validation
+
+func TestLineGraphSetRangeInvalid(t *testing.T) {
+	lg := NewLineGraph(0, 0, 100, 100)
+
+	// Test with min > max (should swap)
+	lg.SetRange(90, 10)
+	lg.mu.RLock()
+	if lg.minValue != 10 || lg.maxValue != 90 {
+		t.Errorf("range = (%v, %v), want (10, 90) after swap", lg.minValue, lg.maxValue)
+	}
+	lg.mu.RUnlock()
+
+	// Test with min == max (should add 1 to max)
+	lg.SetRange(50, 50)
+	lg.mu.RLock()
+	if lg.minValue != 50 || lg.maxValue != 51 {
+		t.Errorf("range = (%v, %v), want (50, 51) for equal values", lg.minValue, lg.maxValue)
+	}
+	lg.mu.RUnlock()
+}
+
+func TestBarGraphSetRangeInvalid(t *testing.T) {
+	bg := NewBarGraph(0, 0, 100, 100)
+
+	// Test with min > max (should swap)
+	bg.SetRange(100, 0)
+	bg.mu.RLock()
+	if bg.minValue != 0 || bg.maxValue != 100 {
+		t.Errorf("range = (%v, %v), want (0, 100) after swap", bg.minValue, bg.maxValue)
+	}
+	bg.mu.RUnlock()
+
+	// Test with min == max (should add 1 to max)
+	bg.SetRange(25, 25)
+	bg.mu.RLock()
+	if bg.minValue != 25 || bg.maxValue != 26 {
+		t.Errorf("range = (%v, %v), want (25, 26) for equal values", bg.minValue, bg.maxValue)
+	}
+	bg.mu.RUnlock()
+}
+
+func TestHistogramSetRangeInvalid(t *testing.T) {
+	h := NewHistogram(0, 0, 100, 100)
+
+	// Test with min > max (should swap)
+	h.SetRange(80, 20)
+	h.mu.RLock()
+	if h.minValue != 20 || h.maxValue != 80 {
+		t.Errorf("range = (%v, %v), want (20, 80) after swap", h.minValue, h.maxValue)
+	}
+	h.mu.RUnlock()
+
+	// Test with min == max (should add 1 to max)
+	h.SetRange(30, 30)
+	h.mu.RLock()
+	if h.minValue != 30 || h.maxValue != 31 {
+		t.Errorf("range = (%v, %v), want (30, 31) for equal values", h.minValue, h.maxValue)
+	}
+	h.mu.RUnlock()
+}
+
+// Tests for BarGraph negative value support
+
+func TestBarGraphDrawNegativeValues(t *testing.T) {
+	bg := NewBarGraph(10, 10, 100, 50)
+	bg.SetAutoScale(true)
+	bg.SetData([]float64{-20, -10, 0, 10, 20})
+
+	screen := ebiten.NewImage(200, 100)
+
+	// Should not panic and should handle negative values
+	bg.Draw(screen)
+}
+
+func TestBarGraphAutoScaleNegativeOnly(t *testing.T) {
+	bg := NewBarGraph(10, 10, 100, 50)
+	bg.SetAutoScale(true)
+	bg.SetData([]float64{-50, -30, -10})
+
+	screen := ebiten.NewImage(200, 100)
+
+	// Should handle all-negative datasets
+	bg.Draw(screen)
+}
+
+func TestBarGraphAutoScalePositiveOnly(t *testing.T) {
+	bg := NewBarGraph(10, 10, 100, 50)
+	bg.SetAutoScale(true)
+	bg.SetData([]float64{10, 20, 30})
+
+	screen := ebiten.NewImage(200, 100)
+
+	// Should keep baseline at zero for positive-only datasets
+	bg.Draw(screen)
+}
