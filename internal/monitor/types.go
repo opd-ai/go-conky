@@ -182,6 +182,7 @@ type SystemData struct {
 	Network    NetworkStats
 	Filesystem FilesystemStats
 	DiskIO     DiskIOStats
+	Hwmon      HwmonStats
 	mu         sync.RWMutex
 }
 
@@ -312,4 +313,41 @@ func (sd *SystemData) setDiskIO(diskIO DiskIOStats) {
 	sd.mu.Lock()
 	defer sd.mu.Unlock()
 	sd.DiskIO = diskIO
+}
+
+// GetHwmon returns a copy of the hardware monitoring statistics with proper locking.
+func (sd *SystemData) GetHwmon() HwmonStats {
+	sd.mu.RLock()
+	defer sd.mu.RUnlock()
+	return sd.copyHwmon()
+}
+
+// copyHwmon returns a deep copy of the hardware monitoring statistics.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copyHwmon() HwmonStats {
+	result := HwmonStats{
+		Devices:     make(map[string]HwmonDevice, len(sd.Hwmon.Devices)),
+		TempSensors: make([]TempSensor, len(sd.Hwmon.TempSensors)),
+	}
+	for k, v := range sd.Hwmon.Devices {
+		// Deep copy the device including its temps map
+		deviceCopy := HwmonDevice{
+			Name:  v.Name,
+			Path:  v.Path,
+			Temps: make(map[string]TempSensor, len(v.Temps)),
+		}
+		for tk, tv := range v.Temps {
+			deviceCopy.Temps[tk] = tv
+		}
+		result.Devices[k] = deviceCopy
+	}
+	copy(result.TempSensors, sd.Hwmon.TempSensors)
+	return result
+}
+
+// setHwmon updates the hardware monitoring statistics with proper locking.
+func (sd *SystemData) setHwmon(hwmon HwmonStats) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	sd.Hwmon = hwmon
 }

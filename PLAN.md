@@ -98,7 +98,7 @@ Window Display (X11/Wayland)
 **Tasks:**
 - [x] Network interface monitoring (/proc/net/dev parsing) (12 hours)
 - [x] Filesystem and disk I/O monitoring (10 hours) 
-- [ ] Temperature and hardware sensors (hwmon integration) (8 hours)
+- [x] Temperature and hardware sensors (hwmon integration) (8 hours)
 - [ ] Process and memory detailed statistics (10 hours)
 - [ ] Battery and power management monitoring (6 hours)
 - [ ] Audio system integration (ALSA/PulseAudio) (8 hours)
