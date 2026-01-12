@@ -657,7 +657,6 @@ func IsDark(c color.RGBA) bool {
 }
 
 // Gradient represents a color gradient for smooth color transitions.
-// Gradient represents a color gradient for smooth color transitions.
 // Gradient is not thread-safe. If gradients are used across goroutines,
 // callers must provide their own synchronization.
 type Gradient struct {
