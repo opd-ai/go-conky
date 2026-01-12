@@ -23,16 +23,16 @@ type rawDiskStats struct {
 
 // diskIOReader reads disk I/O statistics from /proc/diskstats.
 type diskIOReader struct {
-	mu               sync.Mutex
-	prevStats        map[string]rawDiskStats
-	prevTime         time.Time
+	mu                sync.Mutex
+	prevStats         map[string]rawDiskStats
+	prevTime          time.Time
 	procDiskstatsPath string
 }
 
 // newDiskIOReader creates a new diskIOReader with default paths.
 func newDiskIOReader() *diskIOReader {
 	return &diskIOReader{
-		prevStats:        make(map[string]rawDiskStats),
+		prevStats:         make(map[string]rawDiskStats),
 		procDiskstatsPath: "/proc/diskstats",
 	}
 }
@@ -154,8 +154,9 @@ func (r *diskIOReader) readProcDiskstats() (map[string]parsedDiskLine, error) {
 
 // parseDiskstatsLine parses a single line from /proc/diskstats.
 // Format: major minor name reads_completed reads_merged sectors_read read_time
-//         writes_completed writes_merged sectors_written write_time io_in_progress
-//         io_time weighted_io_time
+//
+//	writes_completed writes_merged sectors_written write_time io_in_progress
+//	io_time weighted_io_time
 func parseDiskstatsLine(line string) (string, parsedDiskLine, error) {
 	fields := strings.Fields(line)
 	if len(fields) < 14 {

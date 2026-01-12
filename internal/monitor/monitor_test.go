@@ -131,8 +131,8 @@ func TestSystemDataGettersSetters(t *testing.T) {
 	diskIOStats := DiskIOStats{
 		Disks: map[string]DiskStats{
 			"sda": {
-				Name:           "sda",
-				ReadsCompleted: 1000,
+				Name:            "sda",
+				ReadsCompleted:  1000,
 				WritesCompleted: 500,
 			},
 		},

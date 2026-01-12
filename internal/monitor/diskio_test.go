@@ -16,8 +16,8 @@ func TestParseDiskstatsLine(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name: "valid sda line",
-			line: "   8       0 sda 12345 678 901234 567 89012 345 678901 234 5 6789 1234",
+			name:     "valid sda line",
+			line:     "   8       0 sda 12345 678 901234 567 89012 345 678901 234 5 6789 1234",
 			wantName: "sda",
 			wantStats: parsedDiskLine{
 				readsCompleted:   12345,
@@ -35,8 +35,8 @@ func TestParseDiskstatsLine(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid nvme line",
-			line: "259       0 nvme0n1 100 200 300 400 500 600 700 800 9 1000 1100",
+			name:     "valid nvme line",
+			line:     "259       0 nvme0n1 100 200 300 400 500 600 700 800 9 1000 1100",
 			wantName: "nvme0n1",
 			wantStats: parsedDiskLine{
 				readsCompleted:   100,
@@ -161,7 +161,7 @@ func TestDiskIOReaderWithMockFile(t *testing.T) {
 	}
 
 	reader := &diskIOReader{
-		prevStats:        make(map[string]rawDiskStats),
+		prevStats:         make(map[string]rawDiskStats),
 		procDiskstatsPath: filepath.Join(tmpDir, "diskstats"),
 	}
 
@@ -226,7 +226,7 @@ func TestDiskIOReaderRateCalculation(t *testing.T) {
 	}
 
 	reader := &diskIOReader{
-		prevStats:        make(map[string]rawDiskStats),
+		prevStats:         make(map[string]rawDiskStats),
 		procDiskstatsPath: diskstatsPath,
 	}
 
@@ -278,7 +278,7 @@ func TestDiskIOReaderRateCalculation(t *testing.T) {
 
 func TestDiskIOReaderMissingFile(t *testing.T) {
 	reader := &diskIOReader{
-		prevStats:        make(map[string]rawDiskStats),
+		prevStats:         make(map[string]rawDiskStats),
 		procDiskstatsPath: "/nonexistent/diskstats",
 	}
 
@@ -296,7 +296,7 @@ func TestDiskIOReaderEmptyFile(t *testing.T) {
 	}
 
 	reader := &diskIOReader{
-		prevStats:        make(map[string]rawDiskStats),
+		prevStats:         make(map[string]rawDiskStats),
 		procDiskstatsPath: filepath.Join(tmpDir, "diskstats"),
 	}
 
@@ -435,7 +435,7 @@ short line 1 2 3
 	}
 
 	reader := &diskIOReader{
-		prevStats:        make(map[string]rawDiskStats),
+		prevStats:         make(map[string]rawDiskStats),
 		procDiskstatsPath: filepath.Join(tmpDir, "diskstats"),
 	}
 

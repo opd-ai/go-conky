@@ -229,6 +229,7 @@ type SystemData struct {
 	DiskIO     DiskIOStats
 	Hwmon      HwmonStats
 	Process    ProcessStats
+	Battery    BatteryStats
 	mu         sync.RWMutex
 }
 
@@ -428,4 +429,40 @@ func (sd *SystemData) setProcess(process ProcessStats) {
 	sd.mu.Lock()
 	defer sd.mu.Unlock()
 	sd.Process = process
+}
+
+// GetBattery returns a copy of the battery statistics with proper locking.
+func (sd *SystemData) GetBattery() BatteryStats {
+	sd.mu.RLock()
+	defer sd.mu.RUnlock()
+	return sd.copyBattery()
+}
+
+// copyBattery returns a deep copy of the battery statistics.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copyBattery() BatteryStats {
+	result := BatteryStats{
+		Batteries:       make(map[string]BatteryInfo, len(sd.Battery.Batteries)),
+		ACAdapters:      make(map[string]ACAdapterInfo, len(sd.Battery.ACAdapters)),
+		ACOnline:        sd.Battery.ACOnline,
+		TotalCapacity:   sd.Battery.TotalCapacity,
+		TotalEnergyNow:  sd.Battery.TotalEnergyNow,
+		TotalEnergyFull: sd.Battery.TotalEnergyFull,
+		IsCharging:      sd.Battery.IsCharging,
+		IsDischarging:   sd.Battery.IsDischarging,
+	}
+	for k, v := range sd.Battery.Batteries {
+		result.Batteries[k] = v
+	}
+	for k, v := range sd.Battery.ACAdapters {
+		result.ACAdapters[k] = v
+	}
+	return result
+}
+
+// setBattery updates the battery statistics with proper locking.
+func (sd *SystemData) setBattery(battery BatteryStats) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	sd.Battery = battery
 }
