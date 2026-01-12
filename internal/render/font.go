@@ -203,10 +203,11 @@ func (fm *FontManager) loadEmbeddedFonts() {
 }
 
 // loadEmbeddedFont loads an embedded font from byte data.
+// Failures are silently ignored since embedded fonts should always be valid.
 func (fm *FontManager) loadEmbeddedFont(family *FontFamily, style FontStyle, data []byte) {
 	source, err := etext.NewGoTextFaceSource(bytes.NewReader(data))
 	if err != nil {
-		// Log but don't fail - embedded fonts should always work
+		// Silently ignore errors for embedded fonts - they should always work
 		return
 	}
 	family.AddFont(style, source)

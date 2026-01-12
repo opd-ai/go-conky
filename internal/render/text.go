@@ -29,7 +29,7 @@ func NewTextRenderer() *TextRenderer {
 	return &TextRenderer{
 		fontManager: NewFontManager(),
 		fontFamily:  defaultFontFamily,
-		fontStyle:   FontStyleBold,
+		fontStyle:   FontStyleRegular,
 		fontSize:    defaultFontSize,
 	}
 }
