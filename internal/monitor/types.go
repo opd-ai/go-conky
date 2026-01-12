@@ -230,6 +230,7 @@ type SystemData struct {
 	Hwmon      HwmonStats
 	Process    ProcessStats
 	Battery    BatteryStats
+	Audio      AudioStats
 	mu         sync.RWMutex
 }
 
@@ -465,4 +466,45 @@ func (sd *SystemData) setBattery(battery BatteryStats) {
 	sd.mu.Lock()
 	defer sd.mu.Unlock()
 	sd.Battery = battery
+}
+
+// GetAudio returns a copy of the audio statistics with proper locking.
+func (sd *SystemData) GetAudio() AudioStats {
+	sd.mu.RLock()
+	defer sd.mu.RUnlock()
+	return sd.copyAudio()
+}
+
+// copyAudio returns a deep copy of the audio statistics.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copyAudio() AudioStats {
+	result := AudioStats{
+		Cards:        make(map[int]AudioCard, len(sd.Audio.Cards)),
+		DefaultCard:  sd.Audio.DefaultCard,
+		MasterVolume: sd.Audio.MasterVolume,
+		MasterMuted:  sd.Audio.MasterMuted,
+		HasAudio:     sd.Audio.HasAudio,
+	}
+	for k, v := range sd.Audio.Cards {
+		// Deep copy the card including its mixers map
+		cardCopy := AudioCard{
+			Index:  v.Index,
+			ID:     v.ID,
+			Name:   v.Name,
+			Driver: v.Driver,
+			Mixers: make(map[string]MixerInfo, len(v.Mixers)),
+		}
+		for mk, mv := range v.Mixers {
+			cardCopy.Mixers[mk] = mv
+		}
+		result.Cards[k] = cardCopy
+	}
+	return result
+}
+
+// setAudio updates the audio statistics with proper locking.
+func (sd *SystemData) setAudio(audio AudioStats) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	sd.Audio = audio
 }
