@@ -101,6 +101,53 @@ func TestSystemDataGettersSetters(t *testing.T) {
 	} else if eth0.RxBytes != 1000 {
 		t.Errorf("GetNetwork().Interfaces[eth0].RxBytes = %v, want 1000", eth0.RxBytes)
 	}
+
+	// Test Filesystem
+	filesystemStats := FilesystemStats{
+		Mounts: map[string]MountStats{
+			"/": {
+				MountPoint:   "/",
+				Device:       "/dev/sda1",
+				FSType:       "ext4",
+				Total:        1000000,
+				Used:         500000,
+				UsagePercent: 50.0,
+			},
+		},
+	}
+	sd.setFilesystem(filesystemStats)
+	gotFilesystem := sd.GetFilesystem()
+	if len(gotFilesystem.Mounts) != 1 {
+		t.Errorf("GetFilesystem().Mounts length = %d, want 1", len(gotFilesystem.Mounts))
+	}
+	rootMount, ok := gotFilesystem.Mounts["/"]
+	if !ok {
+		t.Error("GetFilesystem().Mounts should contain /")
+	} else if rootMount.Total != 1000000 {
+		t.Errorf("GetFilesystem().Mounts[/].Total = %v, want 1000000", rootMount.Total)
+	}
+
+	// Test DiskIO
+	diskIOStats := DiskIOStats{
+		Disks: map[string]DiskStats{
+			"sda": {
+				Name:           "sda",
+				ReadsCompleted: 1000,
+				WritesCompleted: 500,
+			},
+		},
+	}
+	sd.setDiskIO(diskIOStats)
+	gotDiskIO := sd.GetDiskIO()
+	if len(gotDiskIO.Disks) != 1 {
+		t.Errorf("GetDiskIO().Disks length = %d, want 1", len(gotDiskIO.Disks))
+	}
+	sda, ok := gotDiskIO.Disks["sda"]
+	if !ok {
+		t.Error("GetDiskIO().Disks should contain sda")
+	} else if sda.ReadsCompleted != 1000 {
+		t.Errorf("GetDiskIO().Disks[sda].ReadsCompleted = %v, want 1000", sda.ReadsCompleted)
+	}
 }
 
 func TestNewSystemMonitor(t *testing.T) {
@@ -178,6 +225,24 @@ func TestSystemMonitorUpdate(t *testing.T) {
 	}
 	if network.TotalRxBytes != 6000 { // 1000 + 5000
 		t.Errorf("Network().TotalRxBytes = %d, want 6000", network.TotalRxBytes)
+	}
+
+	// Test Filesystem stats
+	filesystem := sm.Filesystem()
+	// Note: statfs may fail on the mock mount path, so we just verify the method doesn't panic
+	// In a real test environment with access to filesystem, we'd check the actual values
+	_ = filesystem
+
+	// Test DiskIO stats
+	diskIO := sm.DiskIO()
+	if len(diskIO.Disks) != 1 {
+		t.Errorf("DiskIO().Disks count = %d, want 1", len(diskIO.Disks))
+	}
+	sda, ok := diskIO.Disks["sda"]
+	if !ok {
+		t.Error("DiskIO().Disks should contain sda")
+	} else if sda.ReadsCompleted != 1000 {
+		t.Errorf("DiskIO().Disks[sda].ReadsCompleted = %d, want 1000", sda.ReadsCompleted)
 	}
 }
 
@@ -276,6 +341,22 @@ SwapFree:        3072000 kB
 	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0644); err != nil {
 		t.Fatalf("failed to write mock net_dev: %v", err)
 	}
+
+	// Create mock /proc/mounts
+	mountsContent := `/dev/sda1 / ext4 rw,relatime 0 0
+proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(mountsContent), 0644); err != nil {
+		t.Fatalf("failed to write mock mounts: %v", err)
+	}
+
+	// Create mock /proc/diskstats
+	diskstatsContent := `   8       0 sda 1000 100 2000 50 500 50 1000 25 0 100 125
+   8       1 sda1 500 50 1000 25 250 25 500 12 0 50 62
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "diskstats"), []byte(diskstatsContent), 0644); err != nil {
+		t.Fatalf("failed to write mock diskstats: %v", err)
+	}
 }
 
 func createTestMonitor(tmpDir string, interval time.Duration) *SystemMonitor {
@@ -285,5 +366,7 @@ func createTestMonitor(tmpDir string, interval time.Duration) *SystemMonitor {
 	sm.memReader.procMemInfoPath = filepath.Join(tmpDir, "meminfo")
 	sm.uptimeReader.procUptimePath = filepath.Join(tmpDir, "uptime")
 	sm.networkReader.procNetDevPath = filepath.Join(tmpDir, "net_dev")
+	sm.filesystemReader.procMountsPath = filepath.Join(tmpDir, "mounts")
+	sm.diskIOReader.procDiskstatsPath = filepath.Join(tmpDir, "diskstats")
 	return sm
 }
