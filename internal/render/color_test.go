@@ -486,8 +486,9 @@ func TestAdjustHue(t *testing.T) {
 			}
 
 			// Allow for some tolerance in hue
-			if h < tt.expectedHueRange[0] && h > tt.expectedHueRange[1] {
-				// Also check if it's close to 360/0
+			// Check if hue is outside the expected range
+			if h < tt.expectedHueRange[0] || h > tt.expectedHueRange[1] {
+				// Also check if it's close to 360/0 (special case for red)
 				if tt.expectedHueRange[0] < 5 && (h > 355 || h < 5) {
 					return // OK for red/0 degrees
 				}

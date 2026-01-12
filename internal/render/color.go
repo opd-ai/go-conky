@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -674,12 +675,10 @@ func NewGradient(stops ...GradientStop) *Gradient {
 	}
 	copy(g.stops, stops)
 
-	// Sort stops by position
-	for i := 1; i < len(g.stops); i++ {
-		for j := i; j > 0 && g.stops[j].Position < g.stops[j-1].Position; j-- {
-			g.stops[j], g.stops[j-1] = g.stops[j-1], g.stops[j]
-		}
-	}
+	// Sort stops by position using optimized O(n log n) algorithm
+	sort.Slice(g.stops, func(i, j int) bool {
+		return g.stops[i].Position < g.stops[j].Position
+	})
 
 	return g
 }
@@ -721,12 +720,16 @@ func (g *Gradient) At(position float64) color.RGBA {
 // AddStop adds a color stop to the gradient.
 func (g *Gradient) AddStop(position float64, clr color.RGBA) {
 	stop := GradientStop{Position: position, Color: clr}
-	g.stops = append(g.stops, stop)
 
-	// Re-sort
-	for i := len(g.stops) - 1; i > 0 && g.stops[i].Position < g.stops[i-1].Position; i-- {
-		g.stops[i], g.stops[i-1] = g.stops[i-1], g.stops[i]
-	}
+	// Find the correct insertion position using binary search
+	i := sort.Search(len(g.stops), func(j int) bool {
+		return g.stops[j].Position >= position
+	})
+
+	// Insert at position i
+	g.stops = append(g.stops, GradientStop{})
+	copy(g.stops[i+1:], g.stops[i:])
+	g.stops[i] = stop
 }
 
 // Stops returns the gradient stops.
