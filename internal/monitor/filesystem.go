@@ -95,11 +95,11 @@ func (r *filesystemReader) getStatfs(mount mountInfo) (MountStats, error) {
 		return MountStats{}, fmt.Errorf("statfs %s: %w", mount.mountPoint, err)
 	}
 
-	// Calculate disk space
+	// Calculate disk space with overflow protection
 	blockSize := uint64(statfs.Bsize)
-	total := statfs.Blocks * blockSize
-	free := statfs.Bfree * blockSize
-	available := statfs.Bavail * blockSize
+	total := safeMultiply(statfs.Blocks, blockSize)
+	free := safeMultiply(statfs.Bfree, blockSize)
+	available := safeMultiply(statfs.Bavail, blockSize)
 	used := safeSubtract(total, free)
 
 	// Calculate usage percentage
@@ -160,7 +160,6 @@ func isVirtualFS(fsType string) bool {
 		"nsfs":        true,
 		"ramfs":       true,
 		"overlay":     true,
-		"squashfs":    true,
 		"fuse.portal": true,
 	}
 	return virtualTypes[fsType]

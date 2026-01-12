@@ -229,9 +229,10 @@ func isPhysicalDisk(name string) bool {
 
 	// MMC/SD cards: mmcblk0, mmcblk1, etc. (no partition suffix like p1, p2)
 	if strings.HasPrefix(name, "mmcblk") {
-		if !strings.Contains(name[6:], "p") {
+		if len(name) > 6 && !strings.Contains(name[6:], "p") {
 			return true
 		}
+		// Device name is exactly "mmcblk" which is not valid
 		return false
 	}
 
@@ -257,6 +258,7 @@ func (r *diskIOReader) calculateRate(prev, curr uint64, elapsed float64) float64
 }
 
 // calculateByteRate calculates the byte rate from sector counts.
+// Converts to float64 before multiplication to prevent integer overflow.
 func (r *diskIOReader) calculateByteRate(prevSectors, currSectors uint64, elapsed float64) float64 {
 	if currSectors < prevSectors {
 		return 0.0
@@ -265,5 +267,5 @@ func (r *diskIOReader) calculateByteRate(prevSectors, currSectors uint64, elapse
 		return 0.0
 	}
 	sectorDelta := currSectors - prevSectors
-	return float64(sectorDelta*sectorSize) / elapsed
+	return float64(sectorDelta) * float64(sectorSize) / elapsed
 }
