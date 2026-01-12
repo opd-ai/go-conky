@@ -19,6 +19,7 @@ type SystemMonitor struct {
 	networkReader    *networkReader
 	filesystemReader *filesystemReader
 	diskIOReader     *diskIOReader
+	hwmonReader      *hwmonReader
 	ctx              context.Context
 	cancel           context.CancelFunc
 	wg               sync.WaitGroup
@@ -39,6 +40,7 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		networkReader:    newNetworkReader(),
 		filesystemReader: newFilesystemReader(),
 		diskIOReader:     newDiskIOReader(),
+		hwmonReader:      newHwmonReader(),
 		ctx:              ctx,
 		cancel:           cancel,
 	}
@@ -156,6 +158,14 @@ func (sm *SystemMonitor) Update() error {
 		sm.data.setDiskIO(diskIOStats)
 	}
 
+	// Update hardware monitoring stats
+	hwmonStats, err := sm.hwmonReader.ReadStats()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("hwmon: %w", err))
+	} else {
+		sm.data.setHwmon(hwmonStats)
+	}
+
 	if len(errs) > 0 {
 		errMsgs := make([]string, len(errs))
 		for i, e := range errs {
@@ -177,6 +187,7 @@ func (sm *SystemMonitor) Data() SystemData {
 		Network:    sm.data.copyNetwork(),
 		Filesystem: sm.data.copyFilesystem(),
 		DiskIO:     sm.data.copyDiskIO(),
+		Hwmon:      sm.data.copyHwmon(),
 	}
 }
 
@@ -208,6 +219,11 @@ func (sm *SystemMonitor) Filesystem() FilesystemStats {
 // DiskIO returns the current disk I/O statistics.
 func (sm *SystemMonitor) DiskIO() DiskIOStats {
 	return sm.data.GetDiskIO()
+}
+
+// Hwmon returns the current hardware monitoring statistics.
+func (sm *SystemMonitor) Hwmon() HwmonStats {
+	return sm.data.GetHwmon()
 }
 
 // IsRunning returns whether the monitor is currently running.
