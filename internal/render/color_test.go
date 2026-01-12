@@ -817,6 +817,48 @@ func TestGradientStops(t *testing.T) {
 	}
 }
 
+func TestGradientAddStopPositionClamping(t *testing.T) {
+	red := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	blue := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+	green := color.RGBA{R: 0, G: 255, B: 0, A: 255}
+
+	g := NewGradient(
+		GradientStop{Position: 0.5, Color: red},
+	)
+
+	// Add stop with position below 0 - should be clamped to 0
+	g.AddStop(-0.5, blue)
+	stops := g.Stops()
+	if stops[0].Position != 0 {
+		t.Errorf("AddStop(-0.5) position = %f, want 0", stops[0].Position)
+	}
+
+	// Add stop with position above 1 - should be clamped to 1
+	g.AddStop(1.5, green)
+	stops = g.Stops()
+	if stops[len(stops)-1].Position != 1 {
+		t.Errorf("AddStop(1.5) position = %f, want 1", stops[len(stops)-1].Position)
+	}
+}
+
+func TestGradientDuplicatePositions(t *testing.T) {
+	red := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	blue := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	// Create gradient with duplicate positions
+	g := NewGradient(
+		GradientStop{Position: 0.5, Color: red},
+		GradientStop{Position: 0.5, Color: blue},
+	)
+
+	// At the duplicate position, should not cause division by zero
+	got := g.At(0.5)
+	// Should return the latter stop's color when positions are equal
+	if got != blue {
+		t.Errorf("Gradient.At(0.5) with duplicate positions = %v, want %v", got, blue)
+	}
+}
+
 func TestNamedColorsExist(t *testing.T) {
 	// Verify some expected named colors exist
 	expectedColors := []string{

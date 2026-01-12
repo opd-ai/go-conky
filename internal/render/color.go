@@ -657,6 +657,9 @@ func IsDark(c color.RGBA) bool {
 }
 
 // Gradient represents a color gradient for smooth color transitions.
+// Gradient represents a color gradient for smooth color transitions.
+// Gradient is not thread-safe. If gradients are used across goroutines,
+// callers must provide their own synchronization.
 type Gradient struct {
 	stops []GradientStop
 }
@@ -675,7 +678,7 @@ func NewGradient(stops ...GradientStop) *Gradient {
 	}
 	copy(g.stops, stops)
 
-	// Sort stops by position using optimized O(n log n) algorithm
+	// Sort stops by position
 	sort.Slice(g.stops, func(i, j int) bool {
 		return g.stops[i].Position < g.stops[j].Position
 	})
@@ -699,26 +702,44 @@ func (g *Gradient) At(position float64) color.RGBA {
 		return g.stops[len(g.stops)-1].Color
 	}
 
-	// Find the two stops to interpolate between
-	var i int
-	for i = 1; i < len(g.stops); i++ {
-		if g.stops[i].Position >= position {
-			break
-		}
+	// Find the two stops to interpolate between using binary search
+	i := sort.Search(len(g.stops), func(j int) bool {
+		return g.stops[j].Position >= position
+	})
+
+	// Ensure i is at least 1 for interpolation
+	if i == 0 {
+		i = 1
 	}
 
 	// Interpolate between stops[i-1] and stops[i]
 	stop1 := g.stops[i-1]
 	stop2 := g.stops[i]
 
-	// Calculate the ratio between the two stops
-	ratio := (position - stop1.Position) / (stop2.Position - stop1.Position)
+	// Calculate the ratio between the two stops. If the positions are equal,
+	// there is no span to interpolate across; return the latter stop's color
+	// to avoid division by zero and keep behavior deterministic when duplicate
+	// positions are present.
+	diff := stop2.Position - stop1.Position
+	if diff == 0 {
+		return stop2.Color
+	}
+
+	ratio := (position - stop1.Position) / diff
 
 	return Blend(stop1.Color, stop2.Color, ratio)
 }
 
 // AddStop adds a color stop to the gradient.
+// Position is clamped to the [0, 1] range.
 func (g *Gradient) AddStop(position float64, clr color.RGBA) {
+	// Clamp position to the normalized [0, 1] range to maintain GradientStop invariants.
+	if position < 0 {
+		position = 0
+	} else if position > 1 {
+		position = 1
+	}
+
 	stop := GradientStop{Position: position, Color: clr}
 
 	// Find the correct insertion position using binary search
