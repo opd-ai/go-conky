@@ -8,7 +8,21 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
+)
+
+// Package-level compiled regex patterns for performance.
+var (
+	// cardLineRegex matches card entries in /proc/asound/cards.
+	// Example: " 0 [PCH            ]: HDA-Intel - HDA Intel PCH"
+	cardLineRegex = regexp.MustCompile(`^\s*(\d+)\s+\[([^\]]+)\]:\s+(\S+)\s+-\s+(.+)$`)
+
+	// ampRegex matches amp values in codec dumps.
+	// Example: "[0x57 0x57]"
+	ampRegex = regexp.MustCompile(`\[0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\]`)
+
+	// cardRegex matches card number in symlink targets.
+	// Example: "card0"
+	cardRegex = regexp.MustCompile(`card(\d+)`)
 )
 
 // AudioCard represents an audio hardware card.
@@ -19,7 +33,7 @@ type AudioCard struct {
 	ID string
 	// Name is the card name (e.g., "HDA Intel PCH").
 	Name string
-	// Driver is the driver name (e.g., "snd_hda_intel").
+	// Driver is the ALSA driver module name (e.g., "HDA-Intel").
 	Driver string
 	// Mixers contains mixer control information keyed by control name.
 	Mixers map[string]MixerInfo
@@ -59,7 +73,6 @@ type AudioStats struct {
 
 // audioReader reads audio information from /proc/asound.
 type audioReader struct {
-	mu         sync.Mutex
 	asoundPath string
 }
 
@@ -72,9 +85,6 @@ func newAudioReader() *audioReader {
 
 // ReadStats reads current audio system statistics.
 func (r *audioReader) ReadStats() (AudioStats, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	stats := AudioStats{
 		Cards:       make(map[int]AudioCard),
 		DefaultCard: -1,
@@ -131,7 +141,6 @@ func (r *audioReader) readCards() (map[int]AudioCard, error) {
 	//  0 [PCH            ]: HDA-Intel - HDA Intel PCH
 	//                       HDA Intel PCH at 0xf7610000 irq 30
 	scanner := bufio.NewScanner(file)
-	cardLineRegex := regexp.MustCompile(`^\s*(\d+)\s+\[([^\]]+)\]:\s+(\S+)\s+-\s+(.+)$`)
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -190,37 +199,44 @@ func (r *audioReader) parseMixerFromCodec(content string) map[string]MixerInfo {
 		// Parse amp-out/amp-in settings
 		// Example: "Amp-Out vals:  [0x57 0x57]" (volume values)
 		if strings.Contains(line, "Amp-Out vals:") || strings.Contains(line, "Amp-In vals:") {
-			ampRegex := regexp.MustCompile(`\[0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\]`)
 			matches := ampRegex.FindStringSubmatch(line)
-			if matches != nil {
-				leftHex, _ := strconv.ParseInt(matches[1], 16, 64)
-				rightHex, _ := strconv.ParseInt(matches[2], 16, 64)
-
-				// Amp values are typically 0-127 (7-bit), normalize to percentage
-				// Mask the actual volume bits (lower 7 bits)
-				leftVol := float64(leftHex&0x7F) / 127.0 * 100
-				rightVol := float64(rightHex&0x7F) / 127.0 * 100
-
-				// Check mute bit (bit 7)
-				leftMuted := (leftHex & 0x80) != 0
-				rightMuted := (rightHex & 0x80) != 0
-
-				mixerName := "Master"
-				if strings.Contains(line, "Amp-In") {
-					mixerName = "Capture"
-				}
-
-				mixer := MixerInfo{
-					Name:          mixerName,
-					VolumeLeft:    leftVol,
-					VolumeRight:   rightVol,
-					VolumePercent: (leftVol + rightVol) / 2,
-					Muted:         leftMuted && rightMuted,
-					HasVolume:     true,
-					HasSwitch:     true,
-				}
-				mixers[mixerName] = mixer
+			if matches == nil {
+				continue
 			}
+
+			leftHex, err := strconv.ParseInt(matches[1], 16, 64)
+			if err != nil {
+				continue
+			}
+			rightHex, err := strconv.ParseInt(matches[2], 16, 64)
+			if err != nil {
+				continue
+			}
+
+			// Amp values are typically 0-127 (7-bit), normalize to percentage
+			// Mask the actual volume bits (lower 7 bits)
+			leftVol := float64(leftHex&0x7F) / 127.0 * 100
+			rightVol := float64(rightHex&0x7F) / 127.0 * 100
+
+			// Check mute bit (bit 7)
+			leftMuted := (leftHex & 0x80) != 0
+			rightMuted := (rightHex & 0x80) != 0
+
+			mixerName := "Master"
+			if strings.Contains(line, "Amp-In") {
+				mixerName = "Capture"
+			}
+
+			mixer := MixerInfo{
+				Name:          mixerName,
+				VolumeLeft:    leftVol,
+				VolumeRight:   rightVol,
+				VolumePercent: (leftVol + rightVol) / 2,
+				Muted:         leftMuted && rightMuted,
+				HasVolume:     true,
+				HasSwitch:     true,
+			}
+			mixers[mixerName] = mixer
 		}
 	}
 
@@ -265,7 +281,6 @@ func (r *audioReader) findDefaultCard(cards map[int]AudioCard) int {
 	defaultPath := filepath.Join(r.asoundPath, "default")
 	if target, err := os.Readlink(defaultPath); err == nil {
 		// Extract card number from target like "card0"
-		cardRegex := regexp.MustCompile(`card(\d+)`)
 		if matches := cardRegex.FindStringSubmatch(target); matches != nil {
 			if idx, err := strconv.Atoi(matches[1]); err == nil {
 				if _, exists := cards[idx]; exists {
