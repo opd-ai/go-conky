@@ -182,7 +182,10 @@ type ProcessInfo struct {
 	Name string
 	// State is the process state (R, S, D, Z, T, etc.).
 	State string
-	// CPUPercent is the CPU usage as a percentage (0-100).
+	// CPUPercent is the process CPU usage as a system-wide percentage (0-100),
+	// where 100 represents full utilization of all logical CPU cores.
+	// On multi-core systems, a process fully utilizing a single core will
+	// typically report approximately 100 / CPUCount.
 	CPUPercent float64
 	// MemPercent is the memory usage as a percentage (0-100).
 	MemPercent float64
