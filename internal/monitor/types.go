@@ -174,6 +174,50 @@ type DiskIOStats struct {
 	Disks map[string]DiskStats
 }
 
+// ProcessInfo contains information about a single process.
+type ProcessInfo struct {
+	// PID is the process identifier.
+	PID int
+	// Name is the process name (command name).
+	Name string
+	// State is the process state (R, S, D, Z, T, etc.).
+	State string
+	// CPUPercent is the CPU usage as a percentage (0-100).
+	CPUPercent float64
+	// MemPercent is the memory usage as a percentage (0-100).
+	MemPercent float64
+	// MemBytes is the resident set size (RSS) in bytes.
+	MemBytes uint64
+	// VirtBytes is the virtual memory size in bytes.
+	VirtBytes uint64
+	// Threads is the number of threads in the process.
+	Threads int
+	// User is the user ID of the process owner.
+	User int
+	// StartTime is the process start time in jiffies since system boot.
+	StartTime uint64
+}
+
+// ProcessStats contains process-related statistics.
+type ProcessStats struct {
+	// TotalProcesses is the total number of processes.
+	TotalProcesses int
+	// RunningProcesses is the number of processes in running state.
+	RunningProcesses int
+	// SleepingProcesses is the number of processes in sleeping state.
+	SleepingProcesses int
+	// ZombieProcesses is the number of zombie processes.
+	ZombieProcesses int
+	// StoppedProcesses is the number of stopped processes.
+	StoppedProcesses int
+	// TotalThreads is the total number of threads across all processes.
+	TotalThreads int
+	// TopCPU contains the top processes by CPU usage.
+	TopCPU []ProcessInfo
+	// TopMem contains the top processes by memory usage.
+	TopMem []ProcessInfo
+}
+
 // SystemData aggregates all system monitoring data.
 type SystemData struct {
 	CPU        CPUStats
@@ -183,6 +227,7 @@ type SystemData struct {
 	Filesystem FilesystemStats
 	DiskIO     DiskIOStats
 	Hwmon      HwmonStats
+	Process    ProcessStats
 	mu         sync.RWMutex
 }
 
@@ -350,4 +395,36 @@ func (sd *SystemData) setHwmon(hwmon HwmonStats) {
 	sd.mu.Lock()
 	defer sd.mu.Unlock()
 	sd.Hwmon = hwmon
+}
+
+// GetProcess returns a copy of the process statistics with proper locking.
+func (sd *SystemData) GetProcess() ProcessStats {
+	sd.mu.RLock()
+	defer sd.mu.RUnlock()
+	return sd.copyProcess()
+}
+
+// copyProcess returns a deep copy of the process statistics.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copyProcess() ProcessStats {
+	result := ProcessStats{
+		TotalProcesses:    sd.Process.TotalProcesses,
+		RunningProcesses:  sd.Process.RunningProcesses,
+		SleepingProcesses: sd.Process.SleepingProcesses,
+		ZombieProcesses:   sd.Process.ZombieProcesses,
+		StoppedProcesses:  sd.Process.StoppedProcesses,
+		TotalThreads:      sd.Process.TotalThreads,
+		TopCPU:            make([]ProcessInfo, len(sd.Process.TopCPU)),
+		TopMem:            make([]ProcessInfo, len(sd.Process.TopMem)),
+	}
+	copy(result.TopCPU, sd.Process.TopCPU)
+	copy(result.TopMem, sd.Process.TopMem)
+	return result
+}
+
+// setProcess updates the process statistics with proper locking.
+func (sd *SystemData) setProcess(process ProcessStats) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	sd.Process = process
 }
