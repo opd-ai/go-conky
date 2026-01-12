@@ -50,6 +50,7 @@ func NewImageWidget(x, y float64) *ImageWidget {
 // LoadFromFile loads an image from a file path.
 // Supported formats: PNG, JPEG, GIF.
 // Returns an error if the file cannot be read or decoded.
+// If an image was previously loaded, it will be deallocated before loading the new one.
 func (iw *ImageWidget) LoadFromFile(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
