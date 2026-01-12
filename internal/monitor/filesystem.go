@@ -8,7 +8,7 @@ import (
 	"syscall"
 )
 
-// filesystemReader reads filesystem statistics from /proc/mounts and statvfs.
+// filesystemReader reads filesystem statistics from /proc/mounts and statfs (via syscall.Statfs).
 type filesystemReader struct {
 	procMountsPath string
 }
