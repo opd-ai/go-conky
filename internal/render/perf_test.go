@@ -147,6 +147,36 @@ func TestFrameMetricsAverageFrameTime(t *testing.T) {
 	}
 }
 
+func TestFrameMetricsFPSCalculation(t *testing.T) {
+	// Use a very short update period to trigger FPS recalculation quickly
+	fm := NewFrameMetrics(10 * time.Millisecond)
+
+	// Record frames quickly to trigger FPS calculation
+	frameTime := 16 * time.Millisecond // ~60 FPS equivalent frame time
+	for i := 0; i < 100; i++ {
+		fm.RecordFrame(frameTime)
+	}
+
+	// Wait for FPS recalculation period to pass
+	time.Sleep(20 * time.Millisecond)
+
+	// Record one more frame to trigger FPS recalculation
+	fm.RecordFrame(frameTime)
+
+	fps := fm.FPS()
+
+	// FPS should be positive after recording frames and triggering recalculation
+	if fps <= 0 {
+		t.Errorf("FPS() = %v, expected positive value after recording frames", fps)
+	}
+
+	// FPS value should be reasonable (the actual value depends on timing,
+	// but it should be greater than 0 and less than some reasonable max)
+	if fps > 100000 {
+		t.Errorf("FPS() = %v, unreasonably high value", fps)
+	}
+}
+
 func TestFrameMetricsConcurrency(t *testing.T) {
 	fm := NewFrameMetrics(100 * time.Millisecond)
 
@@ -412,6 +442,48 @@ func TestDirtyTrackerMarkDirtyMerge(t *testing.T) {
 	// Should be merged into one
 	if dt.RegionCount() != 1 {
 		t.Errorf("RegionCount() = %d, want 1 (merged)", dt.RegionCount())
+	}
+}
+
+func TestDirtyTrackerMarkDirtyMergeMultiple(t *testing.T) {
+	dt := NewDirtyTracker(800, 600)
+
+	// Mark three non-overlapping regions initially
+	dt.MarkDirty(DirtyRegion{X: 10, Y: 10, Width: 30, Height: 30})  // Region A: 10-40
+	dt.MarkDirty(DirtyRegion{X: 100, Y: 10, Width: 30, Height: 30}) // Region B: 100-130
+	dt.MarkDirty(DirtyRegion{X: 200, Y: 10, Width: 30, Height: 30}) // Region C: 200-230
+
+	// Should have 3 separate regions
+	if dt.RegionCount() != 3 {
+		t.Errorf("RegionCount() = %d, want 3", dt.RegionCount())
+	}
+
+	// Now add a region that bridges A and B (spans 35-105)
+	dt.MarkDirty(DirtyRegion{X: 35, Y: 10, Width: 70, Height: 30})
+
+	// A and B should be merged, C remains separate = 2 regions
+	if dt.RegionCount() != 2 {
+		t.Errorf("RegionCount() after bridge = %d, want 2", dt.RegionCount())
+	}
+
+	dt.Clear()
+
+	// Test case where a new region causes chain merging
+	dt.MarkDirty(DirtyRegion{X: 10, Y: 10, Width: 20, Height: 20}) // Region 1: 10-30
+	dt.MarkDirty(DirtyRegion{X: 50, Y: 10, Width: 20, Height: 20}) // Region 2: 50-70
+	dt.MarkDirty(DirtyRegion{X: 90, Y: 10, Width: 20, Height: 20}) // Region 3: 90-110
+
+	// Should have 3 separate regions
+	if dt.RegionCount() != 3 {
+		t.Errorf("RegionCount() = %d, want 3", dt.RegionCount())
+	}
+
+	// Add a large region that overlaps all three
+	dt.MarkDirty(DirtyRegion{X: 5, Y: 5, Width: 110, Height: 30})
+
+	// All should be merged into one
+	if dt.RegionCount() != 1 {
+		t.Errorf("RegionCount() after large merge = %d, want 1", dt.RegionCount())
 	}
 }
 

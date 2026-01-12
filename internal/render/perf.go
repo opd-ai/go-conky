@@ -118,6 +118,10 @@ func (fm *FrameMetrics) TotalFrames() int64 {
 }
 
 // Reset clears all metrics to their initial state.
+// Note: Reset is not atomic with respect to RecordFrame or metric reads.
+// If called concurrently with RecordFrame or metric accessors like AverageFrameTime,
+// callers may observe inconsistent intermediate states. For consistent behavior,
+// ensure Reset is called when no other goroutines are accessing the metrics.
 func (fm *FrameMetrics) Reset() {
 	fm.frameCount.Store(0)
 	fm.totalFrames.Store(0)
@@ -193,6 +197,9 @@ func (p *VertexPool) Get() []ebiten.Vertex {
 }
 
 // Put returns a vertex slice to the pool.
+// Note: This creates a new pointer allocation for &vertices on each call.
+// While this adds a small overhead, it's necessary for correct sync.Pool usage
+// with slice types and is the recommended pattern to avoid SA6002 warnings.
 func (p *VertexPool) Put(vertices []ebiten.Vertex) {
 	if vertices != nil {
 		vertices = vertices[:0]
@@ -228,6 +235,9 @@ func (p *IndexPool) Get() []uint16 {
 }
 
 // Put returns an index slice to the pool.
+// Note: This creates a new pointer allocation for &indices on each call.
+// While this adds a small overhead, it's necessary for correct sync.Pool usage
+// with slice types and is the recommended pattern to avoid SA6002 warnings.
 func (p *IndexPool) Put(indices []uint16) {
 	if indices != nil {
 		indices = indices[:0]
@@ -284,21 +294,19 @@ func (r DirtyRegion) Union(other DirtyRegion) DirtyRegion {
 // This enables partial screen updates for improved performance when
 // only portions of the display change between frames.
 type DirtyTracker struct {
-	regions     []DirtyRegion
-	fullRedraw  bool
-	screenW     int
-	screenH     int
-	mergeThresh float64 // Threshold for merging regions (0.0-1.0)
-	mu          sync.Mutex
+	regions    []DirtyRegion
+	fullRedraw bool
+	screenW    int
+	screenH    int
+	mu         sync.Mutex
 }
 
 // NewDirtyTracker creates a new DirtyTracker for the given screen dimensions.
 func NewDirtyTracker(screenWidth, screenHeight int) *DirtyTracker {
 	return &DirtyTracker{
-		regions:     make([]DirtyRegion, 0, 16),
-		screenW:     screenWidth,
-		screenH:     screenHeight,
-		mergeThresh: 0.5, // Merge if overlap is > 50%
+		regions: make([]DirtyRegion, 0, 16),
+		screenW: screenWidth,
+		screenH: screenHeight,
 	}
 }
 
@@ -328,15 +336,22 @@ func (dt *DirtyTracker) MarkDirty(region DirtyRegion) {
 		return
 	}
 
-	// Try to merge with existing regions
-	for i := range dt.regions {
-		if dt.regions[i].Intersects(region) {
-			dt.regions[i] = dt.regions[i].Union(region)
-			return
+	// Try to merge with existing regions. We need to keep merging as the
+	// region grows, as it may intersect additional regions after each merge.
+	merged := region
+	for i := 0; i < len(dt.regions); {
+		if dt.regions[i].Intersects(merged) {
+			// Grow the merged region and remove the old one from the slice.
+			merged = dt.regions[i].Union(merged)
+			dt.regions = append(dt.regions[:i], dt.regions[i+1:]...)
+			// Restart from beginning since merged region may now overlap with earlier regions
+			i = 0
+			continue
 		}
+		i++
 	}
 
-	dt.regions = append(dt.regions, region)
+	dt.regions = append(dt.regions, merged)
 }
 
 // MarkFullRedraw marks the entire screen as needing redraw.
@@ -438,6 +453,10 @@ func (rs *RenderStats) Stats() (drawCalls, vertices, textDraws int64) {
 }
 
 // Reset clears all statistics.
+// Note: Reset is not atomic with respect to RecordDrawCall, RecordTextDraw, or Stats.
+// If called concurrently with recording or reading operations, callers may observe
+// inconsistent intermediate states. For consistent behavior, ensure Reset is called
+// when no other goroutines are accessing the stats.
 func (rs *RenderStats) Reset() {
 	rs.DrawCalls.Store(0)
 	rs.VertexCount.Store(0)
@@ -484,7 +503,6 @@ type PerformanceManager struct {
 	drawOptionsPool *DrawOptionsPool
 	vertexPool      *VertexPool
 	indexPool       *IndexPool
-	mu              sync.RWMutex
 }
 
 // NewPerformanceManager creates a new PerformanceManager with the given config.
@@ -582,9 +600,8 @@ func (pm *PerformanceManager) PutIndices(indices []uint16) {
 }
 
 // Config returns the current performance configuration.
+// The config is read-only after PerformanceManager creation.
 func (pm *PerformanceManager) Config() PerformanceConfig {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
 	return pm.config
 }
 
