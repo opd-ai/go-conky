@@ -24,7 +24,6 @@ type FrameMetrics struct {
 	totalTime     atomic.Int64  // Total time accumulated in nanoseconds
 	lastUpdate    atomic.Int64  // Last update time as Unix nano
 	updatePeriod  time.Duration // How often to recalculate FPS
-	mu            sync.RWMutex
 }
 
 // NewFrameMetrics creates a new FrameMetrics instance.
@@ -177,7 +176,8 @@ func NewVertexPool() *VertexPool {
 		pool: sync.Pool{
 			New: func() interface{} {
 				// Pre-allocate with common size (4 vertices for a quad)
-				return make([]ebiten.Vertex, 0, 4)
+				s := make([]ebiten.Vertex, 0, 4)
+				return &s
 			},
 		},
 	}
@@ -186,13 +186,17 @@ func NewVertexPool() *VertexPool {
 // Get retrieves a vertex slice from the pool.
 // The returned slice has length 0 but may have capacity > 0.
 func (p *VertexPool) Get() []ebiten.Vertex {
-	return p.pool.Get().([]ebiten.Vertex)[:0]
+	sp := p.pool.Get().(*[]ebiten.Vertex)
+	s := *sp
+	*sp = nil // Clear the pointer to avoid holding references
+	return s[:0]
 }
 
 // Put returns a vertex slice to the pool.
 func (p *VertexPool) Put(vertices []ebiten.Vertex) {
 	if vertices != nil {
-		p.pool.Put(vertices[:0])
+		vertices = vertices[:0]
+		p.pool.Put(&vertices)
 	}
 }
 
@@ -207,7 +211,8 @@ func NewIndexPool() *IndexPool {
 		pool: sync.Pool{
 			New: func() interface{} {
 				// Pre-allocate with common size (6 indices for 2 triangles)
-				return make([]uint16, 0, 6)
+				s := make([]uint16, 0, 6)
+				return &s
 			},
 		},
 	}
@@ -216,13 +221,17 @@ func NewIndexPool() *IndexPool {
 // Get retrieves an index slice from the pool.
 // The returned slice has length 0 but may have capacity > 0.
 func (p *IndexPool) Get() []uint16 {
-	return p.pool.Get().([]uint16)[:0]
+	sp := p.pool.Get().(*[]uint16)
+	s := *sp
+	*sp = nil // Clear the pointer to avoid holding references
+	return s[:0]
 }
 
 // Put returns an index slice to the pool.
 func (p *IndexPool) Put(indices []uint16) {
 	if indices != nil {
-		p.pool.Put(indices[:0])
+		indices = indices[:0]
+		p.pool.Put(&indices)
 	}
 }
 
@@ -468,14 +477,14 @@ func DefaultPerformanceConfig() PerformanceConfig {
 
 // PerformanceManager coordinates performance optimization features.
 type PerformanceManager struct {
-	config         PerformanceConfig
-	metrics        *FrameMetrics
-	stats          *RenderStats
-	dirtyTracker   *DirtyTracker
+	config          PerformanceConfig
+	metrics         *FrameMetrics
+	stats           *RenderStats
+	dirtyTracker    *DirtyTracker
 	drawOptionsPool *DrawOptionsPool
-	vertexPool     *VertexPool
-	indexPool      *IndexPool
-	mu             sync.RWMutex
+	vertexPool      *VertexPool
+	indexPool       *IndexPool
+	mu              sync.RWMutex
 }
 
 // NewPerformanceManager creates a new PerformanceManager with the given config.

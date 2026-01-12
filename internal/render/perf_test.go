@@ -285,14 +285,14 @@ func TestDirtyRegionContains(t *testing.T) {
 		x, y float64
 		want bool
 	}{
-		{15, 25, true},      // Inside
-		{10, 20, true},      // Top-left corner
-		{109, 69, true},     // Just inside bottom-right
-		{110, 70, false},    // At bottom-right edge (exclusive)
-		{5, 25, false},      // Left of region
-		{115, 25, false},    // Right of region
-		{15, 15, false},     // Above region
-		{15, 75, false},     // Below region
+		{15, 25, true},   // Inside
+		{10, 20, true},   // Top-left corner
+		{109, 69, true},  // Just inside bottom-right
+		{110, 70, false}, // At bottom-right edge (exclusive)
+		{5, 25, false},   // Left of region
+		{115, 25, false}, // Right of region
+		{15, 15, false},  // Above region
+		{15, 75, false},  // Below region
 	}
 
 	for _, tt := range tests {
