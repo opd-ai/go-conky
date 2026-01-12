@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 
 	etext "github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -127,9 +128,12 @@ func (ff *FontFamily) GetFontWithFallback(style FontStyle) *etext.GoTextFaceSour
 		return source
 	}
 
-	// Return any available font if regular is not found
-	for _, source := range ff.fonts {
-		return source
+	// Return font in deterministic order: Bold > Italic > BoldItalic
+	// This ensures consistent behavior across runs when regular is unavailable.
+	for _, fallbackStyle := range []FontStyle{FontStyleBold, FontStyleItalic, FontStyleBoldItalic} {
+		if source, ok := ff.fonts[fallbackStyle]; ok {
+			return source
+		}
 	}
 
 	return nil
@@ -143,14 +147,18 @@ func (ff *FontFamily) HasStyle(style FontStyle) bool {
 	return ok
 }
 
-// AvailableStyles returns a list of available font styles.
+// AvailableStyles returns a sorted list of available font styles.
+// The result is sorted for consistent ordering across calls.
 func (ff *FontFamily) AvailableStyles() []FontStyle {
 	ff.mu.RLock()
 	defer ff.mu.RUnlock()
 
 	styles := make([]FontStyle, 0, len(ff.fonts))
-	for style := range ff.fonts {
-		styles = append(styles, style)
+	// Iterate in defined order for deterministic results
+	for _, style := range []FontStyle{FontStyleRegular, FontStyleBold, FontStyleItalic, FontStyleBoldItalic} {
+		if _, ok := ff.fonts[style]; ok {
+			styles = append(styles, style)
+		}
 	}
 	return styles
 }
@@ -251,7 +259,8 @@ func (fm *FontManager) GetFamily(name string) *FontFamily {
 }
 
 // GetFont returns the font source for a family and style.
-// Returns nil if the family doesn't exist.
+// Returns nil if the family doesn't exist or if the family has no fonts
+// available (even after style fallback within the family).
 func (fm *FontManager) GetFont(familyName string, style FontStyle) *etext.GoTextFaceSource {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
@@ -324,20 +333,25 @@ func (fm *FontManager) FallbackChain() []string {
 	return chain
 }
 
-// ListFamilies returns a list of all registered font family names.
+// ListFamilies returns a list of canonical font family names.
+// Aliases are excluded; only the primary name of each family is returned.
+// The result is sorted for consistent ordering.
 func (fm *FontManager) ListFamilies() []string {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 
 	seen := make(map[string]bool)
 	var families []string
-	for name, family := range fm.families {
-		// Only add the primary name, not aliases
-		if !seen[family.Name()] {
-			seen[family.Name()] = true
-			families = append(families, name)
+	for _, family := range fm.families {
+		// Only add the canonical name, not aliases
+		canonicalName := family.Name()
+		if !seen[canonicalName] {
+			seen[canonicalName] = true
+			families = append(families, canonicalName)
 		}
 	}
+	// Sort for deterministic ordering
+	sort.Strings(families)
 	return families
 }
 

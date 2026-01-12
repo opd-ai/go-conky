@@ -247,9 +247,22 @@ func TestFontManagerListFamilies(t *testing.T) {
 	fm := NewFontManager()
 	families := fm.ListFamilies()
 
-	// Should have at least GoMono and GoSans (may have more due to aliases)
-	if len(families) < 2 {
-		t.Errorf("Expected at least 2 families, got %d", len(families))
+	// Should have exactly GoMono and GoSans (canonical names only, no aliases)
+	if len(families) != 2 {
+		t.Errorf("Expected 2 families, got %d: %v", len(families), families)
+	}
+
+	// Verify the result is sorted
+	if len(families) >= 2 && families[0] > families[1] {
+		t.Errorf("Expected sorted families, got %v", families)
+	}
+
+	// Verify canonical names are returned
+	expectedFamilies := map[string]bool{"GoMono": true, "GoSans": true}
+	for _, name := range families {
+		if !expectedFamilies[name] {
+			t.Errorf("Unexpected family name: %s (expected canonical names GoMono or GoSans)", name)
+		}
 	}
 }
 
