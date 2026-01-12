@@ -137,7 +137,12 @@ func (sd *SystemData) GetUptime() UptimeStats {
 func (sd *SystemData) GetNetwork() NetworkStats {
 	sd.mu.RLock()
 	defer sd.mu.RUnlock()
-	// Return a deep copy of the interfaces map
+	return sd.copyNetwork()
+}
+
+// copyNetwork returns a deep copy of the network statistics.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copyNetwork() NetworkStats {
 	result := NetworkStats{
 		Interfaces:         make(map[string]InterfaceStats, len(sd.Network.Interfaces)),
 		TotalRxBytes:       sd.Network.TotalRxBytes,

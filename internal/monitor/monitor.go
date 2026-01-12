@@ -150,22 +150,11 @@ func (sm *SystemMonitor) Update() error {
 func (sm *SystemMonitor) Data() SystemData {
 	sm.data.mu.RLock()
 	defer sm.data.mu.RUnlock()
-	// Deep copy the network interfaces map
-	networkCopy := NetworkStats{
-		Interfaces:         make(map[string]InterfaceStats, len(sm.data.Network.Interfaces)),
-		TotalRxBytes:       sm.data.Network.TotalRxBytes,
-		TotalTxBytes:       sm.data.Network.TotalTxBytes,
-		TotalRxBytesPerSec: sm.data.Network.TotalRxBytesPerSec,
-		TotalTxBytesPerSec: sm.data.Network.TotalTxBytesPerSec,
-	}
-	for k, v := range sm.data.Network.Interfaces {
-		networkCopy.Interfaces[k] = v
-	}
 	return SystemData{
 		CPU:     sm.data.CPU,
 		Memory:  sm.data.Memory,
 		Uptime:  sm.data.Uptime,
-		Network: networkCopy,
+		Network: sm.data.copyNetwork(),
 	}
 }
 
