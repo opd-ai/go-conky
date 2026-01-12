@@ -21,6 +21,7 @@ type SystemMonitor struct {
 	diskIOReader     *diskIOReader
 	hwmonReader      *hwmonReader
 	processReader    *processReader
+	batteryReader    *batteryReader
 	ctx              context.Context
 	cancel           context.CancelFunc
 	wg               sync.WaitGroup
@@ -43,6 +44,7 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		diskIOReader:     newDiskIOReader(),
 		hwmonReader:      newHwmonReader(),
 		processReader:    newProcessReader(),
+		batteryReader:    newBatteryReader(),
 		ctx:              ctx,
 		cancel:           cancel,
 	}
@@ -176,6 +178,14 @@ func (sm *SystemMonitor) Update() error {
 		sm.data.setProcess(processStats)
 	}
 
+	// Update battery stats
+	batteryStats, err := sm.batteryReader.ReadStats()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("battery: %w", err))
+	} else {
+		sm.data.setBattery(batteryStats)
+	}
+
 	if len(errs) > 0 {
 		errMsgs := make([]string, len(errs))
 		for i, e := range errs {
@@ -199,6 +209,7 @@ func (sm *SystemMonitor) Data() SystemData {
 		DiskIO:     sm.data.copyDiskIO(),
 		Hwmon:      sm.data.copyHwmon(),
 		Process:    sm.data.copyProcess(),
+		Battery:    sm.data.copyBattery(),
 	}
 }
 
@@ -240,6 +251,11 @@ func (sm *SystemMonitor) Hwmon() HwmonStats {
 // Process returns the current process statistics.
 func (sm *SystemMonitor) Process() ProcessStats {
 	return sm.data.GetProcess()
+}
+
+// Battery returns the current battery statistics.
+func (sm *SystemMonitor) Battery() BatteryStats {
+	return sm.data.GetBattery()
 }
 
 // IsRunning returns whether the monitor is currently running.

@@ -16,8 +16,8 @@ func TestParseNetDevLine(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name: "valid eth0 line",
-			line: "  eth0: 523861305  362702    0    0    0     0          0         1  7179696   49506    0    1    0     0       0          0",
+			name:     "valid eth0 line",
+			line:     "  eth0: 523861305  362702    0    0    0     0          0         1  7179696   49506    0    1    0     0       0          0",
 			wantName: "eth0",
 			wantStats: rawInterfaceStats{
 				rxBytes:   523861305,
@@ -32,8 +32,8 @@ func TestParseNetDevLine(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid lo line",
-			line: "    lo: 34909048   19020    0    0    0     0          0         0 34909048   19020    0    0    0     0       0          0",
+			name:     "valid lo line",
+			line:     "    lo: 34909048   19020    0    0    0     0          0         0 34909048   19020    0    0    0     0       0          0",
 			wantName: "lo",
 			wantStats: rawInterfaceStats{
 				rxBytes:   34909048,
@@ -48,8 +48,8 @@ func TestParseNetDevLine(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "line with errors",
-			line: "  eth1: 1000 500 10 5 0 0 0 0 2000 800 20 8 0 0 0 0",
+			name:     "line with errors",
+			line:     "  eth1: 1000 500 10 5 0 0 0 0 2000 800 20 8 0 0 0 0",
 			wantName: "eth1",
 			wantStats: rawInterfaceStats{
 				rxBytes:   1000,
