@@ -160,6 +160,118 @@ func TestImageWidgetLoadFromImageNil(t *testing.T) {
 	}
 }
 
+func TestImageWidgetLoadMultipleTimesFromReader(t *testing.T) {
+	iw := NewImageWidget(0, 0)
+
+	// Load first image
+	pngData1 := createTestPNG(32, 32)
+	if err := iw.LoadFromReader(bytes.NewReader(pngData1)); err != nil {
+		t.Fatalf("first load failed: %v", err)
+	}
+
+	w1, h1 := iw.OriginalSize()
+	if w1 != 32 || h1 != 32 {
+		t.Errorf("first OriginalSize = (%v, %v), want (32, 32)", w1, h1)
+	}
+
+	// Load second image (should deallocate the first)
+	pngData2 := createTestPNG(64, 48)
+	if err := iw.LoadFromReader(bytes.NewReader(pngData2)); err != nil {
+		t.Fatalf("second load failed: %v", err)
+	}
+
+	w2, h2 := iw.OriginalSize()
+	if w2 != 64 || h2 != 48 {
+		t.Errorf("second OriginalSize = (%v, %v), want (64, 48)", w2, h2)
+	}
+
+	// Load third image to ensure repeated loading works
+	pngData3 := createTestPNG(100, 100)
+	if err := iw.LoadFromReader(bytes.NewReader(pngData3)); err != nil {
+		t.Fatalf("third load failed: %v", err)
+	}
+
+	w3, h3 := iw.OriginalSize()
+	if w3 != 100 || h3 != 100 {
+		t.Errorf("third OriginalSize = (%v, %v), want (100, 100)", w3, h3)
+	}
+
+	if !iw.IsLoaded() {
+		t.Error("IsLoaded should be true after loading")
+	}
+}
+
+func TestImageWidgetLoadMultipleTimesFromFile(t *testing.T) {
+	// Create temporary PNG files
+	tmpDir := t.TempDir()
+
+	tmpFile1 := filepath.Join(tmpDir, "test1.png")
+	pngData1 := createTestPNG(32, 32)
+	if err := os.WriteFile(tmpFile1, pngData1, 0644); err != nil {
+		t.Fatalf("failed to create test file 1: %v", err)
+	}
+
+	tmpFile2 := filepath.Join(tmpDir, "test2.png")
+	pngData2 := createTestPNG(64, 48)
+	if err := os.WriteFile(tmpFile2, pngData2, 0644); err != nil {
+		t.Fatalf("failed to create test file 2: %v", err)
+	}
+
+	iw := NewImageWidget(0, 0)
+
+	// Load first file
+	if err := iw.LoadFromFile(tmpFile1); err != nil {
+		t.Fatalf("first LoadFromFile failed: %v", err)
+	}
+
+	w1, h1 := iw.OriginalSize()
+	if w1 != 32 || h1 != 32 {
+		t.Errorf("first OriginalSize = (%v, %v), want (32, 32)", w1, h1)
+	}
+
+	// Load second file (should deallocate the first)
+	if err := iw.LoadFromFile(tmpFile2); err != nil {
+		t.Fatalf("second LoadFromFile failed: %v", err)
+	}
+
+	w2, h2 := iw.OriginalSize()
+	if w2 != 64 || h2 != 48 {
+		t.Errorf("second OriginalSize = (%v, %v), want (64, 48)", w2, h2)
+	}
+
+	if !iw.IsLoaded() {
+		t.Error("IsLoaded should be true after loading")
+	}
+}
+
+func TestImageWidgetLoadMultipleTimesFromImage(t *testing.T) {
+	iw := NewImageWidget(0, 0)
+
+	// Create and load first image
+	testImg1 := createTestImage(40, 30)
+	ebitenImg1 := ebiten.NewImageFromImage(testImg1)
+	iw.LoadFromImage(ebitenImg1)
+
+	w1, h1 := iw.OriginalSize()
+	if w1 != 40 || h1 != 30 {
+		t.Errorf("first OriginalSize = (%v, %v), want (40, 30)", w1, h1)
+	}
+
+	// Create and load second image (should deallocate the first)
+	testImg2 := createTestImage(80, 60)
+	ebitenImg2 := ebiten.NewImageFromImage(testImg2)
+	iw.LoadFromImage(ebitenImg2)
+
+	w2, h2 := iw.OriginalSize()
+	if w2 != 80 || h2 != 60 {
+		t.Errorf("second OriginalSize = (%v, %v), want (80, 60)", w2, h2)
+	}
+
+	if !iw.IsLoaded() {
+		t.Error("IsLoaded should be true after loading")
+	}
+}
+
 func TestImageWidgetSetPosition(t *testing.T) {
 	iw := NewImageWidget(0, 0)
 	iw.SetPosition(50, 75)

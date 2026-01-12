@@ -63,6 +63,7 @@ func (iw *ImageWidget) LoadFromFile(path string) error {
 // LoadFromReader loads an image from an io.Reader.
 // Supported formats: PNG, JPEG, GIF.
 // Returns an error if the image cannot be decoded.
+// If an image was previously loaded, it will be deallocated before loading the new one.
 func (iw *ImageWidget) LoadFromReader(r io.Reader) error {
 	img, _, err := image.Decode(r)
 	if err != nil {
@@ -71,6 +72,11 @@ func (iw *ImageWidget) LoadFromReader(r io.Reader) error {
 
 	iw.mu.Lock()
 	defer iw.mu.Unlock()
+
+	// Deallocate old image to prevent GPU memory leaks
+	if iw.image != nil {
+		iw.image.Deallocate()
+	}
 
 	// Convert to Ebiten image
 	iw.image = ebiten.NewImageFromImage(img)
@@ -83,9 +89,20 @@ func (iw *ImageWidget) LoadFromReader(r io.Reader) error {
 
 // LoadFromImage loads an Ebiten image directly.
 // This is useful when the image is already in memory.
+// This method takes ownership of the provided image reference: the widget
+// will keep a reference to img until another image is loaded (via any
+// LoadFrom* method) or the widget is cleared, at which point the previous
+// image will be deallocated. If the caller needs to retain independent
+// ownership of the image, they should pass a separate copy instead of
+// reusing the same *ebiten.Image.
 func (iw *ImageWidget) LoadFromImage(img *ebiten.Image) {
 	iw.mu.Lock()
 	defer iw.mu.Unlock()
+
+	// Deallocate old image to prevent GPU memory leaks
+	if iw.image != nil {
+		iw.image.Deallocate()
+	}
 
 	iw.image = img
 	if img != nil {
