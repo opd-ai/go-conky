@@ -217,7 +217,7 @@ func (r *batteryReader) readBattery(devicePath, name string) (BatteryInfo, error
 
 	// Read charge values (for charge-based batteries, alternative to energy values)
 	// Conversion formula: energy (µWh) = charge (µAh) × voltage (µV) / 1000000
-	// The division is by the constant 1000000, not by VoltageNow.
+	// Division by 1000000 converts the product from micro-units (µAh × µV) to µWh.
 	if val, err := r.readUint64File(filepath.Join(devicePath, "charge_now")); err == nil {
 		battery.ChargeNow = val
 		// Convert to energy if energy values not available
