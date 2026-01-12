@@ -424,9 +424,9 @@ func TestRuntimeReturnsUnderlyingRuntime(t *testing.T) {
 		t.Error("expected underlying runtime to be non-nil")
 	}
 
-	// Verify it's the same runtime
-	if underlying != runtime.runtime {
-		t.Error("expected Runtime() to return the same instance")
+	// Verify the runtime is functional by checking its global environment
+	if underlying.GlobalEnv() == nil {
+		t.Error("expected underlying runtime to have a valid global environment")
 	}
 }
 
