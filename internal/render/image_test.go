@@ -4,6 +4,7 @@ package render
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -585,7 +586,7 @@ func TestImageCacheClear(t *testing.T) {
 	cache := NewImageCache()
 
 	for i := 0; i < 3; i++ {
-		tmpFile := filepath.Join(tmpDir, "test"+string(rune('0'+i))+".png")
+		tmpFile := filepath.Join(tmpDir, fmt.Sprintf("test%d.png", i))
 		pngData := createTestPNG(32, 32)
 		if err := os.WriteFile(tmpFile, pngData, 0644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
@@ -612,7 +613,7 @@ func TestImageCacheConcurrentAccess(t *testing.T) {
 	var tmpFiles []string
 
 	for i := 0; i < 5; i++ {
-		tmpFile := filepath.Join(tmpDir, "test"+string(rune('0'+i))+".png")
+		tmpFile := filepath.Join(tmpDir, fmt.Sprintf("test%d.png", i))
 		pngData := createTestPNG(32, 32)
 		if err := os.WriteFile(tmpFile, pngData, 0644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)

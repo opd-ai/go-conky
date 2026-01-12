@@ -354,14 +354,24 @@ func NewImageCache() *ImageCache {
 }
 
 // Load loads an image from a file, using the cache if available.
+// Uses double-checked locking to prevent race conditions and duplicate loads.
 func (ic *ImageCache) Load(path string) (*ebiten.Image, error) {
-	// Check cache first
+	// Check cache first (read lock)
 	ic.mu.RLock()
 	if img, ok := ic.cache[path]; ok {
 		ic.mu.RUnlock()
 		return img, nil
 	}
 	ic.mu.RUnlock()
+
+	// Acquire write lock and check again (double-checked locking)
+	ic.mu.Lock()
+	defer ic.mu.Unlock()
+
+	// Check if another goroutine loaded it while we were waiting for the lock
+	if img, ok := ic.cache[path]; ok {
+		return img, nil
+	}
 
 	// Load from file
 	loader := NewImageLoader()
@@ -371,9 +381,7 @@ func (ic *ImageCache) Load(path string) (*ebiten.Image, error) {
 	}
 
 	// Store in cache
-	ic.mu.Lock()
 	ic.cache[path] = img
-	ic.mu.Unlock()
 
 	return img, nil
 }
