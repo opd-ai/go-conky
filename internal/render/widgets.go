@@ -260,8 +260,8 @@ func NewGauge(x, y, radius float64) *Gauge {
 		value:      0,
 		minValue:   0,
 		maxValue:   100,
-		startAngle: math.Pi * 0.75, // 135 degrees (bottom-left)
-		endAngle:   math.Pi * 2.25, // 405 degrees (bottom-right, going clockwise)
+		startAngle: math.Pi * 0.75, // 135 degrees (upper-left quadrant)
+		endAngle:   math.Pi * 2.25, // 405 degrees, 270° arc ending at lower-left
 		thickness:  10,
 		clockwise:  true,
 	}
