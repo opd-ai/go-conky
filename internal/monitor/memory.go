@@ -114,3 +114,16 @@ func safeSubtract(a, b uint64) uint64 {
 	}
 	return 0
 }
+
+// safeMultiply performs multiplication with overflow protection.
+// Returns the maximum uint64 value if overflow would occur.
+func safeMultiply(a, b uint64) uint64 {
+	if b == 0 {
+		return 0
+	}
+	maxBeforeMultiply := ^uint64(0) / b
+	if a > maxBeforeMultiply {
+		return ^uint64(0)
+	}
+	return a * b
+}

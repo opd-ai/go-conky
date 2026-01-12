@@ -11,17 +11,19 @@ import (
 // SystemMonitor provides centralized system monitoring capabilities.
 // It periodically updates system statistics from /proc filesystem.
 type SystemMonitor struct {
-	data          *SystemData
-	interval      time.Duration
-	cpuReader     *cpuReader
-	memReader     *memoryReader
-	uptimeReader  *uptimeReader
-	networkReader *networkReader
-	ctx           context.Context
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-	mu            sync.RWMutex
-	running       bool
+	data             *SystemData
+	interval         time.Duration
+	cpuReader        *cpuReader
+	memReader        *memoryReader
+	uptimeReader     *uptimeReader
+	networkReader    *networkReader
+	filesystemReader *filesystemReader
+	diskIOReader     *diskIOReader
+	ctx              context.Context
+	cancel           context.CancelFunc
+	wg               sync.WaitGroup
+	mu               sync.RWMutex
+	running          bool
 }
 
 // NewSystemMonitor creates a new SystemMonitor with the specified update interval.
@@ -29,14 +31,16 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &SystemMonitor{
-		data:          NewSystemData(),
-		interval:      interval,
-		cpuReader:     newCPUReader(),
-		memReader:     newMemoryReader(),
-		uptimeReader:  newUptimeReader(),
-		networkReader: newNetworkReader(),
-		ctx:           ctx,
-		cancel:        cancel,
+		data:             NewSystemData(),
+		interval:         interval,
+		cpuReader:        newCPUReader(),
+		memReader:        newMemoryReader(),
+		uptimeReader:     newUptimeReader(),
+		networkReader:    newNetworkReader(),
+		filesystemReader: newFilesystemReader(),
+		diskIOReader:     newDiskIOReader(),
+		ctx:              ctx,
+		cancel:           cancel,
 	}
 }
 
@@ -136,6 +140,22 @@ func (sm *SystemMonitor) Update() error {
 		sm.data.setNetwork(networkStats)
 	}
 
+	// Update filesystem stats
+	filesystemStats, err := sm.filesystemReader.ReadStats()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("filesystem: %w", err))
+	} else {
+		sm.data.setFilesystem(filesystemStats)
+	}
+
+	// Update disk I/O stats
+	diskIOStats, err := sm.diskIOReader.ReadStats()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("diskio: %w", err))
+	} else {
+		sm.data.setDiskIO(diskIOStats)
+	}
+
 	if len(errs) > 0 {
 		errMsgs := make([]string, len(errs))
 		for i, e := range errs {
@@ -151,10 +171,12 @@ func (sm *SystemMonitor) Data() SystemData {
 	sm.data.mu.RLock()
 	defer sm.data.mu.RUnlock()
 	return SystemData{
-		CPU:     sm.data.CPU,
-		Memory:  sm.data.Memory,
-		Uptime:  sm.data.Uptime,
-		Network: sm.data.copyNetwork(),
+		CPU:        sm.data.CPU,
+		Memory:     sm.data.Memory,
+		Uptime:     sm.data.Uptime,
+		Network:    sm.data.copyNetwork(),
+		Filesystem: sm.data.copyFilesystem(),
+		DiskIO:     sm.data.copyDiskIO(),
 	}
 }
 
@@ -176,6 +198,16 @@ func (sm *SystemMonitor) Uptime() UptimeStats {
 // Network returns the current network statistics.
 func (sm *SystemMonitor) Network() NetworkStats {
 	return sm.data.GetNetwork()
+}
+
+// Filesystem returns the current filesystem statistics.
+func (sm *SystemMonitor) Filesystem() FilesystemStats {
+	return sm.data.GetFilesystem()
+}
+
+// DiskIO returns the current disk I/O statistics.
+func (sm *SystemMonitor) DiskIO() DiskIOStats {
+	return sm.data.GetDiskIO()
 }
 
 // IsRunning returns whether the monitor is currently running.

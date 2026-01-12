@@ -98,13 +98,91 @@ type NetworkStats struct {
 	TotalTxBytesPerSec float64
 }
 
+// MountStats contains statistics for a single mounted filesystem.
+type MountStats struct {
+	// MountPoint is the filesystem mount path (e.g., "/", "/home").
+	MountPoint string
+	// Device is the block device path (e.g., "/dev/sda1").
+	Device string
+	// FSType is the filesystem type (e.g., "ext4", "xfs").
+	FSType string
+	// Total is the total filesystem size in bytes.
+	Total uint64
+	// Used is the used space in bytes.
+	Used uint64
+	// Free is the free space in bytes.
+	Free uint64
+	// Available is the available space for non-root users in bytes.
+	Available uint64
+	// UsagePercent is the usage as a percentage (0-100).
+	UsagePercent float64
+	// InodesTotal is the total number of inodes.
+	InodesTotal uint64
+	// InodesUsed is the number of used inodes.
+	InodesUsed uint64
+	// InodesFree is the number of free inodes.
+	InodesFree uint64
+	// InodesPercent is the inode usage as a percentage (0-100).
+	InodesPercent float64
+}
+
+// FilesystemStats contains statistics for all mounted filesystems.
+type FilesystemStats struct {
+	// Mounts is a map of mount point to mount statistics.
+	Mounts map[string]MountStats
+}
+
+// DiskStats contains I/O statistics for a single disk device.
+type DiskStats struct {
+	// Name is the device name (e.g., "sda", "nvme0n1").
+	Name string
+	// ReadsCompleted is the total number of reads completed.
+	ReadsCompleted uint64
+	// ReadsMerged is the number of reads merged.
+	ReadsMerged uint64
+	// SectorsRead is the total number of sectors read.
+	SectorsRead uint64
+	// ReadTimeMs is the total time spent reading in milliseconds.
+	ReadTimeMs uint64
+	// WritesCompleted is the total number of writes completed.
+	WritesCompleted uint64
+	// WritesMerged is the number of writes merged.
+	WritesMerged uint64
+	// SectorsWritten is the total number of sectors written.
+	SectorsWritten uint64
+	// WriteTimeMs is the total time spent writing in milliseconds.
+	WriteTimeMs uint64
+	// IOInProgress is the number of I/Os currently in progress.
+	IOInProgress uint64
+	// IOTimeMs is the total time spent doing I/Os in milliseconds.
+	IOTimeMs uint64
+	// WeightedIOTimeMs is the weighted time spent doing I/Os in milliseconds.
+	WeightedIOTimeMs uint64
+	// ReadBytesPerSec is the read rate in bytes per second.
+	ReadBytesPerSec float64
+	// WriteBytesPerSec is the write rate in bytes per second.
+	WriteBytesPerSec float64
+	// ReadsPerSec is the read operations per second.
+	ReadsPerSec float64
+	// WritesPerSec is the write operations per second.
+	WritesPerSec float64
+}
+
+// DiskIOStats contains I/O statistics for all disk devices.
+type DiskIOStats struct {
+	// Disks is a map of device name to disk statistics.
+	Disks map[string]DiskStats
+}
+
 // SystemData aggregates all system monitoring data.
 type SystemData struct {
-	CPU     CPUStats
-	Memory  MemoryStats
-	Uptime  UptimeStats
-	Network NetworkStats
-	mu      sync.RWMutex
+	CPU        CPUStats
+	Memory     MemoryStats
+	Uptime     UptimeStats
+	Network    NetworkStats
+	Filesystem FilesystemStats
+	DiskIO     DiskIOStats
+	mu         sync.RWMutex
 }
 
 // NewSystemData creates a new SystemData instance.
@@ -182,4 +260,56 @@ func (sd *SystemData) setNetwork(network NetworkStats) {
 	sd.mu.Lock()
 	defer sd.mu.Unlock()
 	sd.Network = network
+}
+
+// GetFilesystem returns a copy of the filesystem statistics with proper locking.
+func (sd *SystemData) GetFilesystem() FilesystemStats {
+	sd.mu.RLock()
+	defer sd.mu.RUnlock()
+	return sd.copyFilesystem()
+}
+
+// copyFilesystem returns a deep copy of the filesystem statistics.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copyFilesystem() FilesystemStats {
+	result := FilesystemStats{
+		Mounts: make(map[string]MountStats, len(sd.Filesystem.Mounts)),
+	}
+	for k, v := range sd.Filesystem.Mounts {
+		result.Mounts[k] = v
+	}
+	return result
+}
+
+// setFilesystem updates the filesystem statistics with proper locking.
+func (sd *SystemData) setFilesystem(fs FilesystemStats) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	sd.Filesystem = fs
+}
+
+// GetDiskIO returns a copy of the disk I/O statistics with proper locking.
+func (sd *SystemData) GetDiskIO() DiskIOStats {
+	sd.mu.RLock()
+	defer sd.mu.RUnlock()
+	return sd.copyDiskIO()
+}
+
+// copyDiskIO returns a deep copy of the disk I/O statistics.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copyDiskIO() DiskIOStats {
+	result := DiskIOStats{
+		Disks: make(map[string]DiskStats, len(sd.DiskIO.Disks)),
+	}
+	for k, v := range sd.DiskIO.Disks {
+		result.Disks[k] = v
+	}
+	return result
+}
+
+// setDiskIO updates the disk I/O statistics with proper locking.
+func (sd *SystemData) setDiskIO(diskIO DiskIOStats) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	sd.DiskIO = diskIO
 }

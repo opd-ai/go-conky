@@ -197,3 +197,58 @@ MemTotal 8192000 kB
 		t.Errorf("Total = %d, want 0 for malformed input", stats.Total)
 	}
 }
+
+func TestSafeMultiply(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        uint64
+		b        uint64
+		expected uint64
+	}{
+		{
+			name:     "normal multiplication",
+			a:        100,
+			b:        200,
+			expected: 20000,
+		},
+		{
+			name:     "multiply by zero",
+			a:        100,
+			b:        0,
+			expected: 0,
+		},
+		{
+			name:     "zero times value",
+			a:        0,
+			b:        100,
+			expected: 0,
+		},
+		{
+			name:     "large values no overflow",
+			a:        1000000,
+			b:        1000000,
+			expected: 1000000000000,
+		},
+		{
+			name:     "overflow protection",
+			a:        ^uint64(0),
+			b:        2,
+			expected: ^uint64(0),
+		},
+		{
+			name:     "near overflow protection",
+			a:        ^uint64(0) / 2,
+			b:        3,
+			expected: ^uint64(0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := safeMultiply(tt.a, tt.b)
+			if got != tt.expected {
+				t.Errorf("safeMultiply(%d, %d) = %d, want %d", tt.a, tt.b, got, tt.expected)
+			}
+		})
+	}
+}
