@@ -58,12 +58,53 @@ type UptimeStats struct {
 	IdleSeconds float64
 }
 
+// InterfaceStats contains statistics for a single network interface.
+type InterfaceStats struct {
+	// Name is the interface name (e.g., "eth0", "lo").
+	Name string
+	// RxBytes is the total bytes received.
+	RxBytes uint64
+	// RxPackets is the total packets received.
+	RxPackets uint64
+	// RxErrors is the total receive errors.
+	RxErrors uint64
+	// RxDropped is the total receive packets dropped.
+	RxDropped uint64
+	// TxBytes is the total bytes transmitted.
+	TxBytes uint64
+	// TxPackets is the total packets transmitted.
+	TxPackets uint64
+	// TxErrors is the total transmit errors.
+	TxErrors uint64
+	// TxDropped is the total transmit packets dropped.
+	TxDropped uint64
+	// RxBytesPerSec is the receive rate in bytes per second.
+	RxBytesPerSec float64
+	// TxBytesPerSec is the transmit rate in bytes per second.
+	TxBytesPerSec float64
+}
+
+// NetworkStats contains network interface statistics.
+type NetworkStats struct {
+	// Interfaces is a map of interface name to interface statistics.
+	Interfaces map[string]InterfaceStats
+	// TotalRxBytes is the sum of RxBytes across all interfaces.
+	TotalRxBytes uint64
+	// TotalTxBytes is the sum of TxBytes across all interfaces.
+	TotalTxBytes uint64
+	// TotalRxBytesPerSec is the sum of RxBytesPerSec across all interfaces.
+	TotalRxBytesPerSec float64
+	// TotalTxBytesPerSec is the sum of TxBytesPerSec across all interfaces.
+	TotalTxBytesPerSec float64
+}
+
 // SystemData aggregates all system monitoring data.
 type SystemData struct {
-	CPU    CPUStats
-	Memory MemoryStats
-	Uptime UptimeStats
-	mu     sync.RWMutex
+	CPU     CPUStats
+	Memory  MemoryStats
+	Uptime  UptimeStats
+	Network NetworkStats
+	mu      sync.RWMutex
 }
 
 // NewSystemData creates a new SystemData instance.
@@ -92,6 +133,24 @@ func (sd *SystemData) GetUptime() UptimeStats {
 	return sd.Uptime
 }
 
+// GetNetwork returns a copy of the network statistics with proper locking.
+func (sd *SystemData) GetNetwork() NetworkStats {
+	sd.mu.RLock()
+	defer sd.mu.RUnlock()
+	// Return a deep copy of the interfaces map
+	result := NetworkStats{
+		Interfaces:         make(map[string]InterfaceStats, len(sd.Network.Interfaces)),
+		TotalRxBytes:       sd.Network.TotalRxBytes,
+		TotalTxBytes:       sd.Network.TotalTxBytes,
+		TotalRxBytesPerSec: sd.Network.TotalRxBytesPerSec,
+		TotalTxBytesPerSec: sd.Network.TotalTxBytesPerSec,
+	}
+	for k, v := range sd.Network.Interfaces {
+		result.Interfaces[k] = v
+	}
+	return result
+}
+
 // setCPU updates the CPU statistics with proper locking.
 func (sd *SystemData) setCPU(cpu CPUStats) {
 	sd.mu.Lock()
@@ -111,4 +170,11 @@ func (sd *SystemData) setUptime(uptime UptimeStats) {
 	sd.mu.Lock()
 	defer sd.mu.Unlock()
 	sd.Uptime = uptime
+}
+
+// setNetwork updates the network statistics with proper locking.
+func (sd *SystemData) setNetwork(network NetworkStats) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	sd.Network = network
 }

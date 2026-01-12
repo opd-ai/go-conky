@@ -11,16 +11,17 @@ import (
 // SystemMonitor provides centralized system monitoring capabilities.
 // It periodically updates system statistics from /proc filesystem.
 type SystemMonitor struct {
-	data         *SystemData
-	interval     time.Duration
-	cpuReader    *cpuReader
-	memReader    *memoryReader
-	uptimeReader *uptimeReader
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
-	mu           sync.RWMutex
-	running      bool
+	data          *SystemData
+	interval      time.Duration
+	cpuReader     *cpuReader
+	memReader     *memoryReader
+	uptimeReader  *uptimeReader
+	networkReader *networkReader
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	mu            sync.RWMutex
+	running       bool
 }
 
 // NewSystemMonitor creates a new SystemMonitor with the specified update interval.
@@ -28,13 +29,14 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &SystemMonitor{
-		data:         NewSystemData(),
-		interval:     interval,
-		cpuReader:    newCPUReader(),
-		memReader:    newMemoryReader(),
-		uptimeReader: newUptimeReader(),
-		ctx:          ctx,
-		cancel:       cancel,
+		data:          NewSystemData(),
+		interval:      interval,
+		cpuReader:     newCPUReader(),
+		memReader:     newMemoryReader(),
+		uptimeReader:  newUptimeReader(),
+		networkReader: newNetworkReader(),
+		ctx:           ctx,
+		cancel:        cancel,
 	}
 }
 
@@ -126,6 +128,14 @@ func (sm *SystemMonitor) Update() error {
 		sm.data.setUptime(uptimeStats)
 	}
 
+	// Update network stats
+	networkStats, err := sm.networkReader.ReadStats()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("network: %w", err))
+	} else {
+		sm.data.setNetwork(networkStats)
+	}
+
 	if len(errs) > 0 {
 		errMsgs := make([]string, len(errs))
 		for i, e := range errs {
@@ -140,10 +150,22 @@ func (sm *SystemMonitor) Update() error {
 func (sm *SystemMonitor) Data() SystemData {
 	sm.data.mu.RLock()
 	defer sm.data.mu.RUnlock()
+	// Deep copy the network interfaces map
+	networkCopy := NetworkStats{
+		Interfaces:         make(map[string]InterfaceStats, len(sm.data.Network.Interfaces)),
+		TotalRxBytes:       sm.data.Network.TotalRxBytes,
+		TotalTxBytes:       sm.data.Network.TotalTxBytes,
+		TotalRxBytesPerSec: sm.data.Network.TotalRxBytesPerSec,
+		TotalTxBytesPerSec: sm.data.Network.TotalTxBytesPerSec,
+	}
+	for k, v := range sm.data.Network.Interfaces {
+		networkCopy.Interfaces[k] = v
+	}
 	return SystemData{
-		CPU:    sm.data.CPU,
-		Memory: sm.data.Memory,
-		Uptime: sm.data.Uptime,
+		CPU:     sm.data.CPU,
+		Memory:  sm.data.Memory,
+		Uptime:  sm.data.Uptime,
+		Network: networkCopy,
 	}
 }
 
@@ -160,6 +182,11 @@ func (sm *SystemMonitor) Memory() MemoryStats {
 // Uptime returns the current uptime statistics.
 func (sm *SystemMonitor) Uptime() UptimeStats {
 	return sm.data.GetUptime()
+}
+
+// Network returns the current network statistics.
+func (sm *SystemMonitor) Network() NetworkStats {
+	return sm.data.GetNetwork()
 }
 
 // IsRunning returns whether the monitor is currently running.

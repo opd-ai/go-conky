@@ -96,7 +96,7 @@ Window Display (X11/Wayland)
 - Network, filesystem, and hardware monitoring
 
 **Tasks:**
-- [ ] Network interface monitoring (/proc/net/dev parsing) (12 hours)
+- [x] Network interface monitoring (/proc/net/dev parsing) (12 hours)
 - [ ] Filesystem and disk I/O monitoring (10 hours) 
 - [ ] Temperature and hardware sensors (hwmon integration) (8 hours)
 - [ ] Process and memory detailed statistics (10 hours)
