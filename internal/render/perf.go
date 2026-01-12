@@ -338,6 +338,8 @@ func (dt *DirtyTracker) MarkDirty(region DirtyRegion) {
 
 	// Try to merge with existing regions. We need to keep merging as the
 	// region grows, as it may intersect additional regions after each merge.
+	// Note: This is O(n²) in worst case but acceptable for typical UI scenarios
+	// with few dirty regions (usually < 20). The simplicity is worth the trade-off.
 	merged := region
 	for i := 0; i < len(dt.regions); {
 		if dt.regions[i].Intersects(merged) {
