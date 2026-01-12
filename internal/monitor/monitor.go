@@ -22,6 +22,7 @@ type SystemMonitor struct {
 	hwmonReader      *hwmonReader
 	processReader    *processReader
 	batteryReader    *batteryReader
+	audioReader      *audioReader
 	ctx              context.Context
 	cancel           context.CancelFunc
 	wg               sync.WaitGroup
@@ -45,6 +46,7 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		hwmonReader:      newHwmonReader(),
 		processReader:    newProcessReader(),
 		batteryReader:    newBatteryReader(),
+		audioReader:      newAudioReader(),
 		ctx:              ctx,
 		cancel:           cancel,
 	}
@@ -186,6 +188,14 @@ func (sm *SystemMonitor) Update() error {
 		sm.data.setBattery(batteryStats)
 	}
 
+	// Update audio stats
+	audioStats, err := sm.audioReader.ReadStats()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("audio: %w", err))
+	} else {
+		sm.data.setAudio(audioStats)
+	}
+
 	if len(errs) > 0 {
 		errMsgs := make([]string, len(errs))
 		for i, e := range errs {
@@ -210,6 +220,7 @@ func (sm *SystemMonitor) Data() SystemData {
 		Hwmon:      sm.data.copyHwmon(),
 		Process:    sm.data.copyProcess(),
 		Battery:    sm.data.copyBattery(),
+		Audio:      sm.data.copyAudio(),
 	}
 }
 
@@ -256,6 +267,11 @@ func (sm *SystemMonitor) Process() ProcessStats {
 // Battery returns the current battery statistics.
 func (sm *SystemMonitor) Battery() BatteryStats {
 	return sm.data.GetBattery()
+}
+
+// Audio returns the current audio statistics.
+func (sm *SystemMonitor) Audio() AudioStats {
+	return sm.data.GetAudio()
 }
 
 // IsRunning returns whether the monitor is currently running.
