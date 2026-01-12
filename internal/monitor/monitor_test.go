@@ -74,6 +74,33 @@ func TestSystemDataGettersSetters(t *testing.T) {
 	if gotUptime.Seconds != uptimeStats.Seconds {
 		t.Errorf("GetUptime().Seconds = %v, want %v", gotUptime.Seconds, uptimeStats.Seconds)
 	}
+
+	// Test Network
+	networkStats := NetworkStats{
+		Interfaces: map[string]InterfaceStats{
+			"eth0": {
+				Name:    "eth0",
+				RxBytes: 1000,
+				TxBytes: 2000,
+			},
+		},
+		TotalRxBytes: 1000,
+		TotalTxBytes: 2000,
+	}
+	sd.setNetwork(networkStats)
+	gotNetwork := sd.GetNetwork()
+	if gotNetwork.TotalRxBytes != networkStats.TotalRxBytes {
+		t.Errorf("GetNetwork().TotalRxBytes = %v, want %v", gotNetwork.TotalRxBytes, networkStats.TotalRxBytes)
+	}
+	if len(gotNetwork.Interfaces) != 1 {
+		t.Errorf("GetNetwork().Interfaces length = %d, want 1", len(gotNetwork.Interfaces))
+	}
+	eth0, ok := gotNetwork.Interfaces["eth0"]
+	if !ok {
+		t.Error("GetNetwork().Interfaces should contain eth0")
+	} else if eth0.RxBytes != 1000 {
+		t.Errorf("GetNetwork().Interfaces[eth0].RxBytes = %v, want 1000", eth0.RxBytes)
+	}
 }
 
 func TestNewSystemMonitor(t *testing.T) {
@@ -144,6 +171,14 @@ func TestSystemMonitorUpdate(t *testing.T) {
 	if uptime.Seconds == 0 {
 		t.Error("Uptime().Seconds should not be 0")
 	}
+
+	network := sm.Network()
+	if len(network.Interfaces) != 2 {
+		t.Errorf("Network().Interfaces count = %d, want 2", len(network.Interfaces))
+	}
+	if network.TotalRxBytes != 6000 { // 1000 + 5000
+		t.Errorf("Network().TotalRxBytes = %d, want 6000", network.TotalRxBytes)
+	}
 }
 
 func TestSystemMonitorData(t *testing.T) {
@@ -157,6 +192,10 @@ func TestSystemMonitorData(t *testing.T) {
 	// Verify we got a valid snapshot with non-zero CPU count
 	if data.CPU.CPUCount == 0 {
 		t.Error("Data() should return valid snapshot with CPU data")
+	}
+	// Verify network data is included in snapshot
+	if len(data.Network.Interfaces) == 0 {
+		t.Error("Data() should return valid snapshot with Network data")
 	}
 }
 
@@ -227,6 +266,16 @@ SwapFree:        3072000 kB
 	if err := os.WriteFile(filepath.Join(tmpDir, "uptime"), []byte(uptimeContent), 0644); err != nil {
 		t.Fatalf("failed to write mock uptime: %v", err)
 	}
+
+	// Create mock /proc/net/dev
+	netDevContent := `Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+    lo: 1000   100    0    0    0     0          0         0  1000   100    0    0    0     0       0          0
+  eth0: 5000   500    0    0    0     0          0         0  2000   200    0    0    0     0       0          0
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0644); err != nil {
+		t.Fatalf("failed to write mock net_dev: %v", err)
+	}
 }
 
 func createTestMonitor(tmpDir string, interval time.Duration) *SystemMonitor {
@@ -235,5 +284,6 @@ func createTestMonitor(tmpDir string, interval time.Duration) *SystemMonitor {
 	sm.cpuReader.procInfoPath = filepath.Join(tmpDir, "cpuinfo")
 	sm.memReader.procMemInfoPath = filepath.Join(tmpDir, "meminfo")
 	sm.uptimeReader.procUptimePath = filepath.Join(tmpDir, "uptime")
+	sm.networkReader.procNetDevPath = filepath.Join(tmpDir, "net_dev")
 	return sm
 }
