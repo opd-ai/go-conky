@@ -6,7 +6,8 @@ import (
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	etext "github.com/hajimehoshi/ebiten/v2/text/v2"
+
 	"golang.org/x/image/font/gofont/gomonobold"
 )
 
@@ -15,14 +16,14 @@ const defaultFontSize = 14.0
 
 // TextRenderer handles text rendering using Ebiten's text package.
 type TextRenderer struct {
-	fontSource *text.GoTextFaceSource
+	fontSource *etext.GoTextFaceSource
 	fontSize   float64
 	mu         sync.RWMutex
 }
 
 // NewTextRenderer creates a new TextRenderer with the default monospace font.
 func NewTextRenderer() *TextRenderer {
-	fontSource, err := text.NewGoTextFaceSource(bytes.NewReader(gomonobold.TTF))
+	fontSource, err := etext.NewGoTextFaceSource(bytes.NewReader(gomonobold.TTF))
 	if err != nil {
 		// This should never fail with the embedded font
 		panic("failed to load embedded font: " + err.Error())
@@ -59,16 +60,16 @@ func (tr *TextRenderer) DrawText(screen *ebiten.Image, textStr string, x, y floa
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
 
-	face := &text.GoTextFace{
+	face := &etext.GoTextFace{
 		Source: tr.fontSource,
 		Size:   tr.fontSize,
 	}
 
-	op := &text.DrawOptions{}
+	op := &etext.DrawOptions{}
 	op.GeoM.Translate(x, y)
 	op.ColorScale.ScaleWithColor(clr)
 
-	text.Draw(screen, textStr, face, op)
+	etext.Draw(screen, textStr, face, op)
 }
 
 // MeasureText returns the width and height of the given text string.
@@ -76,14 +77,14 @@ func (tr *TextRenderer) MeasureText(textStr string) (width, height float64) {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
 
-	face := &text.GoTextFace{
+	face := &etext.GoTextFace{
 		Source: tr.fontSource,
 		Size:   tr.fontSize,
 	}
 
 	// lineSpacingInPixels should be the line height for proper text measurement
 	lineSpacing := tr.fontSize * 1.2
-	w, h := text.Measure(textStr, face, lineSpacing)
+	w, h := etext.Measure(textStr, face, lineSpacing)
 	return w, h
 }
 
