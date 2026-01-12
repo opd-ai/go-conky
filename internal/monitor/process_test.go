@@ -503,12 +503,12 @@ func TestProcessReaderTopProcessLimit(t *testing.T) {
 		t.Errorf("expected 20 total processes, got %d", stats.TotalProcesses)
 	}
 
-	if len(stats.TopCPU) != topProcessCount {
-		t.Errorf("expected %d TopCPU processes, got %d", topProcessCount, len(stats.TopCPU))
+	if len(stats.TopCPU) != TopProcessCount {
+		t.Errorf("expected %d TopCPU processes, got %d", TopProcessCount, len(stats.TopCPU))
 	}
 
-	if len(stats.TopMem) != topProcessCount {
-		t.Errorf("expected %d TopMem processes, got %d", topProcessCount, len(stats.TopMem))
+	if len(stats.TopMem) != TopProcessCount {
+		t.Errorf("expected %d TopMem processes, got %d", TopProcessCount, len(stats.TopMem))
 	}
 
 	// TopMem should be sorted by memory (highest first)

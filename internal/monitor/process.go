@@ -11,8 +11,33 @@ import (
 	"sync"
 )
 
-// topProcessCount is the default number of top processes to track.
-const topProcessCount = 10
+// TopProcessCount is the default number of top processes to track.
+const TopProcessCount = 10
+
+// Constants for parsing /proc/[pid]/stat fields.
+// The field indices are relative to the fields after the command name (comm).
+// Field numbers in comments are from the proc(5) man page.
+const (
+	// statMinFields is the minimum number of fields required after comm.
+	statMinFields = 22
+	// statFieldState is the process state (field 3 in proc(5)).
+	statFieldState = 0
+	// statFieldUtime is user mode CPU time in clock ticks (field 14).
+	statFieldUtime = 11
+	// statFieldStime is kernel mode CPU time in clock ticks (field 15).
+	statFieldStime = 12
+	// statFieldNumThreads is the number of threads (field 20).
+	statFieldNumThreads = 17
+	// statFieldStarttime is process start time in clock ticks (field 22).
+	statFieldStarttime = 19
+	// statFieldVsize is virtual memory size in bytes (field 23).
+	statFieldVsize = 20
+	// statFieldRss is resident set size in pages (field 24).
+	statFieldRss = 21
+	// pageSize is the memory page size in bytes.
+	// While this can vary on some systems, 4096 is the standard for x86/x86_64 Linux.
+	pageSize = 4096
+)
 
 // processReader reads process statistics from /proc filesystem.
 type processReader struct {
@@ -47,8 +72,8 @@ func (r *processReader) ReadStats() (ProcessStats, error) {
 	defer r.mu.Unlock()
 
 	stats := ProcessStats{
-		TopCPU: make([]ProcessInfo, 0, topProcessCount),
-		TopMem: make([]ProcessInfo, 0, topProcessCount),
+		TopCPU: make([]ProcessInfo, 0, TopProcessCount),
+		TopMem: make([]ProcessInfo, 0, TopProcessCount),
 	}
 
 	// Read total memory for percentage calculation
@@ -117,7 +142,7 @@ func (r *processReader) ReadStats() (ProcessStats, error) {
 	sort.Slice(processes, func(i, j int) bool {
 		return processes[i].CPUPercent > processes[j].CPUPercent
 	})
-	for i := 0; i < len(processes) && i < topProcessCount; i++ {
+	for i := 0; i < len(processes) && i < TopProcessCount; i++ {
 		stats.TopCPU = append(stats.TopCPU, processes[i])
 	}
 
@@ -125,7 +150,7 @@ func (r *processReader) ReadStats() (ProcessStats, error) {
 	sort.Slice(processes, func(i, j int) bool {
 		return processes[i].MemBytes > processes[j].MemBytes
 	})
-	for i := 0; i < len(processes) && i < topProcessCount; i++ {
+	for i := 0; i < len(processes) && i < TopProcessCount; i++ {
 		stats.TopMem = append(stats.TopMem, processes[i])
 	}
 
@@ -167,53 +192,52 @@ func (r *processReader) parseProcessStat(proc *ProcessInfo, ct *cpuTime, content
 
 	// Fields after the closing parenthesis
 	fields := strings.Fields(content[closeParen+2:])
-	if len(fields) < 22 {
-		return fmt.Errorf("invalid stat format: not enough fields (got %d, need 22)", len(fields))
+	if len(fields) < statMinFields {
+		return fmt.Errorf("invalid stat format: not enough fields (got %d, need %d)", len(fields), statMinFields)
 	}
 
-	// Parse state (field index 0 after comm)
-	proc.State = fields[0]
+	// Parse state (first field after comm)
+	proc.State = fields[statFieldState]
 
-	// Parse utime (field 11 - index 10 in fields array, 14th field overall)
-	utime, err := strconv.ParseUint(fields[11], 10, 64)
+	// Parse utime (user mode CPU time in clock ticks)
+	utime, err := strconv.ParseUint(fields[statFieldUtime], 10, 64)
 	if err != nil {
 		return fmt.Errorf("parsing utime: %w", err)
 	}
 
-	// Parse stime (field 12 - index 11 in fields array, 15th field overall)
-	stime, err := strconv.ParseUint(fields[12], 10, 64)
+	// Parse stime (kernel mode CPU time in clock ticks)
+	stime, err := strconv.ParseUint(fields[statFieldStime], 10, 64)
 	if err != nil {
 		return fmt.Errorf("parsing stime: %w", err)
 	}
 
-	// Parse num_threads (field 17 - index 16 in fields array, 20th field overall)
-	threads, err := strconv.Atoi(fields[17])
+	// Parse num_threads (number of threads)
+	threads, err := strconv.Atoi(fields[statFieldNumThreads])
 	if err != nil {
 		return fmt.Errorf("parsing num_threads: %w", err)
 	}
 	proc.Threads = threads
 
-	// Parse starttime (field 19 - index 18 in fields array, 22nd field overall)
-	starttime, err := strconv.ParseUint(fields[19], 10, 64)
+	// Parse starttime (process start time in clock ticks)
+	starttime, err := strconv.ParseUint(fields[statFieldStarttime], 10, 64)
 	if err != nil {
 		return fmt.Errorf("parsing starttime: %w", err)
 	}
 	proc.StartTime = starttime
 
-	// Parse vsize (field 20 - index 19 in fields array, 23rd field overall)
-	vsize, err := strconv.ParseUint(fields[20], 10, 64)
+	// Parse vsize (virtual memory size in bytes)
+	vsize, err := strconv.ParseUint(fields[statFieldVsize], 10, 64)
 	if err != nil {
 		return fmt.Errorf("parsing vsize: %w", err)
 	}
 	proc.VirtBytes = vsize
 
-	// Parse rss (field 21 - index 20 in fields array, 24th field overall)
-	// RSS is in pages, convert to bytes
-	rss, err := strconv.ParseUint(fields[21], 10, 64)
+	// Parse rss (resident set size in pages, convert to bytes)
+	rss, err := strconv.ParseUint(fields[statFieldRss], 10, 64)
 	if err != nil {
 		return fmt.Errorf("parsing rss: %w", err)
 	}
-	proc.MemBytes = rss * 4096 // Standard page size
+	proc.MemBytes = rss * pageSize
 
 	// Calculate memory percentage
 	if r.totalMemoryBytes > 0 {
