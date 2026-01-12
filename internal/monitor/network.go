@@ -126,9 +126,7 @@ func (r *networkReader) readProcNetDev() (map[string]rawInterfaceStats, error) {
 }
 
 // parseNetDevLine parses a single line from /proc/net/dev.
-// Format: "iface: rxbytes rxpackets rxerrs rxdrop rxfifo rxframe rxcompressed rxmulticast
-//
-//	txbytes txpackets txerrs txdrop txfifo txcolls txcarrier txcompressed"
+// Format: "iface: rxbytes rxpackets rxerrs rxdrop rxfifo rxframe rxcompressed rxmulticast txbytes txpackets txerrs txdrop txfifo txcolls txcarrier txcompressed"
 func parseNetDevLine(line string) (string, rawInterfaceStats, error) {
 	// Split by colon to separate interface name from stats
 	parts := strings.SplitN(line, ":", 2)
