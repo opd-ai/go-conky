@@ -35,7 +35,8 @@ const (
 	// statFieldRss is resident set size in pages (field 24).
 	statFieldRss = 21
 	// pageSize is the memory page size in bytes.
-	// While this can vary on some systems, 4096 is the standard for x86/x86_64 Linux.
+	// TODO: Consider using syscall.Getpagesize() for portability. Currently hardcoded
+	// to 4096 which is correct for x86/x86_64 Linux but may differ on ARM64 (64KB pages).
 	pageSize = 4096
 )
 
@@ -51,10 +52,9 @@ type processReader struct {
 
 // cpuTime stores CPU time information for rate calculation.
 type cpuTime struct {
-	utime  uint64 // User mode time
-	stime  uint64 // Kernel mode time
-	total  uint64 // Combined time
-	sample uint64 // Total CPU time when sampled
+	utime uint64 // User mode time
+	stime uint64 // Kernel mode time
+	total uint64 // Combined time
 }
 
 // newProcessReader creates a new processReader with default paths.
@@ -248,7 +248,6 @@ func (r *processReader) parseProcessStat(proc *ProcessInfo, ct *cpuTime, content
 	ct.utime = utime
 	ct.stime = stime
 	ct.total = utime + stime
-	ct.sample = r.lastTotalCPU
 
 	// Calculate CPU percentage based on delta since last sample
 	if cpuDelta > 0 {

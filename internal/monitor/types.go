@@ -195,8 +195,6 @@ type ProcessInfo struct {
 	VirtBytes uint64
 	// Threads is the number of threads in the process.
 	Threads int
-	// User is the user ID of the process owner.
-	User int
 	// StartTime is the process start time in jiffies since system boot.
 	StartTime uint64
 }
