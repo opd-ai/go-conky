@@ -13,6 +13,8 @@ import (
 type TempSensor struct {
 	// Label is the sensor label (e.g., "Core 0", "Package id 0").
 	Label string
+	// DeviceName is the hwmon device name (e.g., "coretemp", "acpitz").
+	DeviceName string
 	// Input is the current temperature in millidegrees Celsius.
 	Input int64
 	// InputCelsius is the current temperature in degrees Celsius.
@@ -93,7 +95,10 @@ func (r *hwmonReader) ReadStats() (HwmonStats, error) {
 		}
 
 		stats.Devices[device.Name] = device
-		for _, temp := range device.Temps {
+		for sensorType, temp := range device.Temps {
+			// Set DeviceName for easy identification in flat list
+			temp.DeviceName = device.Name
+			device.Temps[sensorType] = temp
 			stats.TempSensors = append(stats.TempSensors, temp)
 		}
 	}
@@ -108,12 +113,13 @@ func (r *hwmonReader) readDevice(devicePath string) (HwmonDevice, error) {
 		Temps: make(map[string]TempSensor),
 	}
 
-	// Read device name
+	// Read device name from the 'name' file
 	nameBytes, err := os.ReadFile(filepath.Join(devicePath, "name"))
 	if err != nil {
-		// Try device symlink for older kernels
+		// Fallback: try to derive name from the 'device' symlink if 'name' file is missing
 		linkPath, linkErr := os.Readlink(filepath.Join(devicePath, "device"))
 		if linkErr != nil {
+			// Final fallback: use the hwmon directory name (e.g., "hwmon0")
 			device.Name = filepath.Base(devicePath)
 		} else {
 			device.Name = filepath.Base(linkPath)

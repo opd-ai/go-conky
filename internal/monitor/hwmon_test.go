@@ -190,6 +190,13 @@ func TestHwmonReaderWithMultipleDevices(t *testing.T) {
 	if len(stats.TempSensors) != 2 {
 		t.Errorf("TempSensors count = %d, want 2", len(stats.TempSensors))
 	}
+
+	// Verify DeviceName is set in flat TempSensors list for identification
+	for _, sensor := range stats.TempSensors {
+		if sensor.DeviceName == "" {
+			t.Errorf("TempSensor DeviceName is empty for sensor %s", sensor.Label)
+		}
+	}
 }
 
 func TestHwmonReaderNoName(t *testing.T) {
