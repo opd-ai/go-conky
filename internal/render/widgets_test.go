@@ -683,3 +683,13 @@ func TestGaugeValueClamping(t *testing.T) {
 		t.Errorf("Percentage for value above max = %v, want 100", pct)
 	}
 }
+
+// Interface compliance tests
+
+func TestProgressBarImplementsWidget(t *testing.T) {
+	var _ Widget = (*ProgressBar)(nil)
+}
+
+func TestGaugeImplementsWidget(t *testing.T) {
+	var _ Widget = (*Gauge)(nil)
+}

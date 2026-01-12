@@ -12,6 +12,25 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
+// Widget is the interface that all progress-based widgets must implement.
+// This provides consistency with GraphWidget and enables polymorphic usage.
+type Widget interface {
+	// Draw renders the widget onto the given screen.
+	Draw(screen *ebiten.Image)
+	// SetStyle sets the visual style of the widget.
+	SetStyle(style WidgetStyle)
+	// SetPosition sets the position of the widget.
+	SetPosition(x, y float64)
+	// SetValue sets the current value of the widget.
+	SetValue(value float64)
+	// SetRange sets the minimum and maximum values for the widget.
+	SetRange(minVal, maxVal float64)
+	// Value returns the current value of the widget.
+	Value() float64
+	// Percentage returns the current value as a percentage (0-100).
+	Percentage() float64
+}
+
 // WidgetStyle defines the visual appearance of progress bar and gauge widgets.
 type WidgetStyle struct {
 	// FillColor is the color used to fill the progress portion.
