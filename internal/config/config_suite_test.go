@@ -326,7 +326,7 @@ own_window yes
 		builder.WriteString("background yes\n\nTEXT\n")
 		for i := range 100 {
 			builder.WriteString("${cpu} Line ")
-			builder.WriteString(string(rune('0' + i%10)))
+			builder.WriteString(fmt.Sprintf("%d", i))
 			builder.WriteString("\n")
 		}
 		content := builder.String()
@@ -784,7 +784,8 @@ ${cpu}
 	done := make(chan bool, numGoroutines)
 	errors := make(chan error, numGoroutines)
 
-	for range numGoroutines {
+	// Launch goroutines to test concurrent parsing
+	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			parser := NewLegacyParser()
 
@@ -806,7 +807,7 @@ ${cpu}
 	}
 
 	// Wait for all goroutines
-	for range numGoroutines {
+	for i := 0; i < numGoroutines; i++ {
 		<-done
 	}
 
