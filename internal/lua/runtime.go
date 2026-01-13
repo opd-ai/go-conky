@@ -243,6 +243,8 @@ func (cr *ConkyRuntime) ClearOutput() {
 // Runtime returns the underlying Golua runtime.
 // Use with caution as this bypasses thread-safety protections.
 func (cr *ConkyRuntime) Runtime() *rt.Runtime {
+	cr.mu.RLock()
+	defer cr.mu.RUnlock()
 	return cr.runtime
 }
 
