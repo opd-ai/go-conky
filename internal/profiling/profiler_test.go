@@ -238,7 +238,7 @@ func TestProfilerInvalidCPUPath(t *testing.T) {
 	err := p.Start()
 	if err == nil {
 		t.Error("Start() should fail with invalid path")
-		p.Stop()
+		_ = p.Stop()
 	}
 }
 
