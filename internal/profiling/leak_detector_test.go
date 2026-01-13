@@ -446,13 +446,18 @@ func TestSnapshotsCopy(t *testing.T) {
 	// Get snapshots
 	snapshots := detector.Snapshots()
 	originalLen := len(snapshots)
+	originalHeapAlloc := snapshots[0].HeapAlloc
 
-	// Modify the returned slice (use _ to mark as intentionally unused)
-	_ = append(snapshots, MemorySnapshot{})
+	// Modify an element in the returned slice
+	snapshots[0].HeapAlloc = 999999
 
-	// Verify internal state is unchanged
+	// Get snapshots again and verify internal state is unchanged
+	newSnapshots := detector.Snapshots()
 	if detector.SnapshotCount() != originalLen {
 		t.Error("modifying returned slice should not affect internal state")
+	}
+	if newSnapshots[0].HeapAlloc != originalHeapAlloc {
+		t.Error("modifying returned snapshot should not affect internal snapshot")
 	}
 }
 

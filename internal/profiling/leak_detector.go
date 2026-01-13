@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+// Byte size constants for memory formatting
+const (
+	KB = 1024
+	MB = KB * 1024
+	GB = MB * 1024
+)
+
 // MemorySnapshot represents a point-in-time memory measurement.
 type MemorySnapshot struct {
 	Timestamp      time.Time
@@ -187,7 +194,7 @@ func (d *MemoryLeakDetector) analyzeGrowthBetween(first, last MemorySnapshot) *M
 		growth.PotentialLeak = true
 		growth.LeakReason = fmt.Sprintf(
 			"sustained memory growth of %.2f KB/s exceeds threshold of %.2f KB/s",
-			growthRate/1024, float64(d.config.LeakThresholdBytes)/1024,
+			growthRate/KB, float64(d.config.LeakThresholdBytes)/KB,
 		)
 	} else if goroutineDelta > d.config.GoroutineLeakThreshold {
 		growth.PotentialLeak = true
@@ -301,12 +308,6 @@ func CurrentMemoryStats() MemorySnapshot {
 
 // FormatBytes formats a byte count as a human-readable string.
 func FormatBytes(bytes uint64) string {
-	const (
-		KB = 1024
-		MB = KB * 1024
-		GB = MB * 1024
-	)
-
 	switch {
 	case bytes >= GB:
 		return fmt.Sprintf("%.2f GB", float64(bytes)/GB)
@@ -360,7 +361,7 @@ func (g MemoryGrowth) String() string {
 		g.Duration.Round(time.Second),
 		direction,
 		FormatBytes(uint64(abs(g.HeapAllocDelta))),
-		g.GrowthRatePerSec/1024,
+		g.GrowthRatePerSec/KB,
 		g.HeapObjectsDelta,
 		g.GoroutineDelta,
 		leakStatus,
