@@ -46,7 +46,7 @@ type Conky interface {
 
     // Restart performs a stop followed by a start.
     // Configuration is reloaded from the original source.
-    // Returns an error if restart fails; the instance may be in a stopped state.
+    // Returns an error if restart fails; the instance will be in a stopped state.
     Restart() error
 
     // IsRunning returns true if the go-conky instance is currently running.
@@ -57,6 +57,8 @@ type Conky interface {
 
     // SetErrorHandler registers a callback for runtime errors.
     // The handler is invoked asynchronously; do not block in the handler.
+    // Implementations of Conky MUST recover from panics in the handler so that
+    // a buggy handler cannot crash the embedding application.
     SetErrorHandler(handler ErrorHandler)
 
     // SetEventHandler registers a callback for lifecycle events.
@@ -92,6 +94,8 @@ type Event struct {
 }
 
 // EventType enumerates lifecycle event types.
+// Note: The underlying integer values are implementation details and should not
+// be relied upon for serialization. Use the constant names for comparison.
 type EventType int
 
 const (
@@ -215,6 +219,10 @@ For applications that want to access system monitoring data without the full ren
 // Monitor provides read-only access to system monitoring data.
 // This interface is useful for applications that want system data
 // without the full rendering overhead.
+//
+// The stat types (SystemData, CPUStats, MemoryStats, etc.) are defined in
+// the internal/monitor package. When implementing the public API, these
+// types will be re-exported or wrapped in the pkg/conky package.
 type Monitor interface {
     // Data returns a snapshot of all current system data.
     Data() SystemData
@@ -235,6 +243,17 @@ type Monitor interface {
 
 // GetMonitor returns the system monitor from a running Conky instance.
 // Returns nil if the instance is not running.
+//
+// Note: GetMonitor is intentionally not part of the public Conky interface
+// as it exposes internal monitoring details. Applications that need direct
+// access to the underlying Monitor should use type assertion:
+//
+//   if impl, ok := c.(*conkyImpl); ok {
+//       monitor := impl.GetMonitor()
+//   }
+//
+// Alternatively, consider adding GetMonitor() to the Conky interface in a
+// future version if this becomes a common use case.
 func (c *conkyImpl) GetMonitor() Monitor
 ```
 
@@ -265,7 +284,8 @@ go-conky/
 │   ├── lua/
 │   ├── monitor/
 │   ├── profiling/
-│   └── render/
+│   ├── render/
+│   └── window/                    # Window management (may need headless mode support)
 ├── test/
 └── docs/
 ```
@@ -431,6 +451,7 @@ type conkyImpl struct {
     opts         Options
     configSource string  // Path or "embedded" or "reader"
     configLoader func() (*config.Config, error)
+    fsys         fs.FS   // Embedded filesystem for Lua require() (nil for disk files)
     
     // Components
     monitor   *monitor.SystemMonitor
@@ -470,7 +491,9 @@ func (c *conkyImpl) Start() error {
     
     // Initialize components
     if err := c.initComponents(); err != nil {
-        c.cancel()
+        if c.cancel != nil {
+            c.cancel()
+        }
         return fmt.Errorf("failed to initialize: %w", err)
     }
     
@@ -480,11 +503,16 @@ func (c *conkyImpl) Start() error {
         return fmt.Errorf("failed to start monitor: %w", err)
     }
     
+    // Set running state BEFORE starting goroutine to avoid race
+    c.running.Store(true)
+    c.startTime = time.Now()
+    
     // Start render loop in goroutine (non-blocking)
     c.wg.Add(1)
     go func() {
         defer c.wg.Done()
         defer c.cleanup()
+        defer c.running.Store(false)
         
         if !c.opts.Headless {
             if err := c.game.Run(); err != nil {
@@ -495,12 +523,9 @@ func (c *conkyImpl) Start() error {
             <-c.ctx.Done()
         }
         
-        c.running.Store(false)
         c.emitEvent(EventStopped, "Instance stopped")
     }()
     
-    c.running.Store(true)
-    c.startTime = time.Now()
     c.emitEvent(EventStarted, "Instance started")
     
     return nil
@@ -512,17 +537,28 @@ func (c *conkyImpl) Stop() error {
     }
     
     // Signal stop
-    c.cancel()
+    if c.cancel != nil {
+        c.cancel()
+    }
     
     // Request game to stop
     if c.game != nil {
         c.game.RequestStop()
     }
     
-    // Wait for goroutines
-    c.wg.Wait()
+    // Wait for goroutines with timeout
+    done := make(chan struct{})
+    go func() {
+        c.wg.Wait()
+        close(done)
+    }()
     
-    return nil
+    select {
+    case <-done:
+        return nil
+    case <-time.After(5 * time.Second):
+        return fmt.Errorf("shutdown timeout: some goroutines did not stop")
+    }
 }
 
 func (c *conkyImpl) Restart() error {
@@ -537,7 +573,9 @@ func (c *conkyImpl) Restart() error {
         if err != nil {
             return fmt.Errorf("config reload failed: %w", err)
         }
+        c.mu.Lock()
         c.cfg = cfg
+        c.mu.Unlock()
         c.emitEvent(EventConfigReloaded, "Configuration reloaded")
     }
     
@@ -555,12 +593,17 @@ func (c *conkyImpl) IsRunning() bool {
 }
 
 func (c *conkyImpl) Status() Status {
+    c.mu.RLock()
+    startTime := c.startTime
+    configSource := c.configSource
+    c.mu.RUnlock()
+    
     return Status{
         Running:      c.running.Load(),
-        StartTime:    c.startTime,
+        StartTime:    startTime,
         UpdateCount:  c.updateCount.Load(),
         LastError:    c.getError(),
-        ConfigSource: c.configSource,
+        ConfigSource: configSource,
     }
 }
 
@@ -627,8 +670,21 @@ func (c *conkyImpl) cleanup() {
 
 func (c *conkyImpl) setError(err error) {
     c.lastError.Store(err)
-    if c.errorHandler != nil {
-        go c.errorHandler(err)
+    
+    c.mu.RLock()
+    handler := c.errorHandler
+    c.mu.RUnlock()
+    
+    if handler != nil {
+        go func() {
+            defer func() {
+                // Recover from panics in error handler to prevent crashing
+                if r := recover(); r != nil {
+                    // Optionally log the panic, but don't propagate it
+                }
+            }()
+            handler(err)
+        }()
     }
     c.emitEvent(EventError, err.Error())
 }
@@ -792,6 +848,7 @@ When Lua configurations use `require()` or `dofile()`, the embedded filesystem m
 
 ```go
 // In lua/runtime.go
+// Note: Requires importing "strings" and "io/fs" packages.
 
 func (cr *ConkyRuntime) registerFSSearcher() {
     if cr.fsys == nil {
@@ -905,7 +962,10 @@ The embedding application is decoupled from go-conky's lifecycle:
 ```go
 // Example: Application continues after go-conky stops
 func main() {
-    c, _ := conky.New("~/.conkyrc", nil)
+    c, err := conky.New("~/.conkyrc", nil)
+    if err != nil {
+        log.Fatalf("failed to create conky instance: %v", err)
+    }
     
     // Handle go-conky errors without crashing the app
     c.SetErrorHandler(func(err error) {
@@ -919,7 +979,9 @@ func main() {
         }
     })
     
-    c.Start()
+    if err := c.Start(); err != nil {
+        log.Fatalf("failed to start conky: %v", err)
+    }
     
     // Application's own event loop continues independently
     for {
@@ -1068,11 +1130,15 @@ CPU: ${cpu}% | RAM: ${memperc}%
         panic(err)
     }
     
-    c.Start()
+    if err := c.Start(); err != nil {
+        panic(err)
+    }
     
     // Later, update configuration
     time.Sleep(10 * time.Second)
-    c.Restart() // Reloads the same config (or could be updated)
+    if err := c.Restart(); err != nil {
+        panic(err)
+    }
     
     select {}
 }
@@ -1168,6 +1234,7 @@ package main
 
 import (
     "fmt"
+    "log"
     "time"
     
     "github.com/opd-ai/go-conky/pkg/conky"
@@ -1179,38 +1246,59 @@ func main() {
     a := app.New()
     w := a.NewWindow("System Monitor")
     
-    // Create conky instance
-    c, _ := conky.New("~/.conkyrc", &conky.Options{
+    // Create conky instance (error handling included for production code)
+    c, err := conky.New("~/.conkyrc", &conky.Options{
         Headless: true, // We'll display data in Fyne
     })
+    if err != nil {
+        log.Fatalf("failed to create conky instance: %v", err)
+    }
     
     // Status label
     statusLabel := widget.NewLabel("Status: Stopped")
     
-    // Control buttons
+    // Control buttons with error handling
     startBtn := widget.NewButton("Start", func() {
-        c.Start()
+        if err := c.Start(); err != nil {
+            log.Printf("failed to start: %v", err)
+            return
+        }
         statusLabel.SetText("Status: Running")
     })
     
     stopBtn := widget.NewButton("Stop", func() {
-        c.Stop()
+        if err := c.Stop(); err != nil {
+            log.Printf("failed to stop: %v", err)
+        }
         statusLabel.SetText("Status: Stopped")
     })
     
-    // CPU display (updated from conky monitor)
+    // CPU display (updated from conky monitor) with proper lifecycle
+    done := make(chan struct{})
     cpuLabel := widget.NewLabel("CPU: --")
     go func() {
+        ticker := time.NewTicker(time.Second)
+        defer ticker.Stop()
         for {
-            if c.IsRunning() {
-                if mon := c.GetMonitor(); mon != nil {
-                    cpu := mon.CPU()
-                    cpuLabel.SetText(fmt.Sprintf("CPU: %.1f%%", cpu.UsagePercent))
+            select {
+            case <-done:
+                return
+            case <-ticker.C:
+                if c.IsRunning() {
+                    if mon := c.GetMonitor(); mon != nil {
+                        cpu := mon.CPU()
+                        cpuLabel.SetText(fmt.Sprintf("CPU: %.1f%%", cpu.UsagePercent))
+                    }
                 }
             }
-            time.Sleep(time.Second)
         }
     }()
+    
+    // Clean up goroutine when window closes
+    w.SetOnClosed(func() {
+        close(done)
+        c.Stop()
+    })
     
     w.SetContent(widget.NewVBox(
         statusLabel,
@@ -1372,6 +1460,14 @@ The migration maintains full backward compatibility:
 
 ```go
 // pkg/conky/conky_test.go
+
+import (
+    "embed"
+    "sync"
+    "testing"
+    
+    "github.com/stretchr/testify/require"
+)
 
 func TestNew(t *testing.T) {
     // Test with valid config
