@@ -4,6 +4,9 @@
 # Build output directory
 build/
 
+# Distribution output directory
+dist/
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
