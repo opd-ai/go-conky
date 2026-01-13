@@ -267,16 +267,9 @@ func ParseAlignment(s string) (Alignment, error) {
 	}
 }
 
-// Validate checks if the Config has valid values.
+// Validate checks if the Config has valid values using the comprehensive validator.
+// It returns the first validation error found, or nil if the config is valid.
+// For detailed validation results including warnings, use NewValidator().Validate().
 func (c *Config) Validate() error {
-	if c.Window.Width < 0 {
-		return fmt.Errorf("window width must be non-negative, got %d", c.Window.Width)
-	}
-	if c.Window.Height < 0 {
-		return fmt.Errorf("window height must be non-negative, got %d", c.Window.Height)
-	}
-	if c.Display.UpdateInterval < 0 {
-		return fmt.Errorf("update interval must be non-negative, got %v", c.Display.UpdateInterval)
-	}
-	return nil
+	return ValidateConfig(c)
 }
