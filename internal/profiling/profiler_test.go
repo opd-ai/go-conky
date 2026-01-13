@@ -21,6 +21,9 @@ func TestNew(t *testing.T) {
 	if p.running {
 		t.Error("new profiler should not be running")
 	}
+	if p.cpuFilePath != "/tmp/cpu.prof" {
+		t.Errorf("cpuFilePath = %q, want %q", p.cpuFilePath, "/tmp/cpu.prof")
+	}
 	if p.memFilePath != "/tmp/mem.prof" {
 		t.Errorf("memFilePath = %q, want %q", p.memFilePath, "/tmp/mem.prof")
 	}
@@ -39,7 +42,7 @@ func TestProfilerStartStop(t *testing.T) {
 	p := New(config)
 
 	// Start profiling
-	if err := p.Start(cpuPath); err != nil {
+	if err := p.Start(); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
 
@@ -48,7 +51,7 @@ func TestProfilerStartStop(t *testing.T) {
 	}
 
 	// Attempt to start again should fail
-	if err := p.Start(cpuPath); err == nil {
+	if err := p.Start(); err == nil {
 		t.Error("Start() should fail when already running")
 	}
 
@@ -84,9 +87,12 @@ func TestProfilerCPUOnly(t *testing.T) {
 	tmpDir := t.TempDir()
 	cpuPath := filepath.Join(tmpDir, "cpu.prof")
 
-	p := New(Config{})
+	config := Config{
+		CPUProfilePath: cpuPath,
+	}
+	p := New(config)
 
-	if err := p.Start(cpuPath); err != nil {
+	if err := p.Start(); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
 
@@ -110,7 +116,7 @@ func TestProfilerMemoryOnly(t *testing.T) {
 	p := New(config)
 
 	// Start with empty CPU path
-	if err := p.Start(""); err != nil {
+	if err := p.Start(); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
 
@@ -127,7 +133,7 @@ func TestProfilerMemoryOnly(t *testing.T) {
 func TestProfilerNoProfiling(t *testing.T) {
 	p := New(Config{})
 
-	if err := p.Start(""); err != nil {
+	if err := p.Start(); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
 
@@ -153,7 +159,7 @@ func TestProfilerSetMemProfilePath(t *testing.T) {
 	}
 
 	// Start profiling
-	if err := p.Start(""); err != nil {
+	if err := p.Start(); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
 
@@ -193,11 +199,12 @@ func TestProfilerConcurrency(t *testing.T) {
 	memPath := filepath.Join(tmpDir, "mem.prof")
 
 	config := Config{
+		CPUProfilePath: cpuPath,
 		MemProfilePath: memPath,
 	}
 	p := New(config)
 
-	if err := p.Start(cpuPath); err != nil {
+	if err := p.Start(); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
 
@@ -222,10 +229,13 @@ func TestProfilerConcurrency(t *testing.T) {
 }
 
 func TestProfilerInvalidCPUPath(t *testing.T) {
-	p := New(Config{})
+	config := Config{
+		CPUProfilePath: "/nonexistent/directory/cpu.prof",
+	}
+	p := New(config)
 
 	// Try to create a file in a non-existent directory
-	err := p.Start("/nonexistent/directory/cpu.prof")
+	err := p.Start()
 	if err == nil {
 		t.Error("Start() should fail with invalid path")
 		p.Stop()
@@ -239,7 +249,7 @@ func TestProfilerInvalidMemPath(t *testing.T) {
 	p := New(config)
 
 	// Start should succeed (CPU path is empty)
-	if err := p.Start(""); err != nil {
+	if err := p.Start(); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
 

@@ -15,6 +15,7 @@ import (
 // Profiler manages CPU and memory profiling for the application.
 // It provides a thread-safe way to start and stop profiling sessions.
 type Profiler struct {
+	cpuFilePath string
 	cpuFile     *os.File
 	memFilePath string
 	running     bool
@@ -36,13 +37,14 @@ type Config struct {
 // The profiler is not started automatically; call Start() to begin profiling.
 func New(config Config) *Profiler {
 	return &Profiler{
+		cpuFilePath: config.CPUProfilePath,
 		memFilePath: config.MemProfilePath,
 	}
 }
 
 // Start begins CPU profiling if a CPU profile path was configured.
 // It returns an error if profiling is already running or if the file cannot be created.
-func (p *Profiler) Start(cpuProfilePath string) error {
+func (p *Profiler) Start() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -50,12 +52,12 @@ func (p *Profiler) Start(cpuProfilePath string) error {
 		return errors.New("profiler is already running")
 	}
 
-	if cpuProfilePath == "" {
+	if p.cpuFilePath == "" {
 		p.running = true
 		return nil
 	}
 
-	f, err := os.Create(cpuProfilePath)
+	f, err := os.Create(p.cpuFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to create CPU profile file: %w", err)
 	}

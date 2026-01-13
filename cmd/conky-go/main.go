@@ -42,7 +42,7 @@ func run() int {
 	profiler := profiling.New(profConfig)
 
 	if profConfig.ProfilingEnabled() {
-		if err := profiler.Start(*cpuProfile); err != nil {
+		if err := profiler.Start(); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to start profiling: %v\n", err)
 			return 1
 		}
