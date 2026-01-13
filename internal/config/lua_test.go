@@ -2,6 +2,7 @@ package config
 
 import (
 	"image/color"
+	"strings"
 	"testing"
 	"time"
 )
@@ -267,11 +268,12 @@ func TestLuaConfigParserColors(t *testing.T) {
 
 			// Check the appropriate color field
 			var actual color.RGBA
-			if contains(tt.input, "default_color") {
+			switch {
+			case strings.Contains(tt.input, "default_color"):
 				actual = cfg.Colors.Default
-			} else if contains(tt.input, "color0") {
+			case strings.Contains(tt.input, "color0"):
 				actual = cfg.Colors.Color0
-			} else if contains(tt.input, "color1") {
+			case strings.Contains(tt.input, "color1"):
 				actual = cfg.Colors.Color1
 			}
 
@@ -497,18 +499,4 @@ func TestLuaConfigParserClose(t *testing.T) {
 	if err := p.Close(); err != nil {
 		t.Errorf("Second Close failed: %v", err)
 	}
-}
-
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

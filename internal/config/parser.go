@@ -6,7 +6,7 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
+	"regexp"
 )
 
 // Parser provides a unified interface for parsing Conky configuration files.
@@ -41,7 +41,7 @@ func (p *Parser) ParseFile(path string) (*Config, error) {
 }
 
 // Parse parses configuration content, auto-detecting the format.
-// It uses the presence of "conky.config" to detect Lua format.
+// It uses the presence of "conky.config = " pattern to detect Lua format.
 func (p *Parser) Parse(content []byte) (*Config, error) {
 	if isLuaConfig(content) {
 		return p.luaParser.Parse(content)
@@ -49,11 +49,17 @@ func (p *Parser) Parse(content []byte) (*Config, error) {
 	return p.legacyParser.Parse(content)
 }
 
+// luaConfigPattern matches "conky.config" followed by optional whitespace and "="
+// at the start of a line (not inside a comment).
+// This pattern identifies modern Lua configuration format and reduces false positives
+// from comments in legacy configs that might mention "conky.config".
+var luaConfigPattern = regexp.MustCompile(`(?m)^\s*conky\.config\s*=`)
+
 // isLuaConfig determines if the content is a Lua configuration.
-// It checks for the presence of "conky.config" which is the modern Lua format marker.
+// It uses a regex pattern to match "conky.config =" at the start of a line,
+// which is the Lua format marker.
 func isLuaConfig(content []byte) bool {
-	s := string(content)
-	return strings.Contains(s, "conky.config")
+	return luaConfigPattern.Match(content)
 }
 
 // Close releases resources associated with the parser.

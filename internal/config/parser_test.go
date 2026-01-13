@@ -82,9 +82,9 @@ ${color grey}Test$color
 
 func TestParserAutoDetection(t *testing.T) {
 	tests := []struct {
-		name     string
-		content  string
-		isLua    bool
+		name    string
+		content string
+		isLua   bool
 	}{
 		{
 			"legacy with TEXT",
@@ -150,7 +150,7 @@ update_interval 2.0
 TEXT
 Test
 `
-	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write temp file: %v", err)
 	}
 
@@ -184,7 +184,7 @@ conky.config = {
 }
 conky.text = [[Test]]
 `
-	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write temp file: %v", err)
 	}
 
@@ -238,11 +238,16 @@ func TestIsLuaConfig(t *testing.T) {
 		{"conky.config = {}", true},
 		{"-- comment\nconky.config = {}", true},
 		{"   conky.config = {}", true},
+		{"conky.config={}", true},     // No space before =
+		{"\nconky.config = {}", true}, // Newline before
 		{"background yes", false},
 		{"TEXT\n$cpu", false},
 		{"# comment\nbackground yes", false},
 		{"", false},
-		{"conky.text = [[]]", false}, // No conky.config
+		{"conky.text = [[]]", false},                          // No conky.config
+		{"# conky.config is the new format", false},           // Legacy comment without "="
+		{"# Use conky.config = {} for modern configs", false}, // Comment with the pattern
+		{"  # conky.config = {}", false},                      // Commented line
 	}
 
 	for _, tt := range tests {
@@ -263,8 +268,8 @@ func TestParseActualTestConfigs(t *testing.T) {
 
 	// Test parsing the actual test configuration files
 	testFiles := []struct {
-		path    string
-		isLua   bool
+		path  string
+		isLua bool
 	}{
 		{"../../test/configs/basic.conkyrc", false},
 		{"../../test/configs/basic_lua.conkyrc", true},
