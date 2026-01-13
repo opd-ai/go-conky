@@ -256,17 +256,28 @@ func (m *Migrator) writeColor(buf *bytes.Buffer, name string, c color.RGBA) {
 	m.writeString(buf, name, hex)
 }
 
-// colorToName converts an RGBA color to a named color if possible.
-func colorToName(c color.RGBA) string {
-	// Only check colors with full opacity
-	if c.A != 255 {
-		return ""
-	}
+// reverseColorNames provides a deterministic mapping from RGBA colors to names.
+// This avoids non-deterministic iteration order of the colorNames map.
+// When multiple names map to the same color (e.g., "grey" and "gray"),
+// we prefer the first entry in this list for consistent output.
+var reverseColorNames = map[color.RGBA]string{
+	{R: 255, G: 255, B: 255, A: 255}: "white",
+	{R: 0, G: 0, B: 0, A: 255}:       "black",
+	{R: 255, G: 0, B: 0, A: 255}:     "red",
+	{R: 0, G: 255, B: 0, A: 255}:     "green",
+	{R: 0, G: 0, B: 255, A: 255}:     "blue",
+	{R: 255, G: 255, B: 0, A: 255}:   "yellow",
+	{R: 0, G: 255, B: 255, A: 255}:   "cyan",
+	{R: 255, G: 0, B: 255, A: 255}:   "magenta",
+	{R: 128, G: 128, B: 128, A: 255}: "grey", // prefer "grey" over "gray"
+	{R: 255, G: 165, B: 0, A: 255}:   "orange",
+}
 
-	for name, namedColor := range colorNames {
-		if c == namedColor {
-			return name
-		}
+// colorToName converts an RGBA color to a named color if possible.
+// Uses a reverse lookup map for deterministic and efficient lookups.
+func colorToName(c color.RGBA) string {
+	if name, ok := reverseColorNames[c]; ok {
+		return name
 	}
 	return ""
 }
@@ -275,7 +286,7 @@ func colorToName(c color.RGBA) string {
 // This is a convenience function that combines parsing and migration.
 func MigrateLegacyFile(path string, opts ...MigratorOption) ([]byte, error) {
 	parser := NewLegacyParser()
-	content, err := readFileContent(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
@@ -299,9 +310,4 @@ func MigrateLegacyContent(content []byte, opts ...MigratorOption) ([]byte, error
 
 	migrator := NewMigrator(opts...)
 	return migrator.MigrateToLua(cfg)
-}
-
-// readFileContent reads file content from path using os.ReadFile.
-func readFileContent(path string) ([]byte, error) {
-	return os.ReadFile(path)
 }
