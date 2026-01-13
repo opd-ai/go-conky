@@ -1,0 +1,7 @@
+-- Minimal Lua config - tests default values
+
+conky.config = {}
+
+conky.text = [[
+$uptime
+]]
