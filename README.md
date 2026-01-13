@@ -12,7 +12,7 @@ A 100% compatible reimplementation of [Conky](https://github.com/brndnmtthws/con
 
 ## Technology Stack
 
-- **Go 1.21+**: Core language and standard library
+- **Go 1.24+**: Core language and standard library
 - **[Ebiten](https://github.com/hajimehoshi/ebiten)**: 2D game engine for rendering (Apache 2.0)
 - **[Golua](https://github.com/arnodel/golua)**: Pure Go Lua 5.4 implementation with sandboxing
 - **Standard Library**: Direct `/proc` filesystem access for system monitoring
@@ -35,7 +35,7 @@ A 100% compatible reimplementation of [Conky](https://github.com/brndnmtthws/con
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.24 or later
 - Linux with X11 (primary target)
 - X11 development headers:
   ```bash
