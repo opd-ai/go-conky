@@ -1071,13 +1071,14 @@ func (c *linuxCPUProvider) readCPUUsage() ([]float64, error) {
             break
         }
         
-        // Skip aggregate "cpu" line, process "cpu0", "cpu1", etc.
-        if line == "cpu" || !strings.HasPrefix(line, "cpu") {
+        // Skip aggregate "cpu" line (no number suffix), process "cpu0", "cpu1", etc.
+        fields := strings.Fields(line)
+        if len(fields) < 8 {
             continue
         }
         
-        fields := strings.Fields(line)
-        if len(fields) < 8 {
+        // The aggregate line has "cpu" as field[0], individual cores have "cpuN"
+        if fields[0] == "cpu" {
             continue
         }
         
@@ -1258,23 +1259,30 @@ func (m *windowsMemoryProvider) SwapStats() (*SwapStats, error) {
         return nil, fmt.Errorf("GlobalMemoryStatusEx failed: %w", err)
     }
     
-    pageFileTotal := memStatus.ullTotalPageFile - memStatus.ullTotalPhys
-    pageFileAvail := memStatus.ullAvailPageFile - memStatus.ullAvailPhys
-    if pageFileTotal < 0 {
+    // Calculate page file (swap) size - check for underflow since these are uint64
+    var pageFileTotal, pageFileAvail uint64
+    if memStatus.ullTotalPageFile > memStatus.ullTotalPhys {
+        pageFileTotal = memStatus.ullTotalPageFile - memStatus.ullTotalPhys
+        pageFileAvail = memStatus.ullAvailPageFile - memStatus.ullAvailPhys
+    } else {
+        // Fallback: use total page file values
         pageFileTotal = memStatus.ullTotalPageFile
         pageFileAvail = memStatus.ullAvailPageFile
     }
     
-    used := pageFileTotal - pageFileAvail
+    var used uint64
+    if pageFileTotal > pageFileAvail {
+        used = pageFileTotal - pageFileAvail
+    }
     var usedPercent float64
     if pageFileTotal > 0 {
         usedPercent = float64(used) / float64(pageFileTotal) * 100
     }
     
     return &SwapStats{
-        Total:       uint64(pageFileTotal),
-        Used:        uint64(used),
-        Free:        uint64(pageFileAvail),
+        Total:       pageFileTotal,
+        Used:        used,
+        Free:        pageFileAvail,
         UsedPercent: usedPercent,
     }, nil
 }
@@ -1327,6 +1335,7 @@ import (
     "time"
 
     "golang.org/x/crypto/ssh"
+    "golang.org/x/crypto/ssh/agent"
 )
 
 // sshPlatform implements Platform for remote systems via SSH.
@@ -1425,9 +1434,9 @@ func (p *sshPlatform) buildSSHConfig() (*ssh.ClientConfig, error) {
         if err != nil {
             return nil, fmt.Errorf("failed to connect to SSH agent: %w", err)
         }
-        authMethods = append(authMethods, ssh.PublicKeysCallback(
-            ssh.NewClient(agentConn, nil, nil).Auth,
-        ))
+        // Use the agent package to create a proper SSH agent client
+        agentClient := agent.NewClient(agentConn)
+        authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
     default:
         return nil, fmt.Errorf("unsupported auth method type: %T", auth)
     }
@@ -1435,7 +1444,11 @@ func (p *sshPlatform) buildSSHConfig() (*ssh.ClientConfig, error) {
     return &ssh.ClientConfig{
         User:            p.config.User,
         Auth:            authMethods,
-        HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Implement proper host key verification
+        // NOTE: For production use, implement proper host key verification.
+        // Options include: using known_hosts file, prompting user for verification,
+        // or implementing a custom HostKeyCallback that validates against a trusted CA.
+        // Example: ssh.FixedHostKey(knownHostKey) or custom verification callback.
+        HostKeyCallback: ssh.InsecureIgnoreHostKey(), // SECURITY: Replace in production
         Timeout:         10 * time.Second,
     }, nil
 }
