@@ -296,13 +296,15 @@ func (cr *CairoRenderer) ArcNegative(xc, yc, radius, angle1, angle2 float64) {
 
 // CurveTo adds a cubic Bézier curve to the path.
 // This is equivalent to cairo_curve_to.
+// If there is no current point, it starts from (0,0) as per Cairo convention.
 func (cr *CairoRenderer) CurveTo(x1, y1, x2, y2, x3, y3 float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		cr.path.MoveTo(float32(x1), float32(y1))
-		cr.pathStartX = float32(x1)
-		cr.pathStartY = float32(y1)
+		// Cairo starts from (0,0) if no current point exists
+		cr.path.MoveTo(0, 0)
+		cr.pathStartX = 0
+		cr.pathStartY = 0
 		cr.hasPath = true
 	}
 	cr.path.CubicTo(float32(x1), float32(y1), float32(x2), float32(y2), float32(x3), float32(y3))
@@ -337,37 +339,13 @@ func (cr *CairoRenderer) Stroke() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 
-	if cr.screen == nil || !cr.hasPath {
+	if !cr.canDraw() {
 		return
 	}
 
-	// Get stroke options
-	var opts vector.StrokeOptions
-	opts.Width = cr.lineWidth
-	switch cr.lineCap {
-	case LineCapButt:
-		opts.LineCap = vector.LineCapButt
-	case LineCapRound:
-		opts.LineCap = vector.LineCapRound
-	case LineCapSquare:
-		opts.LineCap = vector.LineCapSquare
-	}
-	switch cr.lineJoin {
-	case LineJoinMiter:
-		opts.LineJoin = vector.LineJoinMiter
-	case LineJoinRound:
-		opts.LineJoin = vector.LineJoinRound
-	case LineJoinBevel:
-		opts.LineJoin = vector.LineJoinBevel
-	}
-
-	// Get vertices and indices for stroking
-	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, &opts)
-
-	// Set color for all vertices
+	opts := cr.buildStrokeOptions()
+	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, opts)
 	cr.setVertexColors(vertices)
-
-	// Draw the stroke
 	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 	})
@@ -383,17 +361,12 @@ func (cr *CairoRenderer) Fill() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 
-	if cr.screen == nil || !cr.hasPath {
+	if !cr.canDraw() {
 		return
 	}
 
-	// Get vertices and indices for filling
 	vertices, indices := cr.path.AppendVerticesAndIndicesForFilling(nil, nil)
-
-	// Set color for all vertices
 	cr.setVertexColors(vertices)
-
-	// Draw the fill
 	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 	})
@@ -409,17 +382,12 @@ func (cr *CairoRenderer) FillPreserve() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 
-	if cr.screen == nil || !cr.hasPath {
+	if !cr.canDraw() {
 		return
 	}
 
-	// Get vertices and indices for filling
 	vertices, indices := cr.path.AppendVerticesAndIndicesForFilling(nil, nil)
-
-	// Set color for all vertices
 	cr.setVertexColors(vertices)
-
-	// Draw the fill without clearing path
 	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 	})
@@ -431,37 +399,13 @@ func (cr *CairoRenderer) StrokePreserve() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 
-	if cr.screen == nil || !cr.hasPath {
+	if !cr.canDraw() {
 		return
 	}
 
-	// Get stroke options
-	var opts vector.StrokeOptions
-	opts.Width = cr.lineWidth
-	switch cr.lineCap {
-	case LineCapButt:
-		opts.LineCap = vector.LineCapButt
-	case LineCapRound:
-		opts.LineCap = vector.LineCapRound
-	case LineCapSquare:
-		opts.LineCap = vector.LineCapSquare
-	}
-	switch cr.lineJoin {
-	case LineJoinMiter:
-		opts.LineJoin = vector.LineJoinMiter
-	case LineJoinRound:
-		opts.LineJoin = vector.LineJoinRound
-	case LineJoinBevel:
-		opts.LineJoin = vector.LineJoinBevel
-	}
-
-	// Get vertices and indices for stroking
-	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, &opts)
-
-	// Set color for all vertices
+	opts := cr.buildStrokeOptions()
+	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, opts)
 	cr.setVertexColors(vertices)
-
-	// Draw the stroke without clearing path
 	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 	})
@@ -541,6 +485,37 @@ func (cr *CairoRenderer) FillCircle(xc, yc, radius float64) {
 }
 
 // --- Helper Functions ---
+
+// canDraw checks if drawing is possible (has screen and path).
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) canDraw() bool {
+	return cr.screen != nil && cr.hasPath
+}
+
+// buildStrokeOptions creates stroke options from current state.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) buildStrokeOptions() *vector.StrokeOptions {
+	opts := &vector.StrokeOptions{
+		Width: cr.lineWidth,
+	}
+	switch cr.lineCap {
+	case LineCapButt:
+		opts.LineCap = vector.LineCapButt
+	case LineCapRound:
+		opts.LineCap = vector.LineCapRound
+	case LineCapSquare:
+		opts.LineCap = vector.LineCapSquare
+	}
+	switch cr.lineJoin {
+	case LineJoinMiter:
+		opts.LineJoin = vector.LineJoinMiter
+	case LineJoinRound:
+		opts.LineJoin = vector.LineJoinRound
+	case LineJoinBevel:
+		opts.LineJoin = vector.LineJoinBevel
+	}
+	return opts
+}
 
 // setVertexColors sets the current color on all vertices.
 func (cr *CairoRenderer) setVertexColors(vertices []ebiten.Vertex) {
