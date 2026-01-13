@@ -963,6 +963,9 @@ package main
 
 import (
     "log"
+    "os"
+    "os/signal"
+    "syscall"
     
     "github.com/opd-ai/go-conky/pkg/conky"
 )
@@ -1036,6 +1039,7 @@ package main
 
 import (
     "strings"
+    "time"
     
     "github.com/opd-ai/go-conky/pkg/conky"
 )
