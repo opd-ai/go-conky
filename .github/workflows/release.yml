@@ -39,6 +39,9 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      - name: Create dist directory
+        run: mkdir -p dist
+
       - name: Build Linux amd64
         run: |
           GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/conky-go-linux-amd64 ./cmd/conky-go
