@@ -19,37 +19,52 @@ A 100% compatible reimplementation of [Conky](https://github.com/brndnmtthws/con
 
 ## Current Status
 
-🚧 **Early Development Phase** - Not yet functional
+✅ **Core Implementation Complete** - Integration in progress
 
 - [x] Project architecture and implementation plan
-- [x] Basic system monitoring backend (CPU, Memory, Uptime)
-- [ ] Ebiten rendering foundation
-- [ ] Golua integration and Conky API
-- [ ] Configuration parser (legacy + Lua)
-- [ ] Cairo compatibility layer
+- [x] Comprehensive system monitoring backend (CPU, Memory, Network, Disk, Battery, Audio, etc.)
+- [x] Ebiten rendering engine with text, widgets, and graphs
+- [x] Golua integration with Conky API and Cairo bindings
+- [x] Configuration parser (legacy `.conkyrc` + Lua formats)
+- [x] Cairo compatibility layer for Lua scripts
+- [x] Performance profiling and memory leak detection
+- [ ] Full end-to-end integration
+- [ ] Packaging and distribution
 
 ## Quick Start
 
-> **Note:** This project is in early development and is not yet functional. The commands below represent the planned workflow.
+### Prerequisites
+
+- Go 1.21 or later
+- Linux with X11 (primary target)
+- X11 development headers:
+  ```bash
+  sudo apt-get install libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libgl1-mesa-dev libxxf86vm-dev
+  ```
+
+### Build and Run
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/conky-go.git
-cd conky-go
+git clone https://github.com/opd-ai/go-conky.git
+cd go-conky
 
-# Once implemented, build with:
-# make build
+# Install dependencies
+make deps
 
-# Once built, run with your existing Conky config:
-# ./build/conky-go -c ~/.conkyrc
+# Build the binary
+make build
+
+# Run with your existing Conky config
+./build/conky-go -c ~/.conkyrc
 ```
 
 ## Configuration Compatibility
 
-Conky-Go aims for 100% compatibility with existing configurations:
+Conky-Go supports both legacy and modern configuration formats:
 
 ```lua
--- Modern Lua configuration (supported)
+-- Modern Lua configuration (recommended)
 conky.config = {
     background = false,
     font = 'DejaVu Sans Mono:size=10',
@@ -63,7 +78,7 @@ ${color grey}RAM Usage:$color $mem/$memmax
 ```
 
 ```ini
-# Legacy .conkyrc format (also supported)
+# Legacy .conkyrc format (fully supported)
 background no
 font DejaVu Sans Mono:size=10
 update_interval 1.0
@@ -73,44 +88,59 @@ ${color grey}CPU Usage:$color $cpu%
 ${color grey}RAM Usage:$color $mem/$memmax
 ```
 
+See the [Migration Guide](docs/migration.md) for detailed compatibility information.
+
 ## Development
-
-### Prerequisites
-
-- Go 1.21 or later
-- Linux development environment (primary target)
-- X11 development headers: `sudo apt-get install libx11-dev libxext-dev`
 
 ### Building
 
-> **Note:** Build infrastructure is not yet implemented. The commands below represent the planned build workflow.
-
 ```bash
-# Planned commands (not yet available):
-# make deps     # Install dependencies
-# make test     # Run tests
-# make build    # Build binary
-# make install  # Install system-wide
+make deps      # Install dependencies
+make build     # Build binary
+make test      # Run tests with race detection
+make lint      # Run linter
+make coverage  # Generate test coverage report
 ```
 
-See [PLAN.md](PLAN.md) section 5.2 for the planned Makefile implementation.
+### Running Tests
+
+```bash
+# Run all tests
+make test
+
+# Run benchmarks
+make bench
+
+# Run integration tests
+make integration
+```
 
 ### Project Structure
 
-> **Note:** The following directory structure is planned but not yet implemented. See [PLAN.md](PLAN.md) for the complete implementation roadmap.
-
 ```
 conky-go/
-├── cmd/conky-go/          # Main executable (planned)
+├── cmd/conky-go/           # Main executable entry point
 ├── internal/
-│   ├── config/            # Configuration parsing (planned)
-│   ├── monitor/           # System monitoring (planned)
-│   ├── render/            # Ebiten rendering engine (planned)
-│   ├── lua/               # Golua integration (planned)
-│   └── window/            # Window management (planned)
-├── test/configs/          # Test configurations (planned)
-└── docs/                  # Documentation (planned)
+│   ├── config/             # Configuration parsing and validation
+│   ├── lua/                # Golua integration and Conky API
+│   ├── monitor/            # System monitoring backend
+│   ├── profiling/          # CPU/memory profiling tools
+│   └── render/             # Ebiten rendering engine
+├── test/
+│   ├── configs/            # Test configuration files
+│   └── integration/        # Integration tests
+├── docs/                   # Documentation
+│   ├── architecture.md     # System architecture
+│   ├── migration.md        # Migration guide from Conky
+│   └── api.md              # API reference
+└── scripts/                # Build and development scripts
 ```
+
+### Documentation
+
+- [Architecture Guide](docs/architecture.md) - System design and component overview
+- [Migration Guide](docs/migration.md) - Migrating from Conky to Conky-Go
+- [API Reference](docs/api.md) - Go packages and Lua API documentation
 
 ## Contributing
 
@@ -130,7 +160,7 @@ We welcome contributions! This project follows the "lazy programmer" philosophy 
 - ❌ Web frameworks (`echo`, `chi`, `gin`) - Use `net/http` directly
 - ❌ CGO bindings where pure Go alternatives exist
 
-See [PLAN.md](PLAN.md) for detailed implementation guidelines and project architecture.
+See the [Architecture Guide](docs/architecture.md) for detailed design principles.
 
 ## License Compliance
 
@@ -138,16 +168,18 @@ All dependencies use permissive licenses compatible with commercial use:
 
 - **Go Standard Library**: BSD-3-Clause
 - **Ebiten**: Apache License 2.0  
-- **Golua**: License verification in progress
+- **Golua**: MIT License
 
 ## Roadmap
 
-- **Phase 1** (3 weeks): Foundation - basic monitoring and rendering
-- **Phase 2** (3 weeks): Complete system monitoring backend
-- **Phase 3** (3 weeks): Full rendering engine with Ebiten
-- **Phase 4** (3 weeks): Lua integration and Cairo compatibility  
-- **Phase 5** (3 weeks): Configuration parser and migration tools
-- **Phase 6** (3 weeks): Testing, optimization, and packaging
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | ✅ Complete | Foundation - project structure, basic monitoring |
+| Phase 2 | ✅ Complete | System monitoring backend (CPU, Memory, Network, etc.) |
+| Phase 3 | ✅ Complete | Ebiten rendering engine with widgets |
+| Phase 4 | ✅ Complete | Lua integration and Cairo compatibility |
+| Phase 5 | ✅ Complete | Configuration parser and migration tools |
+| Phase 6 | 🔄 In Progress | Testing, documentation, and packaging |
 
 ## License
 
@@ -158,7 +190,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Original [Conky](https://github.com/brndnmtthws/conky) project and maintainers
 - [Ebiten](https://github.com/hajimehoshi/ebiten) game engine by Hajime Hoshi
 - [Golua](https://github.com/arnodel/golua) pure Go Lua implementation
-
----
-
-**Note**: This project is in early development. Current code may not be functional. Check the [Issues](../../issues) page for current development status and known limitations.
