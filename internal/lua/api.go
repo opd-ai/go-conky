@@ -126,11 +126,19 @@ func (api *ConkyAPI) Parse(template string) string {
 	})
 }
 
+// formatUnknownVariable formats an unknown variable back to its original template form.
+func formatUnknownVariable(name string, args []string) string {
+	if len(args) > 0 {
+		return fmt.Sprintf("${%s %s}", name, strings.Join(args, " "))
+	}
+	return fmt.Sprintf("${%s}", name)
+}
+
 // resolveVariable resolves a single Conky variable to its value.
 func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	// Handle case where there's no system data provider
 	if api.sysProvider == nil {
-		return fmt.Sprintf("${%s}", name)
+		return formatUnknownVariable(name, args)
 	}
 
 	switch name {
@@ -218,10 +226,7 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 
 	default:
 		// Return original if unknown variable
-		if len(args) > 0 {
-			return fmt.Sprintf("${%s %s}", name, strings.Join(args, " "))
-		}
-		return fmt.Sprintf("${%s}", name)
+		return formatUnknownVariable(name, args)
 	}
 }
 

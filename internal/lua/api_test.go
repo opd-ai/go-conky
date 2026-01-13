@@ -720,6 +720,13 @@ func TestParseWithNilProvider(t *testing.T) {
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
+
+	// With nil provider, variables with args should also include args
+	result = api.Parse("${cpu 1}")
+	expected = "${cpu 1}"
+	if result != expected {
+		t.Errorf("expected %q, got %q", expected, result)
+	}
 }
 
 func TestSetSystemDataProvider(t *testing.T) {
