@@ -236,10 +236,11 @@ func (d *MemoryLeakDetector) Stop() error {
 	}
 	close(d.stopChan)
 	d.running = false
+	done := d.doneChan
 	d.mu.Unlock()
 
 	// Wait for the goroutine to finish
-	<-d.doneChan
+	<-done
 
 	return nil
 }
