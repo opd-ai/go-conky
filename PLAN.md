@@ -152,8 +152,8 @@ Window Display (X11/Wayland)
 - Comprehensive compatibility test suite
 
 **Tasks:**
-- [ ] Legacy .conkyrc parser implementation (14 hours)
-- [ ] Modern Lua configuration parser (10 hours)
+- [x] Legacy .conkyrc parser implementation (14 hours)
+- [x] Modern Lua configuration parser (10 hours)
 - [ ] Configuration variable resolution and validation (12 hours)
 - [ ] Migration tools for legacy configurations (8 hours)
 - [ ] Comprehensive configuration test suite (10 hours)
