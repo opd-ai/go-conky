@@ -11,6 +11,7 @@ func TestHookTypeString(t *testing.T) {
 		hookType HookType
 		expected string
 	}{
+		{HookInvalid, "invalid"},
 		{HookStartup, "startup"},
 		{HookShutdown, "shutdown"},
 		{HookMain, "main"},
@@ -62,8 +63,8 @@ func TestParseHookType(t *testing.T) {
 		{"main", HookMain, false},
 		{"draw_pre", HookDrawPre, false},
 		{"draw_post", HookDrawPost, false},
-		{"invalid", HookStartup, true},
-		{"", HookStartup, true},
+		{"invalid", HookInvalid, true},
+		{"", HookInvalid, true},
 	}
 
 	for _, tt := range tests {
@@ -75,6 +76,9 @@ func TestParseHookType(t *testing.T) {
 			}
 			if !tt.wantErr && result != tt.expected {
 				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+			if tt.wantErr && result != HookInvalid {
+				t.Errorf("expected HookInvalid on error, got %v", result)
 			}
 		})
 	}

@@ -14,9 +14,13 @@ import (
 type HookType int
 
 const (
+	// HookInvalid represents an invalid or unknown hook type.
+	// This is returned by ParseHookType when parsing fails.
+	HookInvalid HookType = iota
+
 	// HookStartup is called once when Conky starts or reloads configuration.
 	// Use for initialization code, resource allocation, and setup.
-	HookStartup HookType = iota
+	HookStartup
 
 	// HookShutdown is called once when Conky exits or configuration is reloaded.
 	// Use for cleanup code, closing files, and freeing resources.
@@ -48,6 +52,8 @@ func (h HookType) String() string {
 		return "draw_pre"
 	case HookDrawPost:
 		return "draw_post"
+	case HookInvalid:
+		return "invalid"
 	default:
 		return "unknown"
 	}
@@ -60,7 +66,7 @@ func (h HookType) LuaFunctionName() string {
 }
 
 // ParseHookType parses a string into a HookType.
-// Returns an error if the string is not a valid hook type.
+// Returns HookInvalid and an error if the string is not a valid hook type.
 func ParseHookType(s string) (HookType, error) {
 	switch s {
 	case "startup":
@@ -74,7 +80,7 @@ func ParseHookType(s string) (HookType, error) {
 	case "draw_post":
 		return HookDrawPost, nil
 	default:
-		return HookStartup, fmt.Errorf("unknown hook type: %s", s)
+		return HookInvalid, fmt.Errorf("unknown hook type: %s", s)
 	}
 }
 
@@ -200,8 +206,6 @@ func (hm *HookManager) CallIfExists(hookType HookType, args ...rt.Value) (rt.Val
 // and automatically registers them. It looks for conky_startup, conky_shutdown,
 // conky_main, conky_draw_pre, and conky_draw_post.
 func (hm *HookManager) AutoRegisterHooks() []HookType {
-	registered := []HookType{}
-
 	hookTypes := []HookType{
 		HookStartup,
 		HookShutdown,
@@ -210,16 +214,33 @@ func (hm *HookManager) AutoRegisterHooks() []HookType {
 		HookDrawPost,
 	}
 
+	// Collect valid hooks first without holding the lock
+	type hookEntry struct {
+		hookType HookType
+		fn       rt.Value
+	}
+	foundHooks := make([]hookEntry, 0, len(hookTypes))
+
 	for _, hookType := range hookTypes {
 		fullName := hookType.LuaFunctionName()
 		fn := hm.runtime.GetGlobal(fullName)
 		if fn != rt.NilValue && fn.Type() == rt.FunctionType {
-			hm.mu.Lock()
-			hm.hooks[hookType] = hookType.String()
-			hm.callbacks[hookType] = fn
-			hm.mu.Unlock()
-			registered = append(registered, hookType)
+			foundHooks = append(foundHooks, hookEntry{hookType: hookType, fn: fn})
 		}
+	}
+
+	// Now acquire lock once to update all hooks
+	hm.mu.Lock()
+	for _, entry := range foundHooks {
+		hm.hooks[entry.hookType] = entry.hookType.String()
+		hm.callbacks[entry.hookType] = entry.fn
+	}
+	hm.mu.Unlock()
+
+	// Build registered list
+	registered := make([]HookType, len(foundHooks))
+	for i, entry := range foundHooks {
+		registered[i] = entry.hookType
 	}
 
 	return registered
