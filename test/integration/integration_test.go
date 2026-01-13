@@ -290,21 +290,25 @@ func TestFullPipelineIntegration(t *testing.T) {
 
 // TestLuaConfigParsing tests that Lua config files can be parsed correctly.
 func TestLuaConfigParsing(t *testing.T) {
-	luaConfigs := []string{
-		"basic_lua.conkyrc",
-		"advanced_lua.conkyrc",
-		"minimal_lua.conkyrc",
+	luaConfigs := []struct {
+		name              string
+		file              string
+		expectNonEmptyTpl bool
+	}{
+		{"basic_lua", "basic_lua.conkyrc", true},
+		{"advanced_lua", "advanced_lua.conkyrc", true},
+		{"minimal_lua", "minimal_lua.conkyrc", false}, // minimal config may have empty template
 	}
 
-	for _, cfgFile := range luaConfigs {
-		t.Run(cfgFile, func(t *testing.T) {
+	for _, tc := range luaConfigs {
+		t.Run(tc.name, func(t *testing.T) {
 			parser, err := config.NewParser()
 			if err != nil {
 				t.Fatalf("NewParser failed: %v", err)
 			}
 			defer parser.Close()
 
-			path := filepath.Join(getTestConfigsDir(), cfgFile)
+			path := filepath.Join(getTestConfigsDir(), tc.file)
 			cfg, err := parser.ParseFile(path)
 			if err != nil {
 				t.Fatalf("ParseFile failed: %v", err)
@@ -315,8 +319,8 @@ func TestLuaConfigParsing(t *testing.T) {
 				t.Errorf("ValidateConfig failed: %v", err)
 			}
 
-			// Verify that the config has valid text template
-			if len(cfg.Text.Template) == 0 && cfgFile != "minimal_lua.conkyrc" {
+			// Verify that the config has valid text template if expected
+			if tc.expectNonEmptyTpl && len(cfg.Text.Template) == 0 {
 				t.Error("Expected non-empty text template")
 			}
 		})
