@@ -542,10 +542,10 @@ func (sm *SystemMonitor) updateSystemData() {
 | Conky Feature | Implementation Status | Priority | Notes |
 |---------------|----------------------|----------|-------|
 | TEXT section parsing | Complete | P0 | Implemented in internal/config/legacy.go |
-| cairo_* drawing functions | Complete | P0 | 20+ core functions in internal/render/cairo.go |
+| cairo_* drawing functions | Complete | P0 | 25 core functions in internal/render/cairo.go |
 | System variables (CPU, memory, etc.) | Complete | P0 | CPU, memory, disk, network, battery, audio in internal/monitor/ |
 | Lua configuration parsing | Complete | P0 | Implemented in internal/config/lua.go |
-| Window positioning | Complete | P1 | Alignment and gap settings in config types |
+| Window positioning | Complete | P1 | Alignment, gap_x, gap_y in config types |
 | Image rendering | Complete | P1 | PNG, JPEG, GIF support in internal/render/image.go |
 | Network monitoring | Complete | P1 | Interface statistics in internal/monitor/network.go |
 | Temperature sensors | Complete | P2 | hwmon integration in internal/monitor/hwmon.go |
