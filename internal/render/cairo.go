@@ -443,6 +443,10 @@ func (cr *CairoRenderer) PaintWithAlpha(alpha float64) {
 
 // DrawLine draws a line from (x1,y1) to (x2,y2) with the current color and line width.
 // This is a convenience function that combines MoveTo, LineTo, and Stroke.
+// DrawLine draws a line from (x1,y1) to (x2,y2) with the current color and line width.
+// This is a convenience function that combines MoveTo, LineTo, and Stroke.
+// Note: This function is NOT atomic - each internal method call acquires and releases
+// the mutex independently. For atomic operations, use explicit locking at the caller level.
 func (cr *CairoRenderer) DrawLine(x1, y1, x2, y2 float64) {
 	cr.NewPath()
 	cr.MoveTo(x1, y1)
@@ -452,6 +456,8 @@ func (cr *CairoRenderer) DrawLine(x1, y1, x2, y2 float64) {
 
 // DrawRectangle draws a stroked rectangle.
 // This is a convenience function that combines Rectangle and Stroke.
+// Note: This function is NOT atomic - each internal method call acquires and releases
+// the mutex independently. For atomic operations, use explicit locking at the caller level.
 func (cr *CairoRenderer) DrawRectangle(x, y, width, height float64) {
 	cr.NewPath()
 	cr.Rectangle(x, y, width, height)
@@ -460,6 +466,8 @@ func (cr *CairoRenderer) DrawRectangle(x, y, width, height float64) {
 
 // FillRectangle draws a filled rectangle.
 // This is a convenience function that combines Rectangle and Fill.
+// Note: This function is NOT atomic - each internal method call acquires and releases
+// the mutex independently. For atomic operations, use explicit locking at the caller level.
 func (cr *CairoRenderer) FillRectangle(x, y, width, height float64) {
 	cr.NewPath()
 	cr.Rectangle(x, y, width, height)
@@ -468,6 +476,8 @@ func (cr *CairoRenderer) FillRectangle(x, y, width, height float64) {
 
 // DrawCircle draws a stroked circle.
 // This is a convenience function that combines Arc and Stroke.
+// Note: This function is NOT atomic - each internal method call acquires and releases
+// the mutex independently. For atomic operations, use explicit locking at the caller level.
 func (cr *CairoRenderer) DrawCircle(xc, yc, radius float64) {
 	cr.NewPath()
 	cr.Arc(xc, yc, radius, 0, 2*math.Pi)
@@ -477,6 +487,8 @@ func (cr *CairoRenderer) DrawCircle(xc, yc, radius float64) {
 
 // FillCircle draws a filled circle.
 // This is a convenience function that combines Arc and Fill.
+// Note: This function is NOT atomic - each internal method call acquires and releases
+// the mutex independently. For atomic operations, use explicit locking at the caller level.
 func (cr *CairoRenderer) FillCircle(xc, yc, radius float64) {
 	cr.NewPath()
 	cr.Arc(xc, yc, radius, 0, 2*math.Pi)
@@ -518,6 +530,7 @@ func (cr *CairoRenderer) buildStrokeOptions() *vector.StrokeOptions {
 }
 
 // setVertexColors sets the current color on all vertices.
+// This must be called while holding the mutex.
 func (cr *CairoRenderer) setVertexColors(vertices []ebiten.Vertex) {
 	r := float32(cr.currentColor.R) / 255
 	g := float32(cr.currentColor.G) / 255

@@ -491,3 +491,67 @@ func TestCairoBindings_ComplexPath(t *testing.T) {
 		t.Fatalf("Failed to execute complex path code: %v", err)
 	}
 }
+
+func TestCairoBindings_InvalidLineCapValue(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test invalid line cap values
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"negative value", "cairo_set_line_cap(-1)"},
+		{"value too high", "cairo_set_line_cap(3)"},
+		{"very large value", "cairo_set_line_cap(100)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := runtime.ExecuteString("test", tt.code)
+			if err == nil {
+				t.Error("Expected error for invalid line cap value, got nil")
+			}
+		})
+	}
+}
+
+func TestCairoBindings_InvalidLineJoinValue(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test invalid line join values
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"negative value", "cairo_set_line_join(-1)"},
+		{"value too high", "cairo_set_line_join(3)"},
+		{"very large value", "cairo_set_line_join(100)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := runtime.ExecuteString("test", tt.code)
+			if err == nil {
+				t.Error("Expected error for invalid line join value, got nil")
+			}
+		})
+	}
+}

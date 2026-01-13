@@ -5,7 +5,6 @@ package lua
 
 import (
 	"fmt"
-	"sync"
 
 	rt "github.com/arnodel/golua/runtime"
 
@@ -15,10 +14,10 @@ import (
 // CairoBindings provides Cairo drawing function bindings for Lua.
 // It manages a CairoRenderer instance and exposes Cairo-compatible
 // functions to the Lua environment.
+// The renderer field is immutable after initialization.
 type CairoBindings struct {
 	runtime  *ConkyRuntime
 	renderer *render.CairoRenderer
-	mu       sync.RWMutex
 }
 
 // NewCairoBindings creates a new CairoBindings instance and registers
@@ -39,9 +38,8 @@ func NewCairoBindings(runtime *ConkyRuntime) (*CairoBindings, error) {
 
 // Renderer returns the underlying CairoRenderer.
 // This allows the rendering loop to set the screen and access the renderer.
+// The renderer is immutable after CairoBindings creation, so no locking is needed.
 func (cb *CairoBindings) Renderer() *render.CairoRenderer {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
 	return cb.renderer
 }
 
@@ -160,6 +158,11 @@ func (cb *CairoBindings) setLineCap(t *rt.Thread, c *rt.GoCont) (rt.Cont, error)
 		return nil, fmt.Errorf("cairo_set_line_cap: %w", err)
 	}
 
+	// Validate line cap value (0-2)
+	if capStyle < 0 || capStyle > 2 {
+		return nil, fmt.Errorf("cairo_set_line_cap: invalid line cap value %d (must be 0-2)", capStyle)
+	}
+
 	cb.renderer.SetLineCap(render.LineCap(capStyle))
 	return c.Next(), nil
 }
@@ -169,6 +172,11 @@ func (cb *CairoBindings) setLineJoin(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 	join, err := c.IntArg(0)
 	if err != nil {
 		return nil, fmt.Errorf("cairo_set_line_join: %w", err)
+	}
+
+	// Validate line join value (0-2)
+	if join < 0 || join > 2 {
+		return nil, fmt.Errorf("cairo_set_line_join: invalid line join value %d (must be 0-2)", join)
 	}
 
 	cb.renderer.SetLineJoin(render.LineJoin(join))

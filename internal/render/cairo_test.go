@@ -4,6 +4,7 @@ package render
 import (
 	"image/color"
 	"math"
+	"sync"
 	"testing"
 )
 
@@ -445,4 +446,82 @@ func TestCairoRenderer_ArcNegative(t *testing.T) {
 	if math.Abs(x-expectedX) > epsilon || math.Abs(y-expectedY) > epsilon {
 		t.Errorf("Expected current point (%f,%f), got (%f,%f)", expectedX, expectedY, x, y)
 	}
+}
+
+// TestCairoRenderer_ConcurrentAccess tests that CairoRenderer is thread-safe.
+// This test should be run with the race detector: go test -race
+func TestCairoRenderer_ConcurrentAccess(t *testing.T) {
+	cr := NewCairoRenderer()
+	const numGoroutines = 10
+	const numOperations = 100
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < numOperations; j++ {
+				// Mix of different operations to test concurrent access
+				cr.SetSourceRGB(float64(id)/10, float64(j)/100, 0.5)
+				cr.SetLineWidth(float64(id + 1))
+				cr.SetLineCap(LineCap(id % 3))
+				cr.SetLineJoin(LineJoin(j % 3))
+				cr.SetAntialias(j%2 == 0)
+				cr.NewPath()
+				cr.MoveTo(float64(id*10), float64(j*10))
+				cr.LineTo(float64(id*10+50), float64(j*10+50))
+				cr.Rectangle(float64(id), float64(j), 10, 10)
+				cr.GetCurrentPoint()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// TestCairoRenderer_ConcurrentColorChanges tests concurrent color changes.
+func TestCairoRenderer_ConcurrentColorChanges(t *testing.T) {
+	cr := NewCairoRenderer()
+	const numGoroutines = 20
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				cr.SetSourceRGBA(float64(id)/20, float64(j)/50, 0.5, 0.8)
+				_ = cr.GetCurrentColor()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// TestCairoRenderer_ConcurrentPathBuilding tests concurrent path building operations.
+func TestCairoRenderer_ConcurrentPathBuilding(t *testing.T) {
+	cr := NewCairoRenderer()
+	const numGoroutines = 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				cr.NewPath()
+				cr.MoveTo(float64(id*10), float64(j*10))
+				cr.LineTo(float64(id*10+100), float64(j*10+100))
+				cr.Arc(50, 50, 25, 0, math.Pi)
+				cr.ClosePath()
+				cr.GetCurrentPoint()
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }
