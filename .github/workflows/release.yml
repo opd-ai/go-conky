@@ -1,5 +1,5 @@
 # Release workflow for go-conky
-# Builds and packages binaries for multiple platforms when a tag is pushed.
+# Builds and packages binary for native platform when a tag is pushed.
 name: Release
 
 on:
@@ -42,25 +42,30 @@ jobs:
       - name: Create dist directory
         run: mkdir -p dist
 
-      - name: Build Linux amd64
+      - name: Build native binary
+        id: build
         run: |
-          GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/conky-go-linux-amd64 ./cmd/conky-go
+          GOOS=$(go env GOOS)
+          GOARCH=$(go env GOARCH)
+          BINARY="conky-go-${GOOS}-${GOARCH}"
+          echo "BINARY=${BINARY}" >> $GITHUB_OUTPUT
+          go build -ldflags "-X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/${BINARY} ./cmd/conky-go
 
-      - name: Build Linux arm64
-        run: |
-          GOOS=linux GOARCH=arm64 go build -ldflags "-X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/conky-go-linux-arm64 ./cmd/conky-go
-
-      - name: Create release archives
+      - name: Create release archive
         run: |
           cd dist
-          for binary in conky-go-*; do
-            tar -czvf "${binary}.tar.gz" "$binary"
-          done
+          cp ../README.md ../LICENSE .
+          tar -czvf "${{ steps.build.outputs.BINARY }}.tar.gz" "${{ steps.build.outputs.BINARY }}" README.md LICENSE
+          rm -f "${{ steps.build.outputs.BINARY }}" README.md LICENSE
 
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum *.tar.gz > checksums.txt
+          if ls *.tar.gz >/dev/null 2>&1; then
+            sha256sum *.tar.gz > checksums.txt
+          else
+            echo "No .tar.gz files found; skipping checksum generation."
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
