@@ -19,8 +19,13 @@ import (
 )
 
 // getTestConfigsDir returns the path to the test configs directory.
-func getTestConfigsDir() string {
-	_, file, _, _ := runtime.Caller(0)
+// It calls t.Fatal if runtime.Caller fails.
+func getTestConfigsDir(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed to get current file path")
+	}
 	return filepath.Join(filepath.Dir(file), "..", "configs")
 }
 
@@ -51,7 +56,7 @@ func TestConfigMonitorIntegration(t *testing.T) {
 
 	for _, cfgFile := range configFiles {
 		t.Run(cfgFile, func(t *testing.T) {
-			path := filepath.Join(getTestConfigsDir(), cfgFile)
+			path := filepath.Join(getTestConfigsDir(t), cfgFile)
 			cfg, err := parser.ParseFile(path)
 			if err != nil {
 				t.Fatalf("ParseFile failed: %v", err)
@@ -130,7 +135,7 @@ func TestConfigVariableResolution(t *testing.T) {
 
 	for _, tc := range testConfigs {
 		t.Run(tc.name, func(t *testing.T) {
-			path := filepath.Join(getTestConfigsDir(), tc.file)
+			path := filepath.Join(getTestConfigsDir(t), tc.file)
 			cfg, err := parser.ParseFile(path)
 			if err != nil {
 				t.Fatalf("ParseFile failed: %v", err)
@@ -202,7 +207,7 @@ func TestConfigMigrationIntegration(t *testing.T) {
 
 	for _, cfgFile := range legacyConfigs {
 		t.Run(cfgFile, func(t *testing.T) {
-			path := filepath.Join(getTestConfigsDir(), cfgFile)
+			path := filepath.Join(getTestConfigsDir(t), cfgFile)
 
 			// Migrate to Lua format
 			luaContent, err := config.MigrateLegacyFile(path)
@@ -240,7 +245,7 @@ func TestFullPipelineIntegration(t *testing.T) {
 	}
 	defer parser.Close()
 
-	path := filepath.Join(getTestConfigsDir(), "advanced.conkyrc")
+	path := filepath.Join(getTestConfigsDir(t), "advanced.conkyrc")
 	cfg, err := parser.ParseFile(path)
 	if err != nil {
 		t.Fatalf("ParseFile failed: %v", err)
@@ -308,7 +313,7 @@ func TestLuaConfigParsing(t *testing.T) {
 			}
 			defer parser.Close()
 
-			path := filepath.Join(getTestConfigsDir(), tc.file)
+			path := filepath.Join(getTestConfigsDir(t), tc.file)
 			cfg, err := parser.ParseFile(path)
 			if err != nil {
 				t.Fatalf("ParseFile failed: %v", err)
@@ -337,7 +342,7 @@ func TestConfigAndMonitorVariableMapping(t *testing.T) {
 	}
 	defer parser.Close()
 
-	path := filepath.Join(getTestConfigsDir(), "advanced.conkyrc")
+	path := filepath.Join(getTestConfigsDir(t), "advanced.conkyrc")
 	cfg, err := parser.ParseFile(path)
 	if err != nil {
 		t.Fatalf("ParseFile failed: %v", err)
