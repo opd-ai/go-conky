@@ -137,6 +137,10 @@ type Options struct {
     // Zero means use the default (50 MB).
     LuaMemoryLimit uint64
 
+    // ShutdownTimeout sets the maximum time to wait for graceful shutdown.
+    // Zero means use DefaultShutdownTimeout (5 seconds).
+    ShutdownTimeout time.Duration
+
     // Logger sets a custom logger for debug/info messages.
     // If nil, no logging is performed.
     Logger Logger
@@ -444,6 +448,10 @@ import (
     "github.com/opd-ai/go-conky/internal/render"
 )
 
+// DefaultShutdownTimeout is the default timeout for graceful shutdown.
+// This can be overridden via Options.ShutdownTimeout.
+const DefaultShutdownTimeout = 5 * time.Second
+
 // conkyImpl is the private implementation of the Conky interface.
 type conkyImpl struct {
     // Configuration
@@ -553,11 +561,17 @@ func (c *conkyImpl) Stop() error {
         close(done)
     }()
     
+    // Use configured timeout or default
+    timeout := c.opts.ShutdownTimeout
+    if timeout <= 0 {
+        timeout = DefaultShutdownTimeout
+    }
+    
     select {
     case <-done:
         return nil
-    case <-time.After(5 * time.Second):
-        return fmt.Errorf("shutdown timeout: some goroutines did not stop")
+    case <-time.After(timeout):
+        return fmt.Errorf("shutdown timeout after %v: some goroutines did not stop", timeout)
     }
 }
 
@@ -673,6 +687,7 @@ func (c *conkyImpl) setError(err error) {
     
     c.mu.RLock()
     handler := c.errorHandler
+    logger := c.opts.Logger
     c.mu.RUnlock()
     
     if handler != nil {
@@ -680,7 +695,9 @@ func (c *conkyImpl) setError(err error) {
             defer func() {
                 // Recover from panics in error handler to prevent crashing
                 if r := recover(); r != nil {
-                    // Optionally log the panic, but don't propagate it
+                    if logger != nil {
+                        logger.Error("error handler panicked", "panic", r, "original_error", err)
+                    }
                 }
             }()
             handler(err)
@@ -1297,7 +1314,9 @@ func main() {
     // Clean up goroutine when window closes
     w.SetOnClosed(func() {
         close(done)
-        c.Stop()
+        if err := c.Stop(); err != nil {
+            log.Printf("warning: failed to stop conky: %v", err)
+        }
     })
     
     w.SetContent(widget.NewVBox(
