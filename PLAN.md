@@ -135,7 +135,7 @@ Window Display (X11/Wayland)
 
 **Tasks:**
 - [x] Golua runtime initialization and embedding (12 hours)
-- [ ] Implement `conky_parse()` and core Lua functions (16 hours)
+- [x] Implement `conky_parse()` and core Lua functions (16 hours)
 - [ ] Cairo compatibility layer for drawing functions (20 hours)
 - [ ] Lua script sandboxing and resource limiting (8 hours)
 - [ ] Event hook system (conky_main, conky_start, etc.) (8 hours)
