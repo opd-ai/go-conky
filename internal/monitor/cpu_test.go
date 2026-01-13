@@ -195,7 +195,7 @@ cpu0 50 5 25 250 10 2 1 1
 cpu1 50 5 25 250 10 3 2 1
 intr 12345
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte(statContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte(statContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock stat: %v", err)
 	}
 
@@ -208,7 +208,7 @@ processor	: 1
 model name	: Test CPU Model
 cpu MHz		: 2400.456
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "cpuinfo"), []byte(cpuinfoContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "cpuinfo"), []byte(cpuinfoContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock cpuinfo: %v", err)
 	}
 

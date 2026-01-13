@@ -13,7 +13,7 @@ func TestUptimeReaderWithMockFile(t *testing.T) {
 	// Create mock /proc/uptime
 	// Format: uptime_seconds idle_seconds
 	uptimeContent := "12345.67 23456.78\n"
-	if err := os.WriteFile(filepath.Join(tmpDir, "uptime"), []byte(uptimeContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "uptime"), []byte(uptimeContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock uptime: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestUptimeReaderMalformedFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			uptimePath := filepath.Join(tmpDir, "uptime_"+tt.name)
-			if err := os.WriteFile(uptimePath, []byte(tt.content), 0644); err != nil {
+			if err := os.WriteFile(uptimePath, []byte(tt.content), 0o644); err != nil {
 				t.Fatalf("failed to write mock uptime: %v", err)
 			}
 
@@ -100,7 +100,7 @@ func TestUptimeReaderWithWhitespace(t *testing.T) {
 
 	// Test with extra whitespace
 	uptimeContent := "  12345.67   23456.78  \n"
-	if err := os.WriteFile(filepath.Join(tmpDir, "uptime"), []byte(uptimeContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "uptime"), []byte(uptimeContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock uptime: %v", err)
 	}
 

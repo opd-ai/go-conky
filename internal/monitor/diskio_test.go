@@ -156,7 +156,7 @@ func TestDiskIOReaderWithMockFile(t *testing.T) {
  259       1 nvme0n1p1 50 100 150 200 250 300 350 400 0 500 550
    7       0 loop0 10 0 20 5 0 0 0 0 0 5 5
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "diskstats"), []byte(diskstatsContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "diskstats"), []byte(diskstatsContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock diskstats: %v", err)
 	}
 
@@ -221,7 +221,7 @@ func TestDiskIOReaderRateCalculation(t *testing.T) {
 	// First read with initial values
 	diskstatsContent1 := `   8       0 sda 1000 100 2000 50 500 50 1000 25 0 100 125
 `
-	if err := os.WriteFile(diskstatsPath, []byte(diskstatsContent1), 0644); err != nil {
+	if err := os.WriteFile(diskstatsPath, []byte(diskstatsContent1), 0o644); err != nil {
 		t.Fatalf("failed to write mock diskstats: %v", err)
 	}
 
@@ -252,7 +252,7 @@ func TestDiskIOReaderRateCalculation(t *testing.T) {
 	// readsCompleted: 1000 -> 1100 (delta: 100 reads)
 	diskstatsContent2 := `   8       0 sda 1100 100 4000 50 600 50 2000 25 0 100 125
 `
-	if err := os.WriteFile(diskstatsPath, []byte(diskstatsContent2), 0644); err != nil {
+	if err := os.WriteFile(diskstatsPath, []byte(diskstatsContent2), 0o644); err != nil {
 		t.Fatalf("failed to write mock diskstats (2nd): %v", err)
 	}
 
@@ -291,7 +291,7 @@ func TestDiskIOReaderMissingFile(t *testing.T) {
 func TestDiskIOReaderEmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "diskstats"), []byte(""), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "diskstats"), []byte(""), 0o644); err != nil {
 		t.Fatalf("failed to write mock diskstats: %v", err)
 	}
 
@@ -430,7 +430,7 @@ malformed line
    8       1 sdb 2000 200 4000 100 1000 100 2000 50 0 200 250
 short line 1 2 3
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "diskstats"), []byte(diskstatsContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "diskstats"), []byte(diskstatsContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock diskstats: %v", err)
 	}
 

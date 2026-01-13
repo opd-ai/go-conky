@@ -296,7 +296,7 @@ cpu0 50 5 25 250 10 2 1 1
 cpu1 50 5 25 250 10 3 2 1
 intr 12345
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte(statContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte(statContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock stat: %v", err)
 	}
 
@@ -309,7 +309,7 @@ processor	: 1
 model name	: Test CPU Model
 cpu MHz		: 2400.456
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "cpuinfo"), []byte(cpuinfoContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "cpuinfo"), []byte(cpuinfoContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock cpuinfo: %v", err)
 	}
 
@@ -322,13 +322,13 @@ Cached:          1024000 kB
 SwapTotal:       4096000 kB
 SwapFree:        3072000 kB
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock meminfo: %v", err)
 	}
 
 	// Create mock /proc/uptime
 	uptimeContent := "12345.67 23456.78\n"
-	if err := os.WriteFile(filepath.Join(tmpDir, "uptime"), []byte(uptimeContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "uptime"), []byte(uptimeContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock uptime: %v", err)
 	}
 
@@ -338,7 +338,7 @@ SwapFree:        3072000 kB
     lo: 1000   100    0    0    0     0          0         0  1000   100    0    0    0     0       0          0
   eth0: 5000   500    0    0    0     0          0         0  2000   200    0    0    0     0       0          0
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock net_dev: %v", err)
 	}
 
@@ -346,7 +346,7 @@ SwapFree:        3072000 kB
 	mountsContent := `/dev/sda1 / ext4 rw,relatime 0 0
 proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(mountsContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(mountsContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock mounts: %v", err)
 	}
 
@@ -354,7 +354,7 @@ proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
 	diskstatsContent := `   8       0 sda 1000 100 2000 50 500 50 1000 25 0 100 125
    8       1 sda1 500 50 1000 25 250 25 500 12 0 50 62
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "diskstats"), []byte(diskstatsContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "diskstats"), []byte(diskstatsContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock diskstats: %v", err)
 	}
 }

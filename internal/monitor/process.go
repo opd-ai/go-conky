@@ -95,7 +95,7 @@ func (r *processReader) ReadStats() (ProcessStats, error) {
 		return stats, fmt.Errorf("reading %s: %w", r.procPath, err)
 	}
 
-	var processes []ProcessInfo
+	processes := make([]ProcessInfo, 0, len(entries))
 	currentCPUTimes := make(map[int]cpuTime)
 	cpuDelta := totalCPU - r.lastTotalCPU
 
