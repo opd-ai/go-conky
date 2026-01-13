@@ -87,10 +87,9 @@ func ParseHookType(s string) (HookType, error) {
 // HookManager manages Conky Lua lifecycle hooks.
 // It provides thread-safe hook registration and invocation.
 type HookManager struct {
-	runtime   *ConkyRuntime
-	hooks     map[HookType]string   // Maps hook type to function name
-	callbacks map[HookType]rt.Value // Cached Lua function values
-	mu        sync.RWMutex
+	runtime *ConkyRuntime
+	hooks   map[HookType]string // Maps hook type to function name
+	mu      sync.RWMutex
 }
 
 // NewHookManager creates a new HookManager for the given runtime.
@@ -100,9 +99,8 @@ func NewHookManager(runtime *ConkyRuntime) (*HookManager, error) {
 	}
 
 	return &HookManager{
-		runtime:   runtime,
-		hooks:     make(map[HookType]string),
-		callbacks: make(map[HookType]rt.Value),
+		runtime: runtime,
+		hooks:   make(map[HookType]string),
 	}, nil
 }
 
@@ -128,7 +126,6 @@ func (hm *HookManager) RegisterHook(hookType HookType, funcName string) error {
 	}
 
 	hm.hooks[hookType] = funcName
-	hm.callbacks[hookType] = fn
 	return nil
 }
 
@@ -138,7 +135,6 @@ func (hm *HookManager) UnregisterHook(hookType HookType) {
 	defer hm.mu.Unlock()
 
 	delete(hm.hooks, hookType)
-	delete(hm.callbacks, hookType)
 }
 
 // IsRegistered returns true if a hook is registered for the given type.
@@ -215,35 +211,24 @@ func (hm *HookManager) AutoRegisterHooks() []HookType {
 	}
 
 	// Collect valid hooks first without holding the lock
-	type hookEntry struct {
-		hookType HookType
-		fn       rt.Value
-	}
-	foundHooks := make([]hookEntry, 0, len(hookTypes))
+	foundHooks := make([]HookType, 0, len(hookTypes))
 
 	for _, hookType := range hookTypes {
 		fullName := hookType.LuaFunctionName()
 		fn := hm.runtime.GetGlobal(fullName)
 		if fn != rt.NilValue && fn.Type() == rt.FunctionType {
-			foundHooks = append(foundHooks, hookEntry{hookType: hookType, fn: fn})
+			foundHooks = append(foundHooks, hookType)
 		}
 	}
 
 	// Now acquire lock once to update all hooks
 	hm.mu.Lock()
-	for _, entry := range foundHooks {
-		hm.hooks[entry.hookType] = entry.hookType.String()
-		hm.callbacks[entry.hookType] = entry.fn
+	for _, hookType := range foundHooks {
+		hm.hooks[hookType] = hookType.String()
 	}
 	hm.mu.Unlock()
 
-	// Build registered list
-	registered := make([]HookType, len(foundHooks))
-	for i, entry := range foundHooks {
-		registered[i] = entry.hookType
-	}
-
-	return registered
+	return foundHooks
 }
 
 // RegisteredHooks returns a list of all currently registered hook types.
@@ -264,5 +249,4 @@ func (hm *HookManager) Clear() {
 	defer hm.mu.Unlock()
 
 	hm.hooks = make(map[HookType]string)
-	hm.callbacks = make(map[HookType]rt.Value)
 }
