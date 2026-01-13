@@ -240,9 +240,8 @@ func (p *LegacyParser) parseDirective(cfg *Config, line string, lineNum int) err
 		}
 		cfg.Colors.Color9 = c
 
-	// Unknown directives are silently ignored to maintain forward compatibility
 	default:
-		// Ignore unknown directives for compatibility with future Conky versions
+		// Unknown directives are silently ignored for forward compatibility
 	}
 
 	return nil
