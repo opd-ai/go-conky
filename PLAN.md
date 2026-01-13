@@ -134,7 +134,7 @@ Window Display (X11/Wayland)
 - Cairo drawing function translation layer
 
 **Tasks:**
-- [ ] Golua runtime initialization and embedding (12 hours)
+- [x] Golua runtime initialization and embedding (12 hours)
 - [ ] Implement `conky_parse()` and core Lua functions (16 hours)
 - [ ] Cairo compatibility layer for drawing functions (20 hours)
 - [ ] Lua script sandboxing and resource limiting (8 hours)
