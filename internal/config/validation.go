@@ -78,7 +78,7 @@ type Validator struct {
 // NewValidator creates a new Validator with default settings.
 func NewValidator() *Validator {
 	return &Validator{
-		knownVariables: defaultKnownVariables(),
+		knownVariables: knownConkyVariables,
 		strictMode:     false,
 	}
 }
@@ -221,6 +221,9 @@ var simpleVariablePattern = regexp.MustCompile(`\$([a-zA-Z_][a-zA-Z0-9_]*)`)
 
 // validateTemplateLine validates a single template line for variable usage.
 func (v *Validator) validateTemplateLine(line string, lineNum int, result *ValidationResult) {
+	// Track variables found in braced format to avoid duplicate checking
+	bracedVars := make(map[string]bool)
+
 	// Check ${variable} format
 	matches := templateVariablePattern.FindAllStringSubmatch(line, -1)
 	for _, match := range matches {
@@ -233,6 +236,7 @@ func (v *Validator) validateTemplateLine(line string, lineNum int, result *Valid
 			continue
 		}
 		varName := parts[0]
+		bracedVars[varName] = true
 		v.checkVariable(varName, lineNum, result)
 	}
 
@@ -243,8 +247,8 @@ func (v *Validator) validateTemplateLine(line string, lineNum int, result *Valid
 			continue
 		}
 		varName := match[1]
-		// Skip if this is part of a ${...} match
-		if strings.Contains(line, "${"+varName) {
+		// Skip if this variable was already found in braced format
+		if bracedVars[varName] {
 			continue
 		}
 		v.checkVariable(varName, lineNum, result)
@@ -271,168 +275,167 @@ func (v *Validator) checkVariable(varName string, lineNum int, result *Validatio
 	}
 }
 
-// defaultKnownVariables returns the set of recognized Conky template variables.
-func defaultKnownVariables() map[string]bool {
-	return map[string]bool{
-		// CPU variables
-		"cpu":       true,
-		"cpu0":      true,
-		"cpu1":      true,
-		"cpu2":      true,
-		"cpu3":      true,
-		"cpu4":      true,
-		"cpu5":      true,
-		"cpu6":      true,
-		"cpu7":      true,
-		"cpubar":    true,
-		"cpugauge":  true,
-		"cpugraph":  true,
-		"freq":      true,
-		"freq_g":    true,
-		"cpu_model": true,
-		"loadavg":   true,
+// knownConkyVariables is the set of recognized Conky template variables.
+// Initialized once at package load time to avoid repeated allocations.
+var knownConkyVariables = map[string]bool{
+	// CPU variables
+	"cpu":       true,
+	"cpu0":      true,
+	"cpu1":      true,
+	"cpu2":      true,
+	"cpu3":      true,
+	"cpu4":      true,
+	"cpu5":      true,
+	"cpu6":      true,
+	"cpu7":      true,
+	"cpubar":    true,
+	"cpugauge":  true,
+	"cpugraph":  true,
+	"freq":      true,
+	"freq_g":    true,
+	"cpu_model": true,
+	"loadavg":   true,
 
-		// Memory variables
-		"mem":         true,
-		"memmax":      true,
-		"memfree":     true,
-		"memperc":     true,
-		"memeasyfree": true,
-		"membar":      true,
-		"memgauge":    true,
-		"memgraph":    true,
-		"buffers":     true,
-		"cached":      true,
-		"swap":        true,
-		"swapmax":     true,
-		"swapfree":    true,
-		"swapperc":    true,
-		"swapbar":     true,
+	// Memory variables
+	"mem":         true,
+	"memmax":      true,
+	"memfree":     true,
+	"memperc":     true,
+	"memeasyfree": true,
+	"membar":      true,
+	"memgauge":    true,
+	"memgraph":    true,
+	"buffers":     true,
+	"cached":      true,
+	"swap":        true,
+	"swapmax":     true,
+	"swapfree":    true,
+	"swapperc":    true,
+	"swapbar":     true,
 
-		// Uptime variables
-		"uptime":       true,
-		"uptime_short": true,
+	// Uptime variables
+	"uptime":       true,
+	"uptime_short": true,
 
-		// Network variables
-		"downspeed":               true,
-		"downspeedf":              true,
-		"downspeedgraph":          true,
-		"upspeed":                 true,
-		"upspeedf":                true,
-		"upspeedgraph":            true,
-		"totaldown":               true,
-		"totalup":                 true,
-		"addr":                    true,
-		"addrs":                   true,
-		"wireless_essid":          true,
-		"wireless_link_qual":      true,
-		"wireless_link_qual_max":  true,
-		"wireless_link_qual_perc": true,
+	// Network variables
+	"downspeed":               true,
+	"downspeedf":              true,
+	"downspeedgraph":          true,
+	"upspeed":                 true,
+	"upspeedf":                true,
+	"upspeedgraph":            true,
+	"totaldown":               true,
+	"totalup":                 true,
+	"addr":                    true,
+	"addrs":                   true,
+	"wireless_essid":          true,
+	"wireless_link_qual":      true,
+	"wireless_link_qual_max":  true,
+	"wireless_link_qual_perc": true,
 
-		// Filesystem variables
-		"fs_used":      true,
-		"fs_size":      true,
-		"fs_free":      true,
-		"fs_used_perc": true,
-		"fs_bar":       true,
-		"fs_free_perc": true,
-		"fs_type":      true,
+	// Filesystem variables
+	"fs_used":      true,
+	"fs_size":      true,
+	"fs_free":      true,
+	"fs_used_perc": true,
+	"fs_bar":       true,
+	"fs_free_perc": true,
+	"fs_type":      true,
 
-		// Disk I/O variables
-		"diskio":       true,
-		"diskio_read":  true,
-		"diskio_write": true,
-		"diskiograph":  true,
+	// Disk I/O variables
+	"diskio":       true,
+	"diskio_read":  true,
+	"diskio_write": true,
+	"diskiograph":  true,
 
-		// Process variables
-		"processes":         true,
-		"running_processes": true,
-		"threads":           true,
-		"running_threads":   true,
-		"top":               true,
-		"top_mem":           true,
-		"top_time":          true,
-		"top_io":            true,
+	// Process variables
+	"processes":         true,
+	"running_processes": true,
+	"threads":           true,
+	"running_threads":   true,
+	"top":               true,
+	"top_mem":           true,
+	"top_time":          true,
+	"top_io":            true,
 
-		// Battery variables
-		"battery":         true,
-		"battery_bar":     true,
-		"battery_percent": true,
-		"battery_short":   true,
-		"battery_status":  true,
-		"battery_time":    true,
+	// Battery variables
+	"battery":         true,
+	"battery_bar":     true,
+	"battery_percent": true,
+	"battery_short":   true,
+	"battery_status":  true,
+	"battery_time":    true,
 
-		// Hardware monitoring
-		"hwmon":    true,
-		"acpitemp": true,
-		"platform": true,
+	// Hardware monitoring
+	"hwmon":    true,
+	"acpitemp": true,
+	"platform": true,
 
-		// Audio variables
-		"mixer":     true,
-		"mixerbar":  true,
-		"mixerl":    true,
-		"mixerr":    true,
-		"mixerlbar": true,
-		"mixerrbar": true,
+	// Audio variables
+	"mixer":     true,
+	"mixerbar":  true,
+	"mixerl":    true,
+	"mixerr":    true,
+	"mixerlbar": true,
+	"mixerrbar": true,
 
-		// Time and date variables
-		"time":        true,
-		"utime":       true,
-		"tztime":      true,
-		"format_time": true,
+	// Time and date variables
+	"time":        true,
+	"utime":       true,
+	"tztime":      true,
+	"format_time": true,
 
-		// System info
-		"kernel":           true,
-		"machine":          true,
-		"nodename":         true,
-		"nodename_short":   true,
-		"sysname":          true,
-		"conky_version":    true,
-		"conky_build_date": true,
-		"conky_build_arch": true,
+	// System info
+	"kernel":           true,
+	"machine":          true,
+	"nodename":         true,
+	"nodename_short":   true,
+	"sysname":          true,
+	"conky_version":    true,
+	"conky_build_date": true,
+	"conky_build_arch": true,
 
-		// X11 variables
-		"desktop":        true,
-		"desktop_name":   true,
-		"desktop_number": true,
+	// X11 variables
+	"desktop":        true,
+	"desktop_name":   true,
+	"desktop_number": true,
 
-		// Display control (not data variables, but commonly used)
-		"if_empty":     true,
-		"if_match":     true,
-		"if_existing":  true,
-		"if_running":   true,
-		"if_mounted":   true,
-		"if_updatenr":  true,
-		"else":         true,
-		"endif":        true,
-		"template":     true,
-		"exec":         true,
-		"execp":        true,
-		"execi":        true,
-		"execpi":       true,
-		"execbar":      true,
-		"execgauge":    true,
-		"execgraph":    true,
-		"texeci":       true,
-		"lua":          true,
-		"lua_parse":    true,
-		"lua_bar":      true,
-		"lua_gauge":    true,
-		"lua_graph":    true,
-		"pre_exec":     true,
-		"image":        true,
-		"stippled_hr":  true,
-		"offset":       true,
-		"shadecolor":   true,
-		"outlinecolor": true,
-		"to_bytes":     true,
-		"eval":         true,
-		"head":         true,
-		"tail":         true,
-		"lines":        true,
-		"words":        true,
-		"cat":          true,
-	}
+	// Display control (not data variables, but commonly used)
+	"if_empty":     true,
+	"if_match":     true,
+	"if_existing":  true,
+	"if_running":   true,
+	"if_mounted":   true,
+	"if_updatenr":  true,
+	"else":         true,
+	"endif":        true,
+	"template":     true,
+	"exec":         true,
+	"execp":        true,
+	"execi":        true,
+	"execpi":       true,
+	"execbar":      true,
+	"execgauge":    true,
+	"execgraph":    true,
+	"texeci":       true,
+	"lua":          true,
+	"lua_parse":    true,
+	"lua_bar":      true,
+	"lua_gauge":    true,
+	"lua_graph":    true,
+	"pre_exec":     true,
+	"image":        true,
+	"stippled_hr":  true,
+	"offset":       true,
+	"shadecolor":   true,
+	"outlinecolor": true,
+	"to_bytes":     true,
+	"eval":         true,
+	"head":         true,
+	"tail":         true,
+	"lines":        true,
+	"words":        true,
+	"cat":          true,
 }
 
 // ValidateConfig is a convenience function to validate a Config with default settings.

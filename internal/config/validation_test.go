@@ -420,6 +420,20 @@ func TestValidatorValidateText(t *testing.T) {
 			expectErrors: 0,
 			expectWarns:  0,
 		},
+		{
+			name:         "simple var not confused with braced var prefix",
+			template:     []string{"$cpu and ${cpu_model}"},
+			strictMode:   false,
+			expectErrors: 0,
+			expectWarns:  0, // Both are valid, no false positive
+		},
+		{
+			name:         "simple unknown var not skipped due to similar braced var",
+			template:     []string{"$test ${test_var}"},
+			strictMode:   true,
+			expectErrors: 2, // Both are unknown, both should be reported
+			expectWarns:  0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -551,10 +565,8 @@ func TestValidateConfigStrict(t *testing.T) {
 	}
 }
 
-func TestDefaultKnownVariables(t *testing.T) {
-	vars := defaultKnownVariables()
-
-	// Check some common variables are present
+func TestKnownConkyVariables(t *testing.T) {
+	// Check some common variables are present in the package-level map
 	expectedVars := []string{
 		"cpu", "mem", "memmax", "memperc", "uptime",
 		"downspeed", "upspeed", "fs_used", "fs_size",
@@ -562,8 +574,8 @@ func TestDefaultKnownVariables(t *testing.T) {
 	}
 
 	for _, v := range expectedVars {
-		if !vars[v] {
-			t.Errorf("expected variable %q to be in knownVariables", v)
+		if !knownConkyVariables[v] {
+			t.Errorf("expected variable %q to be in knownConkyVariables", v)
 		}
 	}
 }
