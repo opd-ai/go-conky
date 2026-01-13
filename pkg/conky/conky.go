@@ -8,6 +8,14 @@ import (
 	"github.com/opd-ai/go-conky/internal/config"
 )
 
+// Configuration format constants for use with NewFromReader.
+const (
+	// FormatLegacy indicates the legacy .conkyrc text format.
+	FormatLegacy = "legacy"
+	// FormatLua indicates the modern Lua configuration format.
+	FormatLua = "lua"
+)
+
 // Conky represents an embedded go-conky instance with full lifecycle control.
 // It is safe for concurrent use from multiple goroutines.
 type Conky interface {
@@ -157,15 +165,15 @@ func NewFromFS(fsys fs.FS, configPath string, opts *Options) (Conky, error) {
 //		conky.config = { update_interval = 1 }
 //		conky.text = [[CPU: ${cpu}%]]
 //	`)
-//	c, err := conky.NewFromReader(config, "lua", nil)
+//	c, err := conky.NewFromReader(config, conky.FormatLua, nil)
 func NewFromReader(r io.Reader, format string, opts *Options) (Conky, error) {
 	if opts == nil {
 		defaultOpts := DefaultOptions()
 		opts = &defaultOpts
 	}
 
-	if format != "legacy" && format != "lua" {
-		return nil, fmt.Errorf("invalid format: %s (expected 'lua' or 'legacy')", format)
+	if format != FormatLegacy && format != FormatLua {
+		return nil, fmt.Errorf("invalid format: %s (expected '%s' or '%s')", format, FormatLua, FormatLegacy)
 	}
 
 	// Read content once (can't re-read a Reader)

@@ -85,8 +85,14 @@ func (c *conkyImpl) Start() error {
 		defer c.cleanup()
 		defer c.running.Store(false)
 
-		// Wait for context cancellation
-		// TODO: In non-headless mode, integrate with render.Game when render package is ready
+		// Wait for context cancellation.
+		// When opts.Headless is false, this goroutine should integrate with
+		// render.Game.Run() to run the Ebiten rendering loop. The integration
+		// requires:
+		// 1. Create render.Game with config from c.cfg
+		// 2. Set c.monitor as the data provider
+		// 3. Call game.Run() which blocks until window close or context cancel
+		// See PLAN.md section 2.2.2 for render package changes needed.
 		<-c.ctx.Done()
 
 		c.emitEvent(EventStopped, "Instance stopped")
@@ -199,6 +205,11 @@ func (c *conkyImpl) SetEventHandler(handler EventHandler) {
 
 // initComponents initializes all components for operation.
 func (c *conkyImpl) initComponents() error {
+	// Validate config is not nil (should be guaranteed by factory functions)
+	if c.cfg == nil {
+		return fmt.Errorf("configuration is nil")
+	}
+
 	// Determine update interval
 	interval := c.cfg.Display.UpdateInterval
 	if c.opts.UpdateInterval > 0 {
