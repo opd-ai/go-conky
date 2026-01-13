@@ -28,6 +28,7 @@ package conky
 import (
     "context"
     "io/fs"
+    "time"
 )
 
 // Conky represents an embedded go-conky instance with full lifecycle control.
@@ -333,7 +334,8 @@ func (g *Game) Update() error {
     g.mu.RUnlock()
     
     if stopRequested {
-        return ebiten.Termination // Signal Ebiten to stop
+        return ebiten.Termination // Ebiten v2.5+ termination signal
+        // Note: For older Ebiten versions, use a custom termination error
     }
     
     // ... existing update logic ...
@@ -745,6 +747,7 @@ func NewFromFS(fsys fs.FS, configPath string, opts *Options) (Conky, error) {
 
 ```go
 // NewFromReader creates a Conky instance from an io.Reader.
+// Note: Assumes "bytes", "io", and "fmt" are imported.
 func NewFromReader(r io.Reader, format string, opts *Options) (Conky, error) {
     if opts == nil {
         opts = &Options{}
@@ -1113,6 +1116,10 @@ func main() {
 package main
 
 import (
+    "os"
+    "os/signal"
+    "syscall"
+    
     "github.com/opd-ai/go-conky/pkg/conky"
 )
 
@@ -1156,8 +1163,10 @@ func main() {
 package main
 
 import (
+    "fmt"
+    "time"
+    
     "github.com/opd-ai/go-conky/pkg/conky"
-    "fyne.io/fyne/v2"
     "fyne.io/fyne/v2/app"
     "fyne.io/fyne/v2/widget"
 )
