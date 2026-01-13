@@ -1,9 +1,13 @@
-.PHONY: build test clean install deps lint coverage bench integration fmt vet
+.PHONY: build test clean install deps lint coverage bench integration fmt vet dist dist-linux checksums
 
 BINARY_NAME=conky-go
 BUILD_DIR=build
+DIST_DIR=dist
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS=-ldflags "-X main.Version=$(VERSION)"
+
+# Supported platforms for distribution
+PLATFORMS=linux/amd64 linux/arm64
 
 # Default target
 all: build
@@ -33,6 +37,7 @@ integration:
 clean:
 	@echo "Cleaning..."
 	@rm -rf $(BUILD_DIR)
+	@rm -rf $(DIST_DIR)
 	@go clean -testcache
 
 # Install binary to system
@@ -96,4 +101,41 @@ help:
 	@echo "  fmt         - Format code with go fmt"
 	@echo "  vet         - Run go vet"
 	@echo "  run         - Build and run with ~/.conkyrc"
+	@echo "  dist        - Build distribution packages for all platforms"
+	@echo "  dist-linux  - Build distribution packages for Linux only"
+	@echo "  checksums   - Generate checksums for distribution files"
 	@echo "  help        - Print this help message"
+
+# Build distribution packages for all platforms
+dist: clean
+	@echo "Building distribution packages..."
+	@mkdir -p $(DIST_DIR)
+	@for platform in $(PLATFORMS); do \
+		GOOS=$$(echo $$platform | cut -d/ -f1); \
+		GOARCH=$$(echo $$platform | cut -d/ -f2); \
+		OUTPUT="$(DIST_DIR)/$(BINARY_NAME)-$$GOOS-$$GOARCH"; \
+		echo "Building $$OUTPUT..."; \
+		GOOS=$$GOOS GOARCH=$$GOARCH go build $(LDFLAGS) -o $$OUTPUT ./cmd/conky-go; \
+		tar -czvf "$$OUTPUT.tar.gz" -C $(DIST_DIR) "$$(basename $$OUTPUT)"; \
+		rm -f "$$OUTPUT"; \
+	done
+	@$(MAKE) checksums
+
+# Build distribution packages for Linux only
+dist-linux: clean
+	@echo "Building Linux distribution packages..."
+	@mkdir -p $(DIST_DIR)
+	@for arch in amd64 arm64; do \
+		OUTPUT="$(DIST_DIR)/$(BINARY_NAME)-linux-$$arch"; \
+		echo "Building $$OUTPUT..."; \
+		GOOS=linux GOARCH=$$arch go build $(LDFLAGS) -o $$OUTPUT ./cmd/conky-go; \
+		tar -czvf "$$OUTPUT.tar.gz" -C $(DIST_DIR) "$$(basename $$OUTPUT)"; \
+		rm -f "$$OUTPUT"; \
+	done
+	@$(MAKE) checksums
+
+# Generate checksums for distribution files
+checksums:
+	@echo "Generating checksums..."
+	@cd $(DIST_DIR) && sha256sum *.tar.gz > checksums.txt
+	@echo "Checksums written to $(DIST_DIR)/checksums.txt"
