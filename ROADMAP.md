@@ -1261,15 +1261,17 @@ func (m *windowsMemoryProvider) SwapStats() (*SwapStats, error) {
     
     // Calculate page file (swap) size - check for underflow since these are uint64
     var pageFileTotal, pageFileAvail uint64
-    if memStatus.ullTotalPageFile > memStatus.ullTotalPhys {
+    if memStatus.ullTotalPageFile > memStatus.ullTotalPhys &&
+       memStatus.ullAvailPageFile > memStatus.ullAvailPhys {
         pageFileTotal = memStatus.ullTotalPageFile - memStatus.ullTotalPhys
         pageFileAvail = memStatus.ullAvailPageFile - memStatus.ullAvailPhys
     } else {
-        // Fallback: use total page file values
+        // Fallback: use total page file values when subtraction would underflow
         pageFileTotal = memStatus.ullTotalPageFile
         pageFileAvail = memStatus.ullAvailPageFile
     }
     
+    // Ensure we don't underflow on used calculation
     var used uint64
     if pageFileTotal > pageFileAvail {
         used = pageFileTotal - pageFileAvail
