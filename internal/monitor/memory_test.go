@@ -18,7 +18,7 @@ Cached:          1024000 kB
 SwapTotal:       4096000 kB
 SwapFree:        3072000 kB
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock meminfo: %v", err)
 	}
 
@@ -109,7 +109,7 @@ Cached:          1024000 kB
 SwapTotal:             0 kB
 SwapFree:              0 kB
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock meminfo: %v", err)
 	}
 
@@ -142,7 +142,7 @@ Cached:          1024000 kB
 SwapTotal:       1000000 kB
 SwapFree:        2000000 kB
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock meminfo: %v", err)
 	}
 
@@ -179,7 +179,7 @@ func TestMemoryReaderMalformedFile(t *testing.T) {
 	meminfoContent := `This is not valid
 MemTotal 8192000 kB
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock meminfo: %v", err)
 	}
 

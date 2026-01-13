@@ -284,7 +284,7 @@ func TestGameSetErrorHandler(t *testing.T) {
 	game.lastUpdate = time.Now().Add(-2 * time.Second)
 	game.mu.Unlock()
 
-	game.Update()
+	_ = game.Update()
 
 	if capturedErr != testErr {
 		t.Errorf("error handler did not capture error: got %v, want %v", capturedErr, testErr)

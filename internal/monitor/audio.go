@@ -198,46 +198,48 @@ func (r *audioReader) parseMixerFromCodec(content string) map[string]MixerInfo {
 	for _, line := range lines {
 		// Parse amp-out/amp-in settings
 		// Example: "Amp-Out vals:  [0x57 0x57]" (volume values)
-		if strings.Contains(line, "Amp-Out vals:") || strings.Contains(line, "Amp-In vals:") {
-			matches := ampRegex.FindStringSubmatch(line)
-			if matches == nil {
-				continue
-			}
-
-			leftHex, err := strconv.ParseInt(matches[1], 16, 64)
-			if err != nil {
-				continue
-			}
-			rightHex, err := strconv.ParseInt(matches[2], 16, 64)
-			if err != nil {
-				continue
-			}
-
-			// Amp values are typically 0-127 (7-bit), normalize to percentage
-			// Mask the actual volume bits (lower 7 bits)
-			leftVol := float64(leftHex&0x7F) / 127.0 * 100
-			rightVol := float64(rightHex&0x7F) / 127.0 * 100
-
-			// Check mute bit (bit 7)
-			leftMuted := (leftHex & 0x80) != 0
-			rightMuted := (rightHex & 0x80) != 0
-
-			mixerName := "Master"
-			if strings.Contains(line, "Amp-In") {
-				mixerName = "Capture"
-			}
-
-			mixer := MixerInfo{
-				Name:          mixerName,
-				VolumeLeft:    leftVol,
-				VolumeRight:   rightVol,
-				VolumePercent: (leftVol + rightVol) / 2,
-				Muted:         leftMuted && rightMuted,
-				HasVolume:     true,
-				HasSwitch:     true,
-			}
-			mixers[mixerName] = mixer
+		if !strings.Contains(line, "Amp-Out vals:") && !strings.Contains(line, "Amp-In vals:") {
+			continue
 		}
+
+		matches := ampRegex.FindStringSubmatch(line)
+		if matches == nil {
+			continue
+		}
+
+		leftHex, err := strconv.ParseInt(matches[1], 16, 64)
+		if err != nil {
+			continue
+		}
+		rightHex, err := strconv.ParseInt(matches[2], 16, 64)
+		if err != nil {
+			continue
+		}
+
+		// Amp values are typically 0-127 (7-bit), normalize to percentage
+		// Mask the actual volume bits (lower 7 bits)
+		leftVol := float64(leftHex&0x7F) / 127.0 * 100
+		rightVol := float64(rightHex&0x7F) / 127.0 * 100
+
+		// Check mute bit (bit 7)
+		leftMuted := (leftHex & 0x80) != 0
+		rightMuted := (rightHex & 0x80) != 0
+
+		mixerName := "Master"
+		if strings.Contains(line, "Amp-In") {
+			mixerName = "Capture"
+		}
+
+		mixer := MixerInfo{
+			Name:          mixerName,
+			VolumeLeft:    leftVol,
+			VolumeRight:   rightVol,
+			VolumePercent: (leftVol + rightVol) / 2,
+			Muted:         leftMuted && rightMuted,
+			HasVolume:     true,
+			HasSwitch:     true,
+		}
+		mixers[mixerName] = mixer
 	}
 
 	return mixers

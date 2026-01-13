@@ -152,7 +152,7 @@ func TestTextRendererMeasureTextDifferentStrings(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			width, height := tr.MeasureText(tt.text)
 
-			if len(tt.text) > 0 {
+			if tt.text != "" {
 				if width <= 0 {
 					t.Errorf("MeasureText(%q) width = %v, want > 0", tt.text, width)
 				}

@@ -6,6 +6,7 @@ package render
 import (
 	"fmt"
 	"image"
+
 	// Register image decoders for common formats
 	_ "image/gif"
 	_ "image/jpeg"

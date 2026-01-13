@@ -43,7 +43,7 @@ func TestProcessReaderReadStats(t *testing.T) {
 cpu0 500 100 150 2000 50 25 12 0 0 0
 cpu1 500 100 150 2000 50 25 13 0 0 0
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte(statContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte(statContent), 0o644); err != nil {
 		t.Fatalf("failed to create stat file: %v", err)
 	}
 
@@ -52,13 +52,13 @@ cpu1 500 100 150 2000 50 25 13 0 0 0
 MemFree:         8000000 kB
 MemAvailable:   10000000 kB
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte(meminfoContent), 0o644); err != nil {
 		t.Fatalf("failed to create meminfo file: %v", err)
 	}
 
 	// Create a process directory with stat file
 	pid1Dir := filepath.Join(tmpDir, "1")
-	if err := os.MkdirAll(pid1Dir, 0755); err != nil {
+	if err := os.MkdirAll(pid1Dir, 0o755); err != nil {
 		t.Fatalf("failed to create process directory: %v", err)
 	}
 
@@ -66,18 +66,18 @@ MemAvailable:   10000000 kB
 	// minflt cminflt majflt cmajflt utime stime cutime cstime priority nice
 	// num_threads itrealvalue starttime vsize rss ...
 	procStatContent := "1 (systemd) S 0 1 1 0 -1 4194560 10000 20000 5 10 100 50 0 0 20 0 1 0 1 200000000 5000 18446744073709551615 1 1 0 0 0 0 671173123 4096 1260 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0o644); err != nil {
 		t.Fatalf("failed to create process stat file: %v", err)
 	}
 
 	// Create another process
 	pid2Dir := filepath.Join(tmpDir, "2")
-	if err := os.MkdirAll(pid2Dir, 0755); err != nil {
+	if err := os.MkdirAll(pid2Dir, 0o755); err != nil {
 		t.Fatalf("failed to create process directory: %v", err)
 	}
 
 	procStatContent2 := "2 (kthreadd) S 0 0 0 0 -1 2129984 0 0 0 0 10 5 0 0 20 0 2 0 1 0 0 18446744073709551615 0 0 0 0 0 0 0 2147483647 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	if err := os.WriteFile(filepath.Join(pid2Dir, "stat"), []byte(procStatContent2), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pid2Dir, "stat"), []byte(procStatContent2), 0o644); err != nil {
 		t.Fatalf("failed to create process stat file: %v", err)
 	}
 
@@ -117,24 +117,24 @@ func TestProcessReaderReadStatsWithRunningProcess(t *testing.T) {
 	}
 
 	// Create /proc/stat file
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0o644); err != nil {
 		t.Fatalf("failed to create stat file: %v", err)
 	}
 
 	// Create /proc/meminfo file
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0o644); err != nil {
 		t.Fatalf("failed to create meminfo file: %v", err)
 	}
 
 	// Create a running process
 	pid1Dir := filepath.Join(tmpDir, "1")
-	if err := os.MkdirAll(pid1Dir, 0755); err != nil {
+	if err := os.MkdirAll(pid1Dir, 0o755); err != nil {
 		t.Fatalf("failed to create process directory: %v", err)
 	}
 
 	// State 'R' = Running
 	procStatContent := "1 (stress) R 0 1 1 0 -1 4194560 10000 20000 5 10 5000 2500 0 0 20 0 4 0 1 200000000 10000 18446744073709551615 1 1 0 0 0 0 671173123 4096 1260 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0o644); err != nil {
 		t.Fatalf("failed to create process stat file: %v", err)
 	}
 
@@ -161,22 +161,22 @@ func TestProcessReaderZombieProcess(t *testing.T) {
 		clkTck:       100.0,
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0o644); err != nil {
 		t.Fatalf("failed to create stat file: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0o644); err != nil {
 		t.Fatalf("failed to create meminfo file: %v", err)
 	}
 
 	pid1Dir := filepath.Join(tmpDir, "1")
-	if err := os.MkdirAll(pid1Dir, 0755); err != nil {
+	if err := os.MkdirAll(pid1Dir, 0o755); err != nil {
 		t.Fatalf("failed to create process directory: %v", err)
 	}
 
 	// State 'Z' = Zombie
 	procStatContent := "1 (defunct) Z 0 1 1 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 1 0 0 18446744073709551615 0 0 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0o644); err != nil {
 		t.Fatalf("failed to create process stat file: %v", err)
 	}
 
@@ -199,22 +199,22 @@ func TestProcessReaderStoppedProcess(t *testing.T) {
 		clkTck:       100.0,
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0o644); err != nil {
 		t.Fatalf("failed to create stat file: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0o644); err != nil {
 		t.Fatalf("failed to create meminfo file: %v", err)
 	}
 
 	pid1Dir := filepath.Join(tmpDir, "1")
-	if err := os.MkdirAll(pid1Dir, 0755); err != nil {
+	if err := os.MkdirAll(pid1Dir, 0o755); err != nil {
 		t.Fatalf("failed to create process directory: %v", err)
 	}
 
 	// State 'T' = Stopped
 	procStatContent := "1 (vim) T 0 1 1 0 -1 4194560 10000 20000 5 10 100 50 0 0 20 0 1 0 1 200000000 5000 18446744073709551615 1 1 0 0 0 0 671173123 4096 1260 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0o644); err != nil {
 		t.Fatalf("failed to create process stat file: %v", err)
 	}
 
@@ -316,21 +316,21 @@ func TestProcessReaderCPUPercentCalculation(t *testing.T) {
 	}
 
 	// Create base files
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0o644); err != nil {
 		t.Fatalf("failed to create meminfo file: %v", err)
 	}
 
 	pid1Dir := filepath.Join(tmpDir, "1")
-	if err := os.MkdirAll(pid1Dir, 0755); err != nil {
+	if err := os.MkdirAll(pid1Dir, 0o755); err != nil {
 		t.Fatalf("failed to create process directory: %v", err)
 	}
 
 	// First sample - total CPU time = 10000, process CPU time = 1000 (utime=500, stime=500)
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  2000 1000 1000 5000 500 250 250 0 0 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  2000 1000 1000 5000 500 250 250 0 0 0\n"), 0o644); err != nil {
 		t.Fatalf("failed to create stat file: %v", err)
 	}
 	procStatContent := "1 (test) R 0 1 1 0 -1 4194560 0 0 0 0 500 500 0 0 20 0 1 0 1 200000000 5000 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0o644); err != nil {
 		t.Fatalf("failed to create process stat file: %v", err)
 	}
 
@@ -342,11 +342,11 @@ func TestProcessReaderCPUPercentCalculation(t *testing.T) {
 
 	// Second sample - CPU time increased
 	// Total CPU delta = 1000, process CPU delta = 100 (10% CPU)
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  2200 1100 1100 5400 550 275 275 0 0 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  2200 1100 1100 5400 550 275 275 0 0 0\n"), 0o644); err != nil {
 		t.Fatalf("failed to update stat file: %v", err)
 	}
 	procStatContent2 := "1 (test) R 0 1 1 0 -1 4194560 0 0 0 0 550 550 0 0 20 0 1 0 1 200000000 5000 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent2), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent2), 0o644); err != nil {
 		t.Fatalf("failed to update process stat file: %v", err)
 	}
 
@@ -379,23 +379,23 @@ func TestProcessReaderMemoryPercentCalculation(t *testing.T) {
 	}
 
 	// Total memory: 16GB
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16777216 kB\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16777216 kB\n"), 0o644); err != nil {
 		t.Fatalf("failed to create meminfo file: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0o644); err != nil {
 		t.Fatalf("failed to create stat file: %v", err)
 	}
 
 	pid1Dir := filepath.Join(tmpDir, "1")
-	if err := os.MkdirAll(pid1Dir, 0755); err != nil {
+	if err := os.MkdirAll(pid1Dir, 0o755); err != nil {
 		t.Fatalf("failed to create process directory: %v", err)
 	}
 
 	// RSS = 4194304 pages * 4096 bytes = 16GB (but that's not right in this context)
 	// Let's use RSS = 409600 pages = 1.6GB which is 10% of 16GB
 	procStatContent := "1 (bigproc) S 0 1 1 0 -1 4194560 0 0 0 0 100 50 0 0 20 0 1 0 1 200000000 409600 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0o644); err != nil {
 		t.Fatalf("failed to create process stat file: %v", err)
 	}
 
@@ -426,29 +426,29 @@ func TestProcessReaderNonPIDDirectories(t *testing.T) {
 		clkTck:       100.0,
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0o644); err != nil {
 		t.Fatalf("failed to create stat file: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0o644); err != nil {
 		t.Fatalf("failed to create meminfo file: %v", err)
 	}
 
 	// Create non-PID directories that should be ignored
 	for _, name := range []string{"self", "net", "sys", "bus"} {
-		if err := os.MkdirAll(filepath.Join(tmpDir, name), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(tmpDir, name), 0o755); err != nil {
 			t.Fatalf("failed to create %s directory: %v", name, err)
 		}
 	}
 
 	// Create one actual PID directory
 	pid1Dir := filepath.Join(tmpDir, "1")
-	if err := os.MkdirAll(pid1Dir, 0755); err != nil {
+	if err := os.MkdirAll(pid1Dir, 0o755); err != nil {
 		t.Fatalf("failed to create process directory: %v", err)
 	}
 
 	procStatContent := "1 (init) S 0 1 1 0 -1 4194560 0 0 0 0 100 50 0 0 20 0 1 0 1 200000000 5000 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pid1Dir, "stat"), []byte(procStatContent), 0o644); err != nil {
 		t.Fatalf("failed to create process stat file: %v", err)
 	}
 
@@ -471,25 +471,25 @@ func TestProcessReaderTopProcessLimit(t *testing.T) {
 		clkTck:       100.0,
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0o644); err != nil {
 		t.Fatalf("failed to create stat file: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0o644); err != nil {
 		t.Fatalf("failed to create meminfo file: %v", err)
 	}
 
 	// Create more than topProcessCount processes
 	for i := 1; i <= 20; i++ {
 		pidDir := filepath.Join(tmpDir, fmt.Sprintf("%d", i))
-		if err := os.MkdirAll(pidDir, 0755); err != nil {
+		if err := os.MkdirAll(pidDir, 0o755); err != nil {
 			t.Fatalf("failed to create process directory: %v", err)
 		}
 
 		// RSS increases with PID for testing sort order
 		rss := 1000 + i*100
 		procStatContent := fmt.Sprintf("%d (proc%d) S 0 1 1 0 -1 4194560 0 0 0 0 %d 0 0 0 20 0 1 0 1 200000000 %d 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0", i, i, i*10, rss)
-		if err := os.WriteFile(filepath.Join(pidDir, "stat"), []byte(procStatContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(pidDir, "stat"), []byte(procStatContent), 0o644); err != nil {
 			t.Fatalf("failed to create process stat file: %v", err)
 		}
 	}
@@ -528,7 +528,7 @@ func TestProcessReaderMissingStatFile(t *testing.T) {
 	}
 
 	// Missing /proc/stat should cause an error
-	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "meminfo"), []byte("MemTotal: 16000000 kB\n"), 0o644); err != nil {
 		t.Fatalf("failed to create meminfo file: %v", err)
 	}
 
@@ -548,7 +548,7 @@ func TestProcessReaderMissingMeminfo(t *testing.T) {
 	}
 
 	// Create stat but not meminfo
-	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "stat"), []byte("cpu  1000 200 300 4000 100 50 25 0 0 0\n"), 0o644); err != nil {
 		t.Fatalf("failed to create stat file: %v", err)
 	}
 

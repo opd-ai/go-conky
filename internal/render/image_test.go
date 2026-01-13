@@ -92,7 +92,7 @@ func TestImageWidgetLoadFromFile(t *testing.T) {
 	tmpFile := filepath.Join(tmpDir, "test.png")
 
 	pngData := createTestPNG(32, 32)
-	if err := os.WriteFile(tmpFile, pngData, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, pngData, 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -207,13 +207,13 @@ func TestImageWidgetLoadMultipleTimesFromFile(t *testing.T) {
 
 	tmpFile1 := filepath.Join(tmpDir, "test1.png")
 	pngData1 := createTestPNG(32, 32)
-	if err := os.WriteFile(tmpFile1, pngData1, 0644); err != nil {
+	if err := os.WriteFile(tmpFile1, pngData1, 0o644); err != nil {
 		t.Fatalf("failed to create test file 1: %v", err)
 	}
 
 	tmpFile2 := filepath.Join(tmpDir, "test2.png")
 	pngData2 := createTestPNG(64, 48)
-	if err := os.WriteFile(tmpFile2, pngData2, 0644); err != nil {
+	if err := os.WriteFile(tmpFile2, pngData2, 0o644); err != nil {
 		t.Fatalf("failed to create test file 2: %v", err)
 	}
 
@@ -513,7 +513,7 @@ func TestImageLoaderLoadFile(t *testing.T) {
 	tmpFile := filepath.Join(tmpDir, "test.png")
 
 	pngData := createTestPNG(64, 48)
-	if err := os.WriteFile(tmpFile, pngData, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, pngData, 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -582,7 +582,7 @@ func TestImageCacheLoad(t *testing.T) {
 	tmpFile := filepath.Join(tmpDir, "test.png")
 
 	pngData := createTestPNG(32, 32)
-	if err := os.WriteFile(tmpFile, pngData, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, pngData, 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -624,7 +624,7 @@ func TestImageCacheGet(t *testing.T) {
 	tmpFile := filepath.Join(tmpDir, "test.png")
 
 	pngData := createTestPNG(32, 32)
-	if err := os.WriteFile(tmpFile, pngData, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, pngData, 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -653,7 +653,7 @@ func TestImageCacheRemove(t *testing.T) {
 	tmpFile := filepath.Join(tmpDir, "test.png")
 
 	pngData := createTestPNG(32, 32)
-	if err := os.WriteFile(tmpFile, pngData, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, pngData, 0o644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -700,7 +700,7 @@ func TestImageCacheClear(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		tmpFile := filepath.Join(tmpDir, fmt.Sprintf("test%d.png", i))
 		pngData := createTestPNG(32, 32)
-		if err := os.WriteFile(tmpFile, pngData, 0644); err != nil {
+		if err := os.WriteFile(tmpFile, pngData, 0o644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 		if _, err := cache.Load(tmpFile); err != nil {
@@ -727,7 +727,7 @@ func TestImageCacheConcurrentAccess(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		tmpFile := filepath.Join(tmpDir, fmt.Sprintf("test%d.png", i))
 		pngData := createTestPNG(32, 32)
-		if err := os.WriteFile(tmpFile, pngData, 0644); err != nil {
+		if err := os.WriteFile(tmpFile, pngData, 0o644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 		tmpFiles = append(tmpFiles, tmpFile)

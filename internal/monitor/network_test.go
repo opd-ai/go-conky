@@ -114,7 +114,7 @@ func TestNetworkReaderWithMockFile(t *testing.T) {
   eth0: 523861305  362702    0    0    0     0          0         1  7179696   49506    0    1    0     0       0          0
 docker0:       0       0    0    0    0     0          0         0        0       0    0    2    0     0       0          0
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock net_dev: %v", err)
 	}
 
@@ -192,7 +192,7 @@ func TestNetworkReaderRateCalculation(t *testing.T) {
  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
   eth0: 1000  100    0    0    0     0          0         0  2000   200    0    0    0     0       0          0
 `
-	if err := os.WriteFile(netDevPath, []byte(netDevContent1), 0644); err != nil {
+	if err := os.WriteFile(netDevPath, []byte(netDevContent1), 0o644); err != nil {
 		t.Fatalf("failed to write mock net_dev: %v", err)
 	}
 
@@ -220,7 +220,7 @@ func TestNetworkReaderRateCalculation(t *testing.T) {
  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
   eth0: 2000  200    0    0    0     0          0         0  4000   400    0    0    0     0       0          0
 `
-	if err := os.WriteFile(netDevPath, []byte(netDevContent2), 0644); err != nil {
+	if err := os.WriteFile(netDevPath, []byte(netDevContent2), 0o644); err != nil {
 		t.Fatalf("failed to write mock net_dev (2nd): %v", err)
 	}
 
@@ -256,7 +256,7 @@ func TestNetworkReaderEmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create empty file
-	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(""), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(""), 0o644); err != nil {
 		t.Fatalf("failed to write mock net_dev: %v", err)
 	}
 
@@ -282,7 +282,7 @@ func TestNetworkReaderHeadersOnly(t *testing.T) {
 	netDevContent := `Inter-|   Receive                                                |  Transmit
  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock net_dev: %v", err)
 	}
 
@@ -376,7 +376,7 @@ malformed line without colon
   lo: 500   50    0    0    0     0          0         0  500    50    0    0    0     0       0          0
 another: broken
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "net_dev"), []byte(netDevContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock net_dev: %v", err)
 	}
 

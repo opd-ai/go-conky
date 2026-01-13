@@ -203,7 +203,7 @@ func TestLoadFile(t *testing.T) {
 	// Create a temporary Lua file
 	tmpDir := t.TempDir()
 	luaFile := filepath.Join(tmpDir, "test.lua")
-	if err := os.WriteFile(luaFile, []byte("return 123"), 0644); err != nil {
+	if err := os.WriteFile(luaFile, []byte("return 123"), 0o644); err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestExecuteFile(t *testing.T) {
 	// Create a temporary Lua file
 	tmpDir := t.TempDir()
 	luaFile := filepath.Join(tmpDir, "test.lua")
-	if err := os.WriteFile(luaFile, []byte("return 456"), 0644); err != nil {
+	if err := os.WriteFile(luaFile, []byte("return 456"), 0o644); err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
 

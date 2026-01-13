@@ -67,7 +67,7 @@ proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
 sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
 tmpfs /run tmpfs rw,nosuid,nodev,mode=755 0 0
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(mountsContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(mountsContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock mounts: %v", err)
 	}
 
@@ -103,7 +103,7 @@ func TestFilesystemReaderReadProcMountsWithEscapes(t *testing.T) {
 	// In /proc/mounts, spaces are escaped as \040
 	// Using regular string to properly represent the escape sequence
 	mountsContent := "/dev/sda1 /home/my\\040documents ext4 rw,relatime 0 0\n"
-	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(mountsContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(mountsContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock mounts: %v", err)
 	}
 
@@ -140,7 +140,7 @@ func TestFilesystemReaderMissingFile(t *testing.T) {
 func TestFilesystemReaderEmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(""), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(""), 0o644); err != nil {
 		t.Fatalf("failed to write mock mounts: %v", err)
 	}
 
@@ -166,7 +166,7 @@ malformed line
 /dev/sda2 /home ext4 rw,relatime 0 0
 another bad
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(mountsContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "mounts"), []byte(mountsContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock mounts: %v", err)
 	}
 

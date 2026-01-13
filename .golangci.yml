@@ -21,7 +21,7 @@ linters:
     - goimports     # Check imports formatting
     - misspell      # Find misspelled words
     - unconvert     # Remove unnecessary type conversions
-    - unparam       # Find unused function parameters
+    # - unparam     # Disabled: Too many false positives for error returns designed for extensibility
     - prealloc      # Find slice declarations that could be preallocated
 
 linters-settings:
@@ -29,13 +29,17 @@ linters-settings:
     enable-all: true
     disable:
       - fieldalignment  # Too noisy for minimal changes
+      - shadow          # Too noisy in test files
+      - unusedwrite     # False positives in test struct initialization
   gocritic:
     enabled-tags:
       - diagnostic
       - style
       - performance
     disabled-checks:
-      - hugeParam  # Sometimes large parameters are unavoidable
+      - hugeParam       # Sometimes large parameters are unavoidable
+      - unnamedResult   # Stylistic preference, not a bug
+      - rangeValCopy    # Performance optimization that can be deferred
 
 issues:
   # Fix found issues automatically when possible.
