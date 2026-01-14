@@ -8,6 +8,12 @@ import (
 	"unsafe"
 )
 
+// Sysctl MIB constants for Darwin memory operations
+const (
+	ctlVM       = 2 // CTL_VM
+	vmSwapusage = 5 // VM_SWAPUSAGE
+)
+
 // darwinMemoryProvider implements MemoryProvider for macOS/Darwin systems using vm_stat and sysctl.
 type darwinMemoryProvider struct{}
 
@@ -89,7 +95,7 @@ func (m *darwinMemoryProvider) SwapStats() (*SwapStats, error) {
 		encrypted bool
 	}
 
-	mib := []int32{2 /* CTL_VM */, 5 /* VM_SWAPUSAGE */}
+	mib := []int32{ctlVM, vmSwapusage}
 	
 	var swapUsage xswUsage
 	n := uintptr(unsafe.Sizeof(swapUsage))

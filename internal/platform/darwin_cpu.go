@@ -10,6 +10,22 @@ import (
 	"unsafe"
 )
 
+// Sysctl MIB constants for Darwin
+const (
+	ctlKern      = 1  // CTL_KERN
+	ctlVM        = 2  // CTL_VM
+	kernCPTime   = 82 // KERN_CP_TIME
+	vmLoadavg    = 2  // VM_LOADAVG
+)
+
+// cpuTimes stores raw CPU time values from sysctl.
+type cpuTimes struct {
+	user   uint64
+	nice   uint64
+	system uint64
+	idle   uint64
+}
+
 // darwinCPUProvider implements CPUProvider for macOS/Darwin systems using sysctl and mach APIs.
 type darwinCPUProvider struct {
 	mu        sync.Mutex
@@ -146,7 +162,7 @@ func (c *darwinCPUProvider) LoadAverage() (float64, float64, float64, error) {
 		scale int
 	}
 
-	mib := []int32{1 /* CTL_VM */, 2 /* VM_LOADAVG */}
+	mib := []int32{ctlKern, vmLoadavg}
 	
 	var la loadavg
 	n := uintptr(unsafe.Sizeof(la))
@@ -182,7 +198,7 @@ func (c *darwinCPUProvider) LoadAverage() (float64, float64, float64, error) {
 func (c *darwinCPUProvider) getHostCPULoadInfo() (cpuTimes, error) {
 	// Try to get CPU times using sysctl kern.cp_time
 	// This is an array of [user, nice, system, idle]
-	mib := []int32{1 /* CTL_KERN */, 82 /* KERN_CP_TIME */}
+	mib := []int32{ctlKern, kernCPTime}
 	
 	var times [4]uint64
 	n := uintptr(unsafe.Sizeof(times))

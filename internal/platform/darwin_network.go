@@ -9,6 +9,15 @@ import (
 	"unsafe"
 )
 
+// Sysctl MIB constants for Darwin network operations
+const (
+	ctlNet          = 4  // CTL_NET
+	pfLink          = 18 // PF_LINK
+	netlinkGeneric  = 0  // NETLINK_GENERIC
+	ifmibIfdata     = 2  // IFMIB_IFDATA
+	ifdataGeneral   = 1  // IFDATA_GENERAL
+)
+
 // darwinNetworkProvider implements NetworkProvider for macOS/Darwin systems using getifaddrs and sysctl.
 type darwinNetworkProvider struct{}
 
@@ -112,23 +121,23 @@ func (n *darwinNetworkProvider) getIfData(ifIndex int) (*NetworkStats, error) {
 	// Use sysctl with net.link.generic.ifdata.INDEX.general
 	// MIB: CTL_NET, PF_LINK, NETLINK_GENERIC, IFMIB_IFDATA, ifIndex, IFDATA_GENERAL
 	mib := []int32{
-		4,      // CTL_NET
-		18,     // PF_LINK
-		0,      // NETLINK_GENERIC
-		2,      // IFMIB_IFDATA
+		ctlNet,
+		pfLink,
+		netlinkGeneric,
+		ifmibIfdata,
 		int32(ifIndex),
-		1,      // IFDATA_GENERAL
+		ifdataGeneral,
 	}
 
 	var data ifData
-	n := uintptr(unsafe.Sizeof(data))
+	dataSize := uintptr(unsafe.Sizeof(data))
 
 	_, _, errno := syscall.Syscall6(
 		syscall.SYS___SYSCTL,
 		uintptr(unsafe.Pointer(&mib[0])),
 		uintptr(len(mib)),
 		uintptr(unsafe.Pointer(&data)),
-		uintptr(unsafe.Pointer(&n)),
+		uintptr(unsafe.Pointer(&dataSize)),
 		0,
 		0,
 	)
