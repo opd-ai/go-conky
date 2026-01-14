@@ -19,7 +19,9 @@ func newLinuxMemoryProvider() *linuxMemoryProvider {
 	}
 }
 
-func (m *linuxMemoryProvider) Stats() (*MemoryStats, error) {
+// parseMemInfo parses /proc/meminfo and returns a map of key-value pairs.
+// Values are converted from kB to bytes.
+func (m *linuxMemoryProvider) parseMemInfo() (map[string]uint64, error) {
 	file, err := os.Open(m.procMemInfoPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", m.procMemInfoPath, err)
@@ -58,6 +60,15 @@ func (m *linuxMemoryProvider) Stats() (*MemoryStats, error) {
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scanning %s: %w", m.procMemInfoPath, err)
+	}
+
+	return values, nil
+}
+
+func (m *linuxMemoryProvider) Stats() (*MemoryStats, error) {
+	values, err := m.parseMemInfo()
+	if err != nil {
+		return nil, err
 	}
 
 	total := values["MemTotal"]
@@ -96,44 +107,9 @@ func (m *linuxMemoryProvider) Stats() (*MemoryStats, error) {
 }
 
 func (m *linuxMemoryProvider) SwapStats() (*SwapStats, error) {
-	file, err := os.Open(m.procMemInfoPath)
+	values, err := m.parseMemInfo()
 	if err != nil {
-		return nil, fmt.Errorf("opening %s: %w", m.procMemInfoPath, err)
-	}
-	defer file.Close()
-
-	values := make(map[string]uint64)
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		valueStr := strings.TrimSpace(parts[1])
-
-		// Remove "kB" suffix and parse
-		valueStr = strings.TrimSuffix(valueStr, " kB")
-		value, err := strconv.ParseUint(valueStr, 10, 64)
-		if err != nil {
-			continue
-		}
-
-		// Convert kB to bytes
-		const bytesPerKB = 1024
-		maxBeforeMultiply := ^uint64(0) / bytesPerKB
-		if value > maxBeforeMultiply {
-			// Skip values that would overflow
-			continue
-		}
-		values[key] = value * bytesPerKB
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scanning %s: %w", m.procMemInfoPath, err)
+		return nil, err
 	}
 
 	total := values["SwapTotal"]

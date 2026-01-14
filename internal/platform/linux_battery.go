@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -74,22 +73,22 @@ func (b *linuxBatteryProvider) readBatteryStats(batteryPath string) (*BatterySta
 	stats := &BatteryStats{}
 
 	// Read capacity (percentage)
-	capacity, _ := b.readUint64File(filepath.Join(batteryPath, "capacity"))
+	capacity, _ := readUint64File(filepath.Join(batteryPath, "capacity"))
 	stats.Percent = float64(capacity)
 
 	// Read status
-	status, _ := b.readStringFile(filepath.Join(batteryPath, "status"))
+	status, _ := readStringFile(filepath.Join(batteryPath, "status"))
 	stats.Charging = strings.TrimSpace(status) == "Charging"
 
 	// Read energy values (in µWh)
-	energyNow, hasEnergy := b.readUint64File(filepath.Join(batteryPath, "energy_now"))
-	energyFull, _ := b.readUint64File(filepath.Join(batteryPath, "energy_full"))
+	energyNow, hasEnergy := readUint64File(filepath.Join(batteryPath, "energy_now"))
+	energyFull, _ := readUint64File(filepath.Join(batteryPath, "energy_full"))
 
 	// If energy_* files not available, try charge_* files (in µAh)
 	if !hasEnergy {
-		chargeNow, _ := b.readUint64File(filepath.Join(batteryPath, "charge_now"))
-		chargeFull, _ := b.readUint64File(filepath.Join(batteryPath, "charge_full"))
-		voltage, _ := b.readUint64File(filepath.Join(batteryPath, "voltage_now"))
+		chargeNow, _ := readUint64File(filepath.Join(batteryPath, "charge_now"))
+		chargeFull, _ := readUint64File(filepath.Join(batteryPath, "charge_full"))
+		voltage, _ := readUint64File(filepath.Join(batteryPath, "voltage_now"))
 
 		// Convert charge to energy: energy = charge * voltage
 		if voltage > 0 {
@@ -102,11 +101,11 @@ func (b *linuxBatteryProvider) readBatteryStats(batteryPath string) (*BatterySta
 	stats.FullCapacity = energyFull
 
 	// Read voltage
-	voltage, _ := b.readUint64File(filepath.Join(batteryPath, "voltage_now"))
+	voltage, _ := readUint64File(filepath.Join(batteryPath, "voltage_now"))
 	stats.Voltage = float64(voltage) / 1000000.0 // Convert µV to V
 
 	// Calculate time remaining
-	powerNow, _ := b.readUint64File(filepath.Join(batteryPath, "power_now"))
+	powerNow, _ := readUint64File(filepath.Join(batteryPath, "power_now"))
 	if powerNow > 0 {
 		if stats.Charging {
 			// Time to full
@@ -119,29 +118,4 @@ func (b *linuxBatteryProvider) readBatteryStats(batteryPath string) (*BatterySta
 	}
 
 	return stats, nil
-}
-
-// readUint64File reads a uint64 value from a sysfs file.
-func (b *linuxBatteryProvider) readUint64File(path string) (uint64, bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0, false
-	}
-
-	value, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
-	if err != nil {
-		return 0, false
-	}
-
-	return value, true
-}
-
-// readStringFile reads a string value from a sysfs file.
-func (b *linuxBatteryProvider) readStringFile(path string) (string, bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", false
-	}
-
-	return strings.TrimSpace(string(data)), true
 }

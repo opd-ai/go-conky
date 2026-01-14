@@ -6,14 +6,11 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 )
 
 // linuxNetworkProvider implements NetworkProvider for Linux systems by reading /proc/net/dev.
 type linuxNetworkProvider struct {
 	mu             sync.Mutex
-	prevStats      map[string]rawNetStats
-	prevTime       time.Time
 	procNetDevPath string
 }
 
@@ -31,12 +28,14 @@ type rawNetStats struct {
 
 func newLinuxNetworkProvider() *linuxNetworkProvider {
 	return &linuxNetworkProvider{
-		prevStats:      make(map[string]rawNetStats),
 		procNetDevPath: "/proc/net/dev",
 	}
 }
 
 func (n *linuxNetworkProvider) Interfaces() ([]string, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	stats, err := n.readProcNetDev()
 	if err != nil {
 		return nil, err

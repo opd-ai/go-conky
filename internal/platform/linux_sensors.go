@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -105,7 +104,7 @@ func (s *linuxSensorProvider) readTemperatureSensors(devicePath string) ([]Senso
 
 		// Read temperature value (in millidegrees Celsius)
 		inputPath := filepath.Join(devicePath, name)
-		tempMilliC, ok := s.readInt64File(inputPath)
+		tempMilliC, ok := readInt64File(inputPath)
 		if !ok {
 			continue
 		}
@@ -118,7 +117,7 @@ func (s *linuxSensorProvider) readTemperatureSensors(devicePath string) ([]Senso
 
 		// Read critical threshold
 		critPath := filepath.Join(devicePath, sensorType+"_crit")
-		critMilliC, hasCrit := s.readInt64File(critPath)
+		critMilliC, hasCrit := readInt64File(critPath)
 
 		reading := SensorReading{
 			Name:  deviceName,
@@ -161,7 +160,7 @@ func (s *linuxSensorProvider) readFanSensors(devicePath string) ([]SensorReading
 
 		// Read fan speed value (in RPM)
 		inputPath := filepath.Join(devicePath, name)
-		fanRPM, ok := s.readInt64File(inputPath)
+		fanRPM, ok := readInt64File(inputPath)
 		if !ok {
 			continue
 		}
@@ -203,19 +202,4 @@ func (s *linuxSensorProvider) readSensorLabel(devicePath, sensorType string) str
 		return ""
 	}
 	return strings.TrimSpace(string(labelBytes))
-}
-
-// readInt64File reads an int64 value from a file.
-func (s *linuxSensorProvider) readInt64File(path string) (int64, bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0, false
-	}
-
-	value, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
-	if err != nil {
-		return 0, false
-	}
-
-	return value, true
 }

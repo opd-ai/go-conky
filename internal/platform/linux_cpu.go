@@ -312,8 +312,3 @@ func (c *linuxCPUProvider) calculateUsage(prev, current cpuTimes) float64 {
 
 	return 100.0 * float64(totalDelta-idleDelta) / float64(totalDelta)
 }
-
-func parseUint64(s string) uint64 {
-	v, _ := strconv.ParseUint(s, 10, 64)
-	return v
-}
