@@ -5,7 +5,6 @@ package platform
 
 import (
 	"fmt"
-	"syscall"
 	"time"
 	"unsafe"
 )

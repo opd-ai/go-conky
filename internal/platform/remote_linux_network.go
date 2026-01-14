@@ -22,8 +22,8 @@ func (n *remoteLinuxNetworkProvider) Interfaces() ([]string, error) {
 		return nil, fmt.Errorf("failed to read /proc/net/dev: %w", err)
 	}
 
-	var interfaces []string
 	lines := strings.Split(strings.TrimSpace(output), "\n")
+	interfaces := make([]string, 0, len(lines))
 
 	for _, line := range lines {
 		parts := strings.Split(line, ":")

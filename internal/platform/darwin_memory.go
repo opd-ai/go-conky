@@ -11,7 +11,6 @@ import (
 
 // Sysctl MIB constants for Darwin memory operations
 const (
-	ctlVM       = 2 // CTL_VM
 	vmSwapusage = 5 // VM_SWAPUSAGE
 )
 

@@ -89,7 +89,6 @@ func (f *darwinFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, e
 	blockSize := uint64(stat.Bsize)
 	total := blockSize * stat.Blocks
 	free := blockSize * stat.Bfree
-	available := blockSize * stat.Bavail
 	used := total - free
 
 	usedPercent := 0.0

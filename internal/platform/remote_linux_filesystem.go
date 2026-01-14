@@ -23,8 +23,8 @@ func (f *remoteLinuxFilesystemProvider) Mounts() ([]MountInfo, error) {
 		return nil, fmt.Errorf("failed to read /proc/mounts: %w", err)
 	}
 
-	var mounts []MountInfo
 	lines := strings.Split(strings.TrimSpace(output), "\n")
+	mounts := make([]MountInfo, 0, len(lines))
 
 	for _, line := range lines {
 		fields := strings.Fields(line)
