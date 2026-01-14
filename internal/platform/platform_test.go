@@ -10,7 +10,8 @@ import (
 // TestNewPlatform tests the factory function for creating platform instances.
 func TestNewPlatform(t *testing.T) {
 	p, err := NewPlatform()
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		if err != nil {
 			t.Fatalf("NewPlatform() failed on Linux: %v", err)
 		}
@@ -20,7 +21,7 @@ func TestNewPlatform(t *testing.T) {
 		if p.Name() != "linux" {
 			t.Errorf("Expected platform name 'linux', got '%s'", p.Name())
 		}
-	} else if runtime.GOOS == "windows" {
+	case "windows":
 		if err != nil {
 			t.Fatalf("NewPlatform() failed on Windows: %v", err)
 		}
@@ -30,7 +31,7 @@ func TestNewPlatform(t *testing.T) {
 		if p.Name() != "windows" {
 			t.Errorf("Expected platform name 'windows', got '%s'", p.Name())
 		}
-	} else {
+	default:
 		// On non-Linux/Windows systems, we expect an error for now
 		if err == nil {
 			t.Errorf("Expected error on %s platform, got nil", runtime.GOOS)
