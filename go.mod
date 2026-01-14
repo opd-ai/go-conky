@@ -5,6 +5,7 @@ go 1.24.11
 require (
 	github.com/arnodel/golua v0.1.2
 	github.com/hajimehoshi/ebiten/v2 v2.8.8
+	golang.org/x/crypto v0.47.0
 	golang.org/x/image v0.34.0
 )
 
@@ -15,7 +16,6 @@ require (
 	github.com/ebitengine/purego v0.8.0 // indirect
 	github.com/go-text/typesetting v0.2.0 // indirect
 	github.com/jezek/xgb v1.1.1 // indirect
-	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
