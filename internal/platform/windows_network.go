@@ -77,7 +77,11 @@ func newWindowsNetworkProvider() *windowsNetworkProvider {
 	return &windowsNetworkProvider{}
 }
 
-// getInterfaceTable retrieves the network interface table from Windows
+// getInterfaceTable retrieves the network interface table from Windows.
+// Note: This uses unsafe pointer arithmetic to access the variable-length array
+// in the MIB_IF_TABLE2 structure. The structure layout must match the Windows API
+// definition exactly. If Windows changes the structure layout in future versions,
+// this could cause memory corruption.
 func (n *windowsNetworkProvider) getInterfaceTable() ([]mibIfRow2, error) {
 	var table *mibIfTable2
 	ret, _, _ := procGetIfTable2.Call(uintptr(unsafe.Pointer(&table)))
@@ -91,10 +95,12 @@ func (n *windowsNetworkProvider) getInterfaceTable() ([]mibIfRow2, error) {
 	}
 
 	// Extract interface rows from the table
-	// We need to use unsafe pointer arithmetic to access the variable-length array
+	// We use unsafe pointer arithmetic to access the variable-length array
+	// Verify the structure size matches expected size
+	const expectedRowSize = unsafe.Sizeof(mibIfRow2{})
 	rows := make([]mibIfRow2, table.NumEntries)
 	tablePtr := uintptr(unsafe.Pointer(&table.Table[0]))
-	rowSize := unsafe.Sizeof(mibIfRow2{})
+	rowSize := expectedRowSize
 
 	for i := uint32(0); i < table.NumEntries; i++ {
 		rowPtr := tablePtr + uintptr(i)*rowSize

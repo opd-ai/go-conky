@@ -80,16 +80,24 @@ func (m *windowsMemoryProvider) SwapStats() (*SwapStats, error) {
 	}
 
 	// Calculate page file (swap) size
-	// Page file total includes physical memory, so we subtract it
+	// Note: Windows TotalPageFile includes physical memory + page file
+	// We need to subtract physical memory to get actual page file size
+	// If subtraction would underflow (unexpected but possible in edge cases),
+	// we report zero swap to avoid incorrect statistics
 	var pageFileTotal, pageFileAvail uint64
 	if memStatus.ullTotalPageFile > memStatus.ullTotalPhys &&
 		memStatus.ullAvailPageFile > memStatus.ullAvailPhys {
 		pageFileTotal = memStatus.ullTotalPageFile - memStatus.ullTotalPhys
 		pageFileAvail = memStatus.ullAvailPageFile - memStatus.ullAvailPhys
 	} else {
-		// Fallback: use total page file values when subtraction would underflow
-		pageFileTotal = memStatus.ullTotalPageFile
-		pageFileAvail = memStatus.ullAvailPageFile
+		// Fallback: system may have no page file configured
+		// Return zero values rather than potentially incorrect statistics
+		return &SwapStats{
+			Total:       0,
+			Used:        0,
+			Free:        0,
+			UsedPercent: 0,
+		}, nil
 	}
 
 	// Ensure we don't underflow on used calculation

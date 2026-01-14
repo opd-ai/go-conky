@@ -44,7 +44,19 @@ type windowsCPUProvider struct {
 }
 
 func newWindowsCPUProvider() *windowsCPUProvider {
-	return &windowsCPUProvider{}
+	c := &windowsCPUProvider{}
+	// Set a finalizer to ensure PDH queries are cleaned up
+	runtime.SetFinalizer(c, func(provider *windowsCPUProvider) {
+		provider.Close()
+	})
+	return c
+}
+
+// Close releases PDH query resources
+func (c *windowsCPUProvider) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closeQuery()
 }
 
 // initialize sets up the PDH query and counters
@@ -65,7 +77,11 @@ func (c *windowsCPUProvider) initialize() error {
 	c.query = query
 
 	// Add total CPU counter
-	counterPath, _ := syscall.UTF16PtrFromString("\\Processor(_Total)\\% Processor Time")
+	counterPath, err := syscall.UTF16PtrFromString("\\Processor(_Total)\\% Processor Time")
+	if err != nil {
+		c.closeQuery()
+		return fmt.Errorf("failed to create counter path string: %w", err)
+	}
 	var counterTotal uintptr
 	ret, _, _ = procPdhAddCounterW.Call(query, uintptr(unsafe.Pointer(counterPath)), 0, uintptr(unsafe.Pointer(&counterTotal)))
 	if ret != 0 {
@@ -79,7 +95,11 @@ func (c *windowsCPUProvider) initialize() error {
 	c.countersPerCPU = make([]uintptr, numCPU)
 	for i := 0; i < numCPU; i++ {
 		path := fmt.Sprintf("\\Processor(%d)\\%% Processor Time", i)
-		counterPath, _ := syscall.UTF16PtrFromString(path)
+		counterPath, err := syscall.UTF16PtrFromString(path)
+		if err != nil {
+			c.closeQuery()
+			return fmt.Errorf("failed to create counter path string for CPU %d: %w", i, err)
+		}
 		var counter uintptr
 		ret, _, _ = procPdhAddCounterW.Call(query, uintptr(unsafe.Pointer(counterPath)), 0, uintptr(unsafe.Pointer(&counter)))
 		if ret != 0 {
