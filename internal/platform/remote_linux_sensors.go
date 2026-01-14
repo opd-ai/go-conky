@@ -29,7 +29,7 @@ func (s *remoteLinuxSensorProvider) Temperatures() ([]SensorReading, error) {
 		return []SensorReading{}, nil
 	}
 
-	var readings []SensorReading
+	readings := make([]SensorReading, 0, len(lines))
 
 	for _, path := range lines {
 		path = strings.TrimSpace(path)
@@ -99,7 +99,7 @@ func (s *remoteLinuxSensorProvider) Fans() ([]SensorReading, error) {
 		return []SensorReading{}, nil
 	}
 
-	var readings []SensorReading
+	readings := make([]SensorReading, 0, len(lines))
 
 	for _, path := range lines {
 		path = strings.TrimSpace(path)

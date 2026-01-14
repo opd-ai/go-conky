@@ -252,8 +252,8 @@ func (c *remoteLinuxCPUProvider) Frequency() ([]float64, error) {
 		return nil, fmt.Errorf("failed to read CPU frequency: %w", err)
 	}
 
-	var frequencies []float64
 	lines := strings.Split(strings.TrimSpace(output), "\n")
+	frequencies := make([]float64, 0, len(lines))
 
 	for _, line := range lines {
 		parts := strings.SplitN(line, ":", 2)

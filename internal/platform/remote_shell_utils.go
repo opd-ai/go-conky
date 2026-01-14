@@ -18,7 +18,7 @@ func shellEscape(s string) string {
 // Also rejects directory traversal attempts using "..".
 func validatePath(path string) bool {
 	// Reject empty paths
-	if len(path) == 0 {
+	if path == "" {
 		return false
 	}
 

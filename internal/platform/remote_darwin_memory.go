@@ -106,17 +106,24 @@ func (m *remoteDarwinMemoryProvider) SwapStats() (*SwapStats, error) {
 	parts := strings.Fields(output)
 
 	for i, part := range parts {
-		if part == "total" && i+2 < len(parts) {
-			if total, err := parseMemorySize(parts[i+2]); err == nil {
-				stats.Total = total
+		switch part {
+		case "total":
+			if i+2 < len(parts) {
+				if total, err := parseMemorySize(parts[i+2]); err == nil {
+					stats.Total = total
+				}
 			}
-		} else if part == "used" && i+2 < len(parts) {
-			if used, err := parseMemorySize(parts[i+2]); err == nil {
-				stats.Used = used
+		case "used":
+			if i+2 < len(parts) {
+				if used, err := parseMemorySize(parts[i+2]); err == nil {
+					stats.Used = used
+				}
 			}
-		} else if part == "free" && i+2 < len(parts) {
-			if free, err := parseMemorySize(parts[i+2]); err == nil {
-				stats.Free = free
+		case "free":
+			if i+2 < len(parts) {
+				if free, err := parseMemorySize(parts[i+2]); err == nil {
+					stats.Free = free
+				}
 			}
 		}
 	}
@@ -132,7 +139,7 @@ func (m *remoteDarwinMemoryProvider) SwapStats() (*SwapStats, error) {
 // parseMemorySize parses memory sizes like "2048.00M" or "1.5G"
 func parseMemorySize(s string) (uint64, error) {
 	s = strings.TrimSpace(s)
-	if len(s) == 0 {
+	if s == "" {
 		return 0, fmt.Errorf("empty size string")
 	}
 
