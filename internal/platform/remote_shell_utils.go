@@ -15,7 +15,19 @@ func shellEscape(s string) string {
 
 // validatePath performs basic validation on file paths to prevent command injection.
 // Returns true if the path appears safe (contains only alphanumeric, dash, underscore, slash, dot).
+// Also rejects directory traversal attempts using "..".
 func validatePath(path string) bool {
+	// Reject empty paths
+	if len(path) == 0 {
+		return false
+	}
+
+	// Reject directory traversal attempts
+	if strings.Contains(path, "..") {
+		return false
+	}
+
+	// Check for safe characters only
 	for _, c := range path {
 		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 			(c >= '0' && c <= '9') || c == '-' || c == '_' ||
@@ -23,5 +35,5 @@ func validatePath(path string) bool {
 			return false
 		}
 	}
-	return len(path) > 0
+	return true
 }

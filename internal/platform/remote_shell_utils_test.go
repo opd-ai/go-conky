@@ -94,6 +94,16 @@ func TestValidatePath(t *testing.T) {
 			valid: false,
 		},
 		{
+			name:  "directory traversal",
+			path:  "/path/../etc/passwd",
+			valid: false,
+		},
+		{
+			name:  "directory traversal relative",
+			path:  "../../etc/passwd",
+			valid: false,
+		},
+		{
 			name:  "empty path",
 			path:  "",
 			valid: false,

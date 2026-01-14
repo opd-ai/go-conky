@@ -278,8 +278,11 @@ func TestCommandInjectionPrevention(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test that validatePath properly rejects malicious inputs
-			if validatePath(tt.input) == tt.shouldErr {
-				t.Errorf("validatePath(%q) accepted when shouldErr=%v", tt.input, tt.shouldErr)
+			// When shouldErr is true, we expect validatePath to return false (invalid)
+			// When shouldErr is false, we expect validatePath to return true (valid)
+			isValid := validatePath(tt.input)
+			if isValid == tt.shouldErr {
+				t.Errorf("validatePath(%q) = %v, expected %v", tt.input, isValid, !tt.shouldErr)
 			}
 		})
 	}
