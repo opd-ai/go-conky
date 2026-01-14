@@ -11,10 +11,10 @@ import (
 
 // linuxCPUProvider implements CPUProvider for Linux systems by reading /proc/stat and /proc/cpuinfo.
 type linuxCPUProvider struct {
-	mu             sync.Mutex
-	prevStats      map[int]cpuTimes
-	procStatPath   string
-	procInfoPath   string
+	mu              sync.Mutex
+	prevStats       map[int]cpuTimes
+	procStatPath    string
+	procInfoPath    string
 	procLoadavgPath string
 }
 

@@ -31,10 +31,10 @@ func TestNewPlatform(t *testing.T) {
 // TestNewPlatformForOS tests creating platform instances for specific operating systems.
 func TestNewPlatformForOS(t *testing.T) {
 	tests := []struct {
-		name        string
-		goos        string
-		wantErr     bool
-		wantName    string
+		name     string
+		goos     string
+		wantErr  bool
+		wantName string
 	}{
 		{
 			name:     "Linux platform",
