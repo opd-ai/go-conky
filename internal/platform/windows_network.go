@@ -96,11 +96,9 @@ func (n *windowsNetworkProvider) getInterfaceTable() ([]mibIfRow2, error) {
 
 	// Extract interface rows from the table
 	// We use unsafe pointer arithmetic to access the variable-length array
-	// Verify the structure size matches expected size
-	const expectedRowSize = unsafe.Sizeof(mibIfRow2{})
 	rows := make([]mibIfRow2, table.NumEntries)
 	tablePtr := uintptr(unsafe.Pointer(&table.Table[0]))
-	rowSize := expectedRowSize
+	rowSize := unsafe.Sizeof(mibIfRow2{})
 
 	for i := uint32(0); i < table.NumEntries; i++ {
 		rowPtr := tablePtr + uintptr(i)*rowSize

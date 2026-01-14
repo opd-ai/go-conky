@@ -98,9 +98,10 @@ func (f *windowsFilesystemProvider) Mounts() ([]MountInfo, error) {
 
 func (f *windowsFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, error) {
 	// Normalize the path to a drive letter
+	// On Windows, mount points are drive letters like "C:" or "C:\"
 	drive := filepath.VolumeName(mountPoint)
 	if drive == "" {
-		return nil, fmt.Errorf("invalid mount point: %s", mountPoint)
+		return nil, fmt.Errorf("invalid mount point: %s (Windows mount points must be drive letters like C: or C:\\)", mountPoint)
 	}
 
 	// Ensure drive ends with backslash
