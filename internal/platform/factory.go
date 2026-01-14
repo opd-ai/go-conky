@@ -33,9 +33,12 @@ func NewPlatformForOS(goos string) (Platform, error) {
 // NewRemotePlatform creates a Platform that collects data from a remote system via SSH.
 // The remote system does not need go-conky installed; data is collected using
 // standard shell commands and parsed locally.
-// This feature is planned for Phase 7 and is not yet implemented.
 func NewRemotePlatform(config RemoteConfig) (Platform, error) {
-	return nil, fmt.Errorf("remote platform not yet implemented (planned for Phase 7)")
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 // RemoteConfig specifies connection parameters for remote monitoring.

@@ -208,20 +208,50 @@ func TestPlatformProvidersInterface(t *testing.T) {
 	var _ SensorProvider = p.Sensors()
 }
 
-// TestRemotePlatformNotImplemented tests that remote platform returns appropriate error.
-func TestRemotePlatformNotImplemented(t *testing.T) {
-	config := RemoteConfig{
-		Host: "example.com",
-		Port: 22,
-		User: "test",
+// TestRemotePlatformConfiguration tests that remote platform validates configuration.
+func TestRemotePlatformConfiguration(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  RemoteConfig
+		wantErr bool
+	}{
+		{
+			name: "missing auth method",
+			config: RemoteConfig{
+				Host: "example.com",
+				Port: 22,
+				User: "test",
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid config",
+			config: RemoteConfig{
+				Host: "example.com",
+				Port: 22,
+				User: "test",
+				AuthMethod: PasswordAuth{
+					Password: "test",
+				},
+			},
+			wantErr: false,
+		},
 	}
 
-	p, err := NewRemotePlatform(config)
-	if err == nil {
-		t.Error("Expected error for unimplemented remote platform, got nil")
-	}
-	if p != nil {
-		t.Error("Expected nil platform for unimplemented remote platform")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := NewRemotePlatform(tt.config)
+			t.Logf("Platform: %v, Error: %v, wantErr: %v", p, err, tt.wantErr)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewRemotePlatform() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && p == nil {
+				t.Error("Expected non-nil platform for valid config")
+			}
+			if tt.wantErr && p != nil {
+				t.Errorf("Expected nil platform for invalid config, got %v", p)
+			}
+		})
 	}
 }
 
