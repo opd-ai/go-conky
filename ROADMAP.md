@@ -272,7 +272,7 @@ Window Display (X11/Wayland)
 - [x] Design Platform interface architecture (12 hours)
 - [x] Implement Linux Platform adapter (refactor existing code) (16 hours)
 - [x] Implement Windows Platform adapter (24 hours)
-- [ ] Implement macOS Platform adapter (20 hours)
+- [x] Implement macOS Platform adapter (20 hours)
 - [ ] Implement Android Platform adapter (28 hours)
 - [ ] Design SSH remote monitoring protocol (8 hours)
 - [ ] Implement SSH connection management (16 hours)
@@ -1695,15 +1695,17 @@ fmt.Printf("Remote CPU: %.1f%%, Memory: %.1f%%\n", cpuUsage, memStats.UsedPercen
 
 | Feature | Linux | Windows | macOS | Android | Remote/SSH |
 |---------|-------|---------|-------|---------|------------|
-| CPU usage | ✓ | Planned | Planned | Planned | Planned |
-| Memory stats | ✓ | Planned | Planned | Planned | Planned |
-| Network I/O | ✓ | Planned | Planned | Planned | Planned |
-| Filesystem usage | ✓ | Planned | Planned | Planned | Planned |
-| Battery status | ✓ | Planned | Planned | Planned | N/A |
-| Temperature sensors | ✓ | Planned | Planned | Limited | Planned |
+| CPU usage | ✓ | ✓ | ✓ | Planned | Planned |
+| Memory stats | ✓ | ✓ | ✓ | Planned | Planned |
+| Network I/O | ✓ | ✓ | ✓ | Planned | Planned |
+| Filesystem usage | ✓ | ✓ | ✓ | Planned | Planned |
+| Battery status | ✓ | ✓ | ✓ | Planned | N/A |
+| Temperature sensors | ✓ | ✓ | ✓* | Limited | Planned |
 | Process list | ✓ | Planned | Planned | Limited | Planned |
 | GPU monitoring | Limited | Planned | Planned | N/A | N/A |
 | Window rendering | X11/Wayland | Planned | Planned | Planned | N/A |
+
+*macOS temperature sensors require root privileges (powermetrics)
 
 ## 5. DEVELOPMENT INFRASTRUCTURE
 
