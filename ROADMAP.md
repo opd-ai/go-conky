@@ -270,7 +270,7 @@ Window Display (X11/Wayland)
 
 **Tasks:**
 - [x] Design Platform interface architecture (12 hours)
-- [ ] Implement Linux Platform adapter (refactor existing code) (16 hours)
+- [x] Implement Linux Platform adapter (refactor existing code) (16 hours)
 - [ ] Implement Windows Platform adapter (24 hours)
 - [ ] Implement macOS Platform adapter (20 hours)
 - [ ] Implement Android Platform adapter (28 hours)

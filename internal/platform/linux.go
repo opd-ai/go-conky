@@ -2,7 +2,6 @@ package platform
 
 import (
 	"context"
-	"fmt"
 	"sync"
 )
 
@@ -38,13 +37,13 @@ func (p *linuxPlatform) Initialize(ctx context.Context) error {
 	p.ctx, cancel = context.WithCancel(ctx)
 	p.cancel = cancel
 
-	// Initialize providers (stub implementations for now)
-	p.cpu = &stubCPUProvider{}
-	p.memory = &stubMemoryProvider{}
-	p.network = &stubNetworkProvider{}
-	p.filesystem = &stubFilesystemProvider{}
-	p.battery = &stubBatteryProvider{}
-	p.sensors = &stubSensorProvider{}
+	// Initialize providers with real implementations
+	p.cpu = newLinuxCPUProvider()
+	p.memory = newLinuxMemoryProvider()
+	p.network = newLinuxNetworkProvider()
+	p.filesystem = newLinuxFilesystemProvider()
+	p.battery = newLinuxBatteryProvider()
+	p.sensors = newLinuxSensorProvider()
 
 	return nil
 }
@@ -93,87 +92,4 @@ func (p *linuxPlatform) Sensors() SensorProvider {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.sensors
-}
-
-// Stub implementations - these will be replaced with real implementations
-// when we refactor the existing monitor code in the next task.
-
-type stubCPUProvider struct{}
-
-func (s *stubCPUProvider) Usage() ([]float64, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubCPUProvider) TotalUsage() (float64, error) {
-	return 0, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubCPUProvider) Frequency() ([]float64, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubCPUProvider) Info() (*CPUInfo, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubCPUProvider) LoadAverage() (float64, float64, float64, error) {
-	return 0, 0, 0, fmt.Errorf("not yet implemented")
-}
-
-type stubMemoryProvider struct{}
-
-func (s *stubMemoryProvider) Stats() (*MemoryStats, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubMemoryProvider) SwapStats() (*SwapStats, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-type stubNetworkProvider struct{}
-
-func (s *stubNetworkProvider) Interfaces() ([]string, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubNetworkProvider) Stats(interfaceName string) (*NetworkStats, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubNetworkProvider) AllStats() (map[string]*NetworkStats, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-type stubFilesystemProvider struct{}
-
-func (s *stubFilesystemProvider) Mounts() ([]MountInfo, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-type stubBatteryProvider struct{}
-
-func (s *stubBatteryProvider) Count() int {
-	return 0
-}
-
-func (s *stubBatteryProvider) Stats(index int) (*BatteryStats, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-type stubSensorProvider struct{}
-
-func (s *stubSensorProvider) Temperatures() ([]SensorReading, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (s *stubSensorProvider) Fans() ([]SensorReading, error) {
-	return nil, fmt.Errorf("not yet implemented")
 }
