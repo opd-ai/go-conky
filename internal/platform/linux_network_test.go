@@ -17,7 +17,7 @@ func TestLinuxNetworkProvider_Interfaces(t *testing.T) {
   eth0: 9876543210    5000    5    2    0     0          0         0  1234567890   4000    1    0    0     0       0          0
   wlan0: 5555555555    3000    0    0    0     0          0         0  4444444444   2500    0    0    0     0       0          0
 `
-	if err := os.WriteFile(netDevPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(netDevPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write net/dev file: %v", err)
 	}
 
@@ -59,7 +59,7 @@ func TestLinuxNetworkProvider_Stats(t *testing.T) {
     lo: 1234567       100    0    0    0     0          0         0  1234567       100    0    0    0     0       0          0
   eth0: 9876543210    5000    5    2    0     0          0         0  1234567890   4000    1    0    0     0       0          0
 `
-	if err := os.WriteFile(netDevPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(netDevPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write net/dev file: %v", err)
 	}
 
@@ -107,7 +107,7 @@ func TestLinuxNetworkProvider_Stats_NotFound(t *testing.T) {
  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
     lo: 1234567       100    0    0    0     0          0         0  1234567       100    0    0    0     0       0          0
 `
-	if err := os.WriteFile(netDevPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(netDevPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write net/dev file: %v", err)
 	}
 
@@ -131,7 +131,7 @@ func TestLinuxNetworkProvider_AllStats(t *testing.T) {
     lo: 1234567       100    0    0    0     0          0         0  1234567       100    0    0    0     0       0          0
   eth0: 9876543210    5000    5    2    0     0          0         0  1234567890   4000    1    0    0     0       0          0
 `
-	if err := os.WriteFile(netDevPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(netDevPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write net/dev file: %v", err)
 	}
 
@@ -179,7 +179,7 @@ func TestLinuxNetworkProvider_ConcurrentAccess(t *testing.T) {
     lo: 1234567       100    0    0    0     0          0         0  1234567       100    0    0    0     0       0          0
   eth0: 9876543210    5000    5    2    0     0          0         0  1234567890   4000    1    0    0     0       0          0
 `
-	if err := os.WriteFile(netDevPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(netDevPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write net/dev file: %v", err)
 	}
 

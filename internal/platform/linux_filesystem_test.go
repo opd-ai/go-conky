@@ -17,7 +17,7 @@ tmpfs /tmp tmpfs rw,nosuid,nodev 0 0
 proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
 sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
 `
-	if err := os.WriteFile(mountsPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(mountsPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write mounts file: %v", err)
 	}
 
@@ -64,7 +64,7 @@ func TestLinuxFilesystemProvider_Mounts_OctalEscape(t *testing.T) {
 	// \040 is the octal escape for a space character
 	content := `/dev/sdb1 /mnt/my\040drive ext4 rw,relatime 0 0
 `
-	if err := os.WriteFile(mountsPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(mountsPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write mounts file: %v", err)
 	}
 

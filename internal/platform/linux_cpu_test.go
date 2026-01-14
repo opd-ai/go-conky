@@ -18,7 +18,7 @@ cpu1 25 0 13 213 0 0 0 0 0 0
 cpu2 25 0 12 212 0 0 0 0 0 0
 cpu3 25 0 13 213 0 0 0 0 0 0
 `
-	if err := os.WriteFile(statPath, []byte(initialContent), 0644); err != nil {
+	if err := os.WriteFile(statPath, []byte(initialContent), 0o644); err != nil {
 		t.Fatalf("Failed to write initial stat file: %v", err)
 	}
 
@@ -43,7 +43,7 @@ cpu1 50 0 25 225 0 0 0 0 0 0
 cpu2 50 0 25 225 0 0 0 0 0 0
 cpu3 50 0 25 225 0 0 0 0 0 0
 `
-	if err := os.WriteFile(statPath, []byte(updatedContent), 0644); err != nil {
+	if err := os.WriteFile(statPath, []byte(updatedContent), 0o644); err != nil {
 		t.Fatalf("Failed to write updated stat file: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestLinuxCPUProvider_Usage(t *testing.T) {
 cpu0 25 0 12 212 0 0 0 0 0 0
 cpu1 25 0 13 213 0 0 0 0 0 0
 `
-	if err := os.WriteFile(statPath, []byte(initialContent), 0644); err != nil {
+	if err := os.WriteFile(statPath, []byte(initialContent), 0o644); err != nil {
 		t.Fatalf("Failed to write initial stat file: %v", err)
 	}
 
@@ -111,7 +111,7 @@ func TestLinuxCPUProvider_LoadAverage(t *testing.T) {
 	loadavgPath := filepath.Join(tmpDir, "loadavg")
 
 	content := "0.52 0.58 0.59 3/815 12345\n"
-	if err := os.WriteFile(loadavgPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(loadavgPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write loadavg file: %v", err)
 	}
 
@@ -158,7 +158,7 @@ cpu cores	: 4
 siblings	: 8
 cache size	: 8192 KB
 `
-	if err := os.WriteFile(cpuinfoPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(cpuinfoPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write cpuinfo file: %v", err)
 	}
 
@@ -201,7 +201,7 @@ processor	: 1
 cpu MHz		: 1850.456
 cache size	: 8192 KB
 `
-	if err := os.WriteFile(cpuinfoPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(cpuinfoPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write cpuinfo file: %v", err)
 	}
 

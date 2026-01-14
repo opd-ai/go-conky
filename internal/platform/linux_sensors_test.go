@@ -10,36 +10,36 @@ func TestLinuxSensorProvider_Temperatures(t *testing.T) {
 	// Create a temporary /sys/class/hwmon directory
 	tmpDir := t.TempDir()
 	hwmonPath := filepath.Join(tmpDir, "hwmon")
-	if err := os.MkdirAll(hwmonPath, 0755); err != nil {
+	if err := os.MkdirAll(hwmonPath, 0o755); err != nil {
 		t.Fatalf("Failed to create hwmon directory: %v", err)
 	}
 
 	// Create hwmon0 device
 	hwmon0Path := filepath.Join(hwmonPath, "hwmon0")
-	if err := os.MkdirAll(hwmon0Path, 0755); err != nil {
+	if err := os.MkdirAll(hwmon0Path, 0o755); err != nil {
 		t.Fatalf("Failed to create hwmon0 directory: %v", err)
 	}
 
 	// Create device name file
-	if err := os.WriteFile(filepath.Join(hwmon0Path, "name"), []byte("coretemp\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon0Path, "name"), []byte("coretemp\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write name file: %v", err)
 	}
 
 	// Create temperature sensor files
-	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp1_input"), []byte("45000\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp1_input"), []byte("45000\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write temp1_input: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp1_label"), []byte("Core 0\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp1_label"), []byte("Core 0\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write temp1_label: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp1_crit"), []byte("100000\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp1_crit"), []byte("100000\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write temp1_crit: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp2_input"), []byte("52000\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp2_input"), []byte("52000\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write temp2_input: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp2_label"), []byte("Core 1\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon0Path, "temp2_label"), []byte("Core 1\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write temp2_label: %v", err)
 	}
 
@@ -101,30 +101,30 @@ func TestLinuxSensorProvider_Fans(t *testing.T) {
 	// Create a temporary /sys/class/hwmon directory
 	tmpDir := t.TempDir()
 	hwmonPath := filepath.Join(tmpDir, "hwmon")
-	if err := os.MkdirAll(hwmonPath, 0755); err != nil {
+	if err := os.MkdirAll(hwmonPath, 0o755); err != nil {
 		t.Fatalf("Failed to create hwmon directory: %v", err)
 	}
 
 	// Create hwmon1 device
 	hwmon1Path := filepath.Join(hwmonPath, "hwmon1")
-	if err := os.MkdirAll(hwmon1Path, 0755); err != nil {
+	if err := os.MkdirAll(hwmon1Path, 0o755); err != nil {
 		t.Fatalf("Failed to create hwmon1 directory: %v", err)
 	}
 
 	// Create device name file
-	if err := os.WriteFile(filepath.Join(hwmon1Path, "name"), []byte("it8792\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon1Path, "name"), []byte("it8792\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write name file: %v", err)
 	}
 
 	// Create fan sensor files
-	if err := os.WriteFile(filepath.Join(hwmon1Path, "fan1_input"), []byte("1200\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon1Path, "fan1_input"), []byte("1200\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write fan1_input: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(hwmon1Path, "fan1_label"), []byte("CPU Fan\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon1Path, "fan1_label"), []byte("CPU Fan\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write fan1_label: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(hwmon1Path, "fan2_input"), []byte("800\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hwmon1Path, "fan2_input"), []byte("800\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write fan2_input: %v", err)
 	}
 
@@ -206,26 +206,26 @@ func TestLinuxSensorProvider_MultipleDevices(t *testing.T) {
 	// Create a temporary /sys/class/hwmon directory
 	tmpDir := t.TempDir()
 	hwmonPath := filepath.Join(tmpDir, "hwmon")
-	if err := os.MkdirAll(hwmonPath, 0755); err != nil {
+	if err := os.MkdirAll(hwmonPath, 0o755); err != nil {
 		t.Fatalf("Failed to create hwmon directory: %v", err)
 	}
 
 	// Create two hwmon devices
 	for i := 0; i < 2; i++ {
 		devicePath := filepath.Join(hwmonPath, "hwmon"+string(rune('0'+i)))
-		if err := os.MkdirAll(devicePath, 0755); err != nil {
+		if err := os.MkdirAll(devicePath, 0o755); err != nil {
 			t.Fatalf("Failed to create device directory: %v", err)
 		}
 
 		// Create device name file
 		deviceName := "device" + string(rune('0'+i)) + "\n"
-		if err := os.WriteFile(filepath.Join(devicePath, "name"), []byte(deviceName), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(devicePath, "name"), []byte(deviceName), 0o644); err != nil {
 			t.Fatalf("Failed to write name file: %v", err)
 		}
 
 		// Create temperature sensor
 		tempValue := string(rune('4'+i)) + "0000\n"
-		if err := os.WriteFile(filepath.Join(devicePath, "temp1_input"), []byte(tempValue), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(devicePath, "temp1_input"), []byte(tempValue), 0o644); err != nil {
 			t.Fatalf("Failed to write temp1_input: %v", err)
 		}
 	}

@@ -10,9 +10,7 @@ import (
 	"unsafe"
 )
 
-var (
-	modKernel32GetSystemPowerStatus = modKernel32.NewProc("GetSystemPowerStatus")
-)
+var modKernel32GetSystemPowerStatus = modKernel32.NewProc("GetSystemPowerStatus")
 
 const (
 	AC_LINE_OFFLINE      = 0x00

@@ -11,7 +11,7 @@ func TestLinuxBatteryProvider_Count(t *testing.T) {
 	// Create a temporary /sys/class/power_supply directory
 	tmpDir := t.TempDir()
 	powerSupplyPath := filepath.Join(tmpDir, "power_supply")
-	if err := os.MkdirAll(powerSupplyPath, 0755); err != nil {
+	if err := os.MkdirAll(powerSupplyPath, 0o755); err != nil {
 		t.Fatalf("Failed to create power_supply directory: %v", err)
 	}
 
@@ -21,19 +21,19 @@ func TestLinuxBatteryProvider_Count(t *testing.T) {
 	acPath := filepath.Join(powerSupplyPath, "AC")
 
 	for _, path := range []string{bat0Path, bat1Path, acPath} {
-		if err := os.MkdirAll(path, 0755); err != nil {
+		if err := os.MkdirAll(path, 0o755); err != nil {
 			t.Fatalf("Failed to create directory %s: %v", path, err)
 		}
 	}
 
 	// Create type files
-	if err := os.WriteFile(filepath.Join(bat0Path, "type"), []byte("Battery\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bat0Path, "type"), []byte("Battery\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write type file: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(bat1Path, "type"), []byte("Battery\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bat1Path, "type"), []byte("Battery\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write type file: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(acPath, "type"), []byte("Mains\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(acPath, "type"), []byte("Mains\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write type file: %v", err)
 	}
 
@@ -52,12 +52,12 @@ func TestLinuxBatteryProvider_Stats_EnergyBased(t *testing.T) {
 	tmpDir := t.TempDir()
 	powerSupplyPath := filepath.Join(tmpDir, "power_supply")
 	bat0Path := filepath.Join(powerSupplyPath, "BAT0")
-	if err := os.MkdirAll(bat0Path, 0755); err != nil {
+	if err := os.MkdirAll(bat0Path, 0o755); err != nil {
 		t.Fatalf("Failed to create battery directory: %v", err)
 	}
 
 	// Create type file
-	if err := os.WriteFile(filepath.Join(bat0Path, "type"), []byte("Battery\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bat0Path, "type"), []byte("Battery\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write type file: %v", err)
 	}
 
@@ -73,7 +73,7 @@ func TestLinuxBatteryProvider_Stats_EnergyBased(t *testing.T) {
 
 	for filename, content := range files {
 		path := filepath.Join(bat0Path, filename)
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatalf("Failed to write %s: %v", filename, err)
 		}
 	}
@@ -116,12 +116,12 @@ func TestLinuxBatteryProvider_Stats_ChargeBased(t *testing.T) {
 	tmpDir := t.TempDir()
 	powerSupplyPath := filepath.Join(tmpDir, "power_supply")
 	bat0Path := filepath.Join(powerSupplyPath, "BAT0")
-	if err := os.MkdirAll(bat0Path, 0755); err != nil {
+	if err := os.MkdirAll(bat0Path, 0o755); err != nil {
 		t.Fatalf("Failed to create battery directory: %v", err)
 	}
 
 	// Create type file
-	if err := os.WriteFile(filepath.Join(bat0Path, "type"), []byte("Battery\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bat0Path, "type"), []byte("Battery\n"), 0o644); err != nil {
 		t.Fatalf("Failed to write type file: %v", err)
 	}
 
@@ -136,7 +136,7 @@ func TestLinuxBatteryProvider_Stats_ChargeBased(t *testing.T) {
 
 	for filename, content := range files {
 		path := filepath.Join(bat0Path, filename)
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatalf("Failed to write %s: %v", filename, err)
 		}
 	}

@@ -20,7 +20,7 @@ SwapCached:            0 kB
 Active:          4096000 kB
 Inactive:        2048000 kB
 `
-	if err := os.WriteFile(meminfoPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(meminfoPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write meminfo file: %v", err)
 	}
 
@@ -80,7 +80,7 @@ MemFree:         8192000 kB
 SwapTotal:       4096000 kB
 SwapFree:        3072000 kB
 `
-	if err := os.WriteFile(meminfoPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(meminfoPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write meminfo file: %v", err)
 	}
 
@@ -128,7 +128,7 @@ Cached:          2048000 kB
 SwapTotal:              0 kB
 SwapFree:               0 kB
 `
-	if err := os.WriteFile(meminfoPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(meminfoPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write meminfo file: %v", err)
 	}
 
