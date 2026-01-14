@@ -420,8 +420,15 @@ func main() {
     }
     
     // Collect metrics
-    cpuUsage, _ := remote.CPU().TotalUsage()
-    memStats, _ := remote.Memory().Stats()
+    cpuUsage, err := remote.CPU().TotalUsage()
+    if err != nil {
+        panic(fmt.Errorf("get remote CPU usage: %w", err))
+    }
+    
+    memStats, err := remote.Memory().Stats()
+    if err != nil {
+        panic(fmt.Errorf("get remote memory stats: %w", err))
+    }
     
     fmt.Printf("Remote CPU: %.1f%%\n", cpuUsage)
     fmt.Printf("Remote Memory: %.1f%%\n", memStats.UsedPercent)
