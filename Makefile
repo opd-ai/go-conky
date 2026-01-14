@@ -1,4 +1,4 @@
-.PHONY: build test clean install deps lint coverage bench integration fmt vet dist checksums
+.PHONY: build test clean install deps lint coverage bench integration fmt vet dist checksums build-linux build-windows build-darwin build-all dist-linux dist-windows dist-darwin dist-all
 
 BINARY_NAME=conky-go
 BUILD_DIR=build
@@ -86,21 +86,32 @@ run: build
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  build       - Build the binary"
-	@echo "  test        - Run tests with race detection"
-	@echo "  bench       - Run benchmarks"
-	@echo "  integration - Run integration tests"
-	@echo "  clean       - Clean build artifacts"
-	@echo "  install     - Install binary to /usr/local/bin"
-	@echo "  deps        - Download and verify dependencies"
-	@echo "  lint        - Run golangci-lint"
-	@echo "  coverage    - Generate test coverage report"
-	@echo "  fmt         - Format code with go fmt"
-	@echo "  vet         - Run go vet"
-	@echo "  run         - Build and run with ~/.conkyrc"
-	@echo "  dist        - Build distribution package for native platform"
-	@echo "  checksums   - Generate checksums for distribution files"
-	@echo "  help        - Print this help message"
+	@echo "  build         - Build the binary for native platform"
+	@echo "  test          - Run tests with race detection"
+	@echo "  bench         - Run benchmarks"
+	@echo "  integration   - Run integration tests"
+	@echo "  clean         - Clean build artifacts"
+	@echo "  install       - Install binary to /usr/local/bin"
+	@echo "  deps          - Download and verify dependencies"
+	@echo "  lint          - Run golangci-lint"
+	@echo "  coverage      - Generate test coverage report"
+	@echo "  fmt           - Format code with go fmt"
+	@echo "  vet           - Run go vet"
+	@echo "  run           - Build and run with ~/.conkyrc"
+	@echo "  dist          - Build distribution package for native platform"
+	@echo "  checksums     - Generate checksums for distribution files"
+	@echo ""
+	@echo "Cross-platform build targets:"
+	@echo "  build-linux   - Build for Linux (amd64, arm64)"
+	@echo "  build-windows - Build for Windows (amd64)"
+	@echo "  build-darwin  - Build for macOS (amd64, arm64)"
+	@echo "  build-all     - Build for all platforms"
+	@echo "  dist-linux    - Create Linux distribution packages"
+	@echo "  dist-windows  - Create Windows distribution package"
+	@echo "  dist-darwin   - Create macOS distribution packages"
+	@echo "  dist-all      - Create distribution packages for all platforms"
+	@echo ""
+	@echo "  help          - Print this help message"
 
 # Build distribution package for native platform
 dist: clean
@@ -119,3 +130,70 @@ dist: clean
 checksums:
 	@echo "Generating checksums..."
 	@cd $(DIST_DIR) && if ls *.tar.gz >/dev/null 2>&1; then sha256sum *.tar.gz > checksums.txt && echo "Checksums written to $(DIST_DIR)/checksums.txt"; else echo "No .tar.gz files found in $(DIST_DIR); skipping checksum generation."; fi
+
+# Cross-platform build targets
+.PHONY: build-linux build-windows build-darwin build-all
+
+build-linux:
+	@echo "Building for Linux (amd64)..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/conky-go
+	@echo "Building for Linux (arm64)..."
+	@GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/conky-go
+
+build-windows:
+	@echo "Building for Windows (amd64)..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/conky-go
+
+build-darwin:
+	@echo "Building for macOS (amd64)..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/conky-go
+	@echo "Building for macOS (arm64)..."
+	@GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/conky-go
+
+build-all: build-linux build-windows build-darwin
+	@echo "All platform builds complete."
+
+# Cross-platform distribution packages
+.PHONY: dist-all dist-linux dist-windows dist-darwin
+
+dist-linux:
+	@echo "Building Linux distribution packages..."
+	@mkdir -p $(DIST_DIR)
+	@$(MAKE) build-linux
+	@for arch in amd64 arm64; do \
+		echo "Packaging $(BINARY_NAME)-linux-$$arch..."; \
+		cp README.md LICENSE $(DIST_DIR)/; \
+		tar -czvf "$(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-linux-$$arch.tar.gz" \
+			-C $(BUILD_DIR) "$(BINARY_NAME)-linux-$$arch" \
+			-C ../$(DIST_DIR) README.md LICENSE; \
+		rm -f "$(DIST_DIR)/README.md" "$(DIST_DIR)/LICENSE"; \
+	done
+
+dist-windows:
+	@echo "Building Windows distribution package..."
+	@mkdir -p $(DIST_DIR)
+	@$(MAKE) build-windows
+	@cp README.md LICENSE $(DIST_DIR)/
+	@cd $(BUILD_DIR) && zip -q ../$(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-windows-amd64.zip \
+		$(BINARY_NAME)-windows-amd64.exe ../$(DIST_DIR)/README.md ../$(DIST_DIR)/LICENSE
+	@rm -f "$(DIST_DIR)/README.md" "$(DIST_DIR)/LICENSE"
+
+dist-darwin:
+	@echo "Building macOS distribution packages..."
+	@mkdir -p $(DIST_DIR)
+	@$(MAKE) build-darwin
+	@for arch in amd64 arm64; do \
+		echo "Packaging $(BINARY_NAME)-darwin-$$arch..."; \
+		cp README.md LICENSE $(DIST_DIR)/; \
+		tar -czvf "$(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-darwin-$$arch.tar.gz" \
+			-C $(BUILD_DIR) "$(BINARY_NAME)-darwin-$$arch" \
+			-C ../$(DIST_DIR) README.md LICENSE; \
+		rm -f "$(DIST_DIR)/README.md" "$(DIST_DIR)/LICENSE"; \
+	done
+
+dist-all: dist-linux dist-windows dist-darwin
+	@echo "All distribution packages complete."
+	@$(MAKE) checksums
