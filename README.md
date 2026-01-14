@@ -6,7 +6,7 @@ A 100% compatible reimplementation of [Conky](https://github.com/brndnmtthws/con
 
 - **Perfect Compatibility**: Run your existing `.conkyrc` and Lua configurations without modification
 - **Modern Architecture**: Built with Go for better memory safety, concurrency, and maintainability  
-- **Cross-Platform**: Native support for Linux with planned Windows/macOS compatibility
+- **Cross-Platform**: Native support for Linux, Windows, and macOS, plus remote monitoring via SSH
 - **Performance**: Leverages Ebiten's optimized 2D rendering pipeline for smooth 60fps updates
 - **Safe Lua Execution**: Sandboxed Lua scripts with resource limits prevent system abuse
 
@@ -28,6 +28,8 @@ A 100% compatible reimplementation of [Conky](https://github.com/brndnmtthws/con
 - [x] Configuration parser (legacy `.conkyrc` + Lua formats)
 - [x] Cairo compatibility layer for Lua scripts
 - [x] Performance profiling and memory leak detection
+- [x] Cross-platform support (Linux, Windows, macOS)
+- [x] Remote monitoring via SSH (Linux, macOS)
 - [ ] Full end-to-end integration
 - [ ] Packaging and distribution
 
@@ -139,7 +141,9 @@ conky-go/
 ### Documentation
 
 - [Architecture Guide](docs/architecture.md) - System design and component overview
+- [Cross-Platform Deployment](docs/cross-platform.md) - Multi-platform installation and configuration
 - [Migration Guide](docs/migration.md) - Migrating from Conky to Conky-Go
+- [SSH Remote Monitoring](docs/ssh-remote-monitoring.md) - Monitor remote systems without agent installation
 - [API Reference](docs/api.md) - Go packages and Lua API documentation
 
 ## Contributing
@@ -179,7 +183,10 @@ All dependencies use permissive licenses compatible with commercial use:
 | Phase 3 | ✅ Complete | Ebiten rendering engine with widgets |
 | Phase 4 | ✅ Complete | Lua integration and Cairo compatibility |
 | Phase 5 | ✅ Complete | Configuration parser and migration tools |
-| Phase 6 | 🔄 In Progress | Testing, documentation, and packaging |
+| Phase 6 | ✅ Complete | Testing, documentation, and packaging |
+| Phase 7 | 🔄 In Progress | Cross-platform support (Linux, Windows, macOS, Remote) |
+
+See [ROADMAP.md](ROADMAP.md) for detailed implementation plan.
 
 ## License
 
