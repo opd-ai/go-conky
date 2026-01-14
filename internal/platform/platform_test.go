@@ -59,9 +59,10 @@ func TestNewPlatformForOS(t *testing.T) {
 			wantName: "windows",
 		},
 		{
-			name:    "macOS platform (not yet implemented)",
-			goos:    "darwin",
-			wantErr: true,
+			name:     "macOS platform",
+			goos:     "darwin",
+			wantErr:  false,
+			wantName: "darwin",
 		},
 		{
 			name:    "Android platform (not yet implemented)",
@@ -80,6 +81,9 @@ func TestNewPlatformForOS(t *testing.T) {
 			// Skip platform tests if we can't build for that platform
 			if tt.goos == "windows" && runtime.GOOS != "windows" {
 				t.Skip("Skipping Windows platform test on non-Windows system")
+			}
+			if tt.goos == "darwin" && runtime.GOOS != "darwin" {
+				t.Skip("Skipping Darwin platform test on non-Darwin system")
 			}
 			
 			p, err := NewPlatformForOS(tt.goos)
