@@ -82,8 +82,6 @@ func (s *linuxSensorProvider) Fans() ([]SensorReading, error) {
 
 // readTemperatureSensors reads all temperature sensors from a hwmon device.
 func (s *linuxSensorProvider) readTemperatureSensors(devicePath string) ([]SensorReading, error) {
-	var readings []SensorReading
-
 	// Read device name
 	deviceName := s.readDeviceName(devicePath)
 
@@ -92,6 +90,8 @@ func (s *linuxSensorProvider) readTemperatureSensors(devicePath string) ([]Senso
 	if err != nil {
 		return nil, fmt.Errorf("reading device directory: %w", err)
 	}
+
+	readings := make([]SensorReading, 0, len(entries)/4)
 
 	for _, entry := range entries {
 		name := entry.Name()
@@ -138,8 +138,6 @@ func (s *linuxSensorProvider) readTemperatureSensors(devicePath string) ([]Senso
 
 // readFanSensors reads all fan sensors from a hwmon device.
 func (s *linuxSensorProvider) readFanSensors(devicePath string) ([]SensorReading, error) {
-	var readings []SensorReading
-
 	// Read device name
 	deviceName := s.readDeviceName(devicePath)
 
@@ -148,6 +146,8 @@ func (s *linuxSensorProvider) readFanSensors(devicePath string) ([]SensorReading
 	if err != nil {
 		return nil, fmt.Errorf("reading device directory: %w", err)
 	}
+
+	readings := make([]SensorReading, 0, len(entries)/4)
 
 	for _, entry := range entries {
 		name := entry.Name()

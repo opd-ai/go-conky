@@ -48,7 +48,7 @@ func (c *linuxCPUProvider) Usage() ([]float64, error) {
 		return nil, err
 	}
 
-	var usages []float64
+	usages := make([]float64, 0, len(currentStats))
 	for cpuNum, current := range currentStats {
 		prev, exists := c.prevStats[cpuNum]
 		c.prevStats[cpuNum] = current

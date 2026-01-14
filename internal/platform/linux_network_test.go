@@ -152,20 +152,16 @@ func TestLinuxNetworkProvider_AllStats(t *testing.T) {
 	loStats, ok := allStats["lo"]
 	if !ok {
 		t.Error("AllStats() missing 'lo' interface")
-	} else {
-		if loStats.BytesRecv != 1234567 {
-			t.Errorf("lo BytesRecv = %d, want 1234567", loStats.BytesRecv)
-		}
+	} else if loStats.BytesRecv != 1234567 {
+		t.Errorf("lo BytesRecv = %d, want 1234567", loStats.BytesRecv)
 	}
 
 	// Check eth0 interface
 	eth0Stats, ok := allStats["eth0"]
 	if !ok {
 		t.Error("AllStats() missing 'eth0' interface")
-	} else {
-		if eth0Stats.BytesRecv != 9876543210 {
-			t.Errorf("eth0 BytesRecv = %d, want 9876543210", eth0Stats.BytesRecv)
-		}
+	} else if eth0Stats.BytesRecv != 9876543210 {
+		t.Errorf("eth0 BytesRecv = %d, want 9876543210", eth0Stats.BytesRecv)
 	}
 }
 
