@@ -133,6 +133,7 @@ func (c *windowsCPUProvider) closeQuery() {
 func (c *windowsCPUProvider) collectSample() error {
 	// Wait at least 100ms between samples to get meaningful data. If called
 	// more frequently, reuse the previous sample instead of blocking.
+	// Skip if we have a recent sample (within 100ms)
 	if !c.lastSample.IsZero() && time.Since(c.lastSample) < 100*time.Millisecond {
 		return nil
 	}

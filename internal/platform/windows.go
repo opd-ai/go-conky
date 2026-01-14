@@ -54,7 +54,7 @@ func (p *windowsPlatform) Close() error {
 	defer p.mu.Unlock()
 
 	// Close CPU provider to release PDH query resources
-	if cpuProvider, ok := p.cpu.(*windowsCPUProvider); ok && cpuProvider != nil {
+	if cpuProvider, ok := p.cpu.(*windowsCPUProvider); ok {
 		cpuProvider.Close()
 	}
 
