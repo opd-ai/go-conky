@@ -222,6 +222,19 @@ func (c *conkyImpl) initComponents() error {
 	// Initialize system monitor
 	c.monitor = monitor.NewSystemMonitor(interval)
 
+	// Ensure the monitor is stopped when the conkyImpl context is cancelled.
+	// This avoids a situation where c.ctx is cancelled but the monitor's own
+	// internal context (created in NewSystemMonitor) remains active.
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		<-c.ctx.Done()
+
+		// Best-effort stop; Stop should be safe to call multiple times.
+		if c.monitor != nil {
+			c.monitor.Stop()
+		}
+	}()
 	return nil
 }
 
