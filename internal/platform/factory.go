@@ -20,7 +20,7 @@ func NewPlatformForOS(goos string) (Platform, error) {
 	case "linux":
 		return NewLinuxPlatform(), nil
 	case "windows":
-		return nil, fmt.Errorf("Windows platform not yet implemented (planned for Phase 7)")
+		return NewWindowsPlatform(), nil
 	case "darwin":
 		return nil, fmt.Errorf("macOS platform not yet implemented (planned for Phase 7)")
 	case "android":
