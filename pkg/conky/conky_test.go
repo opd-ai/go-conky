@@ -2,6 +2,7 @@ package conky
 
 import (
 	"embed"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -419,6 +420,61 @@ $uptime
 	}
 	if status.StartTime.IsZero() {
 		t.Error("StartTime should not be zero after Start()")
+	}
+
+	if err := c.Stop(); err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+}
+
+func TestErrorHandler(t *testing.T) {
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	// Track errors received by the handler
+	var receivedErrors []error
+	var errorsMu sync.Mutex
+	errorsCh := make(chan error, 10)
+
+	c.SetErrorHandler(func(err error) {
+		errorsMu.Lock()
+		receivedErrors = append(receivedErrors, err)
+		errorsMu.Unlock()
+		errorsCh <- err
+	})
+
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Access the impl to directly test notifyError
+	impl := c.(*conkyImpl)
+	testErr := fmt.Errorf("test runtime error")
+	impl.notifyError(testErr)
+
+	// Wait for the error to be received
+	select {
+	case receivedErr := <-errorsCh:
+		if receivedErr != testErr {
+			t.Errorf("received error = %v, want %v", receivedErr, testErr)
+		}
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for error handler to be called")
+	}
+
+	// Also verify the error is stored in status
+	status := c.Status()
+	if status.LastError == nil {
+		t.Error("LastError should not be nil after notifyError")
 	}
 
 	if err := c.Stop(); err != nil {

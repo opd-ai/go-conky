@@ -136,7 +136,9 @@ func (c *conkyImpl) Stop() error {
 	case <-done:
 		return nil
 	case <-time.After(timeout):
-		return fmt.Errorf("shutdown timeout after %v: some goroutines did not stop", timeout)
+		err := fmt.Errorf("shutdown timeout after %v: some goroutines did not stop", timeout)
+		c.notifyError(err)
+		return err
 	}
 }
 
@@ -144,14 +146,18 @@ func (c *conkyImpl) Stop() error {
 func (c *conkyImpl) Restart() error {
 	// Stop if running
 	if err := c.Stop(); err != nil {
-		return fmt.Errorf("stop failed: %w", err)
+		wrappedErr := fmt.Errorf("stop failed: %w", err)
+		c.notifyError(wrappedErr)
+		return wrappedErr
 	}
 
 	// Reload configuration
 	if c.configLoader != nil {
 		cfg, err := c.configLoader()
 		if err != nil {
-			return fmt.Errorf("config reload failed: %w", err)
+			wrappedErr := fmt.Errorf("config reload failed: %w", err)
+			c.notifyError(wrappedErr)
+			return wrappedErr
 		}
 		c.mu.Lock()
 		c.cfg = cfg
@@ -161,7 +167,9 @@ func (c *conkyImpl) Restart() error {
 
 	// Start again
 	if err := c.Start(); err != nil {
-		return fmt.Errorf("start failed: %w", err)
+		wrappedErr := fmt.Errorf("start failed: %w", err)
+		c.notifyError(wrappedErr)
+		return wrappedErr
 	}
 
 	c.emitEvent(EventRestarted, "Instance restarted")
@@ -253,6 +261,35 @@ func (c *conkyImpl) getError() error {
 		}
 	}
 	return nil
+}
+
+// notifyError stores an error and invokes the error handler if registered.
+// This method should be called when runtime errors occur during operation.
+func (c *conkyImpl) notifyError(err error) {
+	// Store the error for Status() retrieval
+	c.lastError.Store(err)
+
+	c.mu.RLock()
+	handler := c.errorHandler
+	logger := c.opts.Logger
+	c.mu.RUnlock()
+
+	if handler != nil {
+		go func() {
+			defer func() {
+				// Recover from panics in error handler to prevent crashing
+				if r := recover(); r != nil {
+					if logger != nil {
+						logger.Error("error handler panicked", "panic", r, "original_error", err)
+					}
+				}
+			}()
+			handler(err)
+		}()
+	}
+
+	// Also emit an error event
+	c.emitEvent(EventError, err.Error())
 }
 
 // emitEvent sends an event to the event handler if configured.
