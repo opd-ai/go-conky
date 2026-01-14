@@ -3,6 +3,7 @@ package platform
 import (
 	"fmt"
 	"runtime"
+	"time"
 )
 
 // NewPlatform creates the appropriate Platform implementation for the current OS.
@@ -56,10 +57,10 @@ type RemoteConfig struct {
 	TargetOS string
 
 	// CommandTimeout is the timeout for individual commands (default: 5s).
-	CommandTimeout int64
+	CommandTimeout time.Duration
 
 	// ReconnectInterval is how often to attempt reconnection on failure (default: 30s).
-	ReconnectInterval int64
+	ReconnectInterval time.Duration
 }
 
 // AuthMethod defines SSH authentication methods.

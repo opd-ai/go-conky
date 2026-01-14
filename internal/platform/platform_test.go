@@ -148,8 +148,13 @@ func TestLinuxPlatformContextCancellation(t *testing.T) {
 	// Cancel context
 	cancel()
 
-	// Give it a moment to propagate
-	time.Sleep(10 * time.Millisecond)
+	// Wait for cancellation to propagate, with a timeout to avoid hanging tests.
+	select {
+	case <-ctx.Done():
+		// expected: context has been canceled
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("context cancellation did not propagate in time")
+	}
 
 	// Close should still work
 	if err := p.Close(); err != nil {
