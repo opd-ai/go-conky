@@ -249,10 +249,28 @@ func (c *conkyImpl) emitEvent(eventType EventType, message string) {
 	c.mu.RUnlock()
 
 	if handler != nil {
-		go handler(Event{
-			Type:      eventType,
-			Timestamp: time.Now(),
-			Message:   message,
-		})
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Recover from panics in the handler to avoid crashing the embedding application.
+					c.mu.RLock()
+					errHandler := c.errorHandler
+					c.mu.RUnlock()
+					if errHandler != nil {
+						if err, ok := r.(error); ok {
+							errHandler(fmt.Errorf("panic in event handler: %w", err))
+						} else {
+							errHandler(fmt.Errorf("panic in event handler: %v", r))
+						}
+					}
+				}
+			}()
+
+			handler(Event{
+				Type:      eventType,
+				Timestamp: time.Now(),
+				Message:   message,
+			})
+		}()
 	}
 }
