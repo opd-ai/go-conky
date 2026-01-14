@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package platform
@@ -10,7 +11,7 @@ func TestDarwinBatteryProvider_Count(t *testing.T) {
 	provider := newDarwinBatteryProvider()
 
 	count := provider.Count()
-	
+
 	// macOS systems have either 0 (desktop) or 1 (laptop) battery
 	if count < 0 || count > 1 {
 		t.Errorf("Expected battery count to be 0 or 1, got %d", count)
@@ -40,7 +41,7 @@ func TestDarwinBatteryProvider_Stats(t *testing.T) {
 		t.Errorf("TimeRemaining should be non-negative, got %v", stats.TimeRemaining)
 	}
 
-	t.Logf("Battery stats: %.1f%%, charging: %v, time remaining: %v", 
+	t.Logf("Battery stats: %.1f%%, charging: %v, time remaining: %v",
 		stats.Percent, stats.Charging, stats.TimeRemaining)
 }
 

@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package platform
@@ -59,10 +60,10 @@ func (b *darwinBatteryProvider) Stats(index int) (*BatteryStats, error) {
 // -InternalBattery-0 (id=12345678)	95%; discharging; 5:23 remaining present: true
 func (b *darwinBatteryProvider) parsePmsetOutput(output []byte) (*BatteryStats, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(output))
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		// Look for battery line (starts with -InternalBattery or contains Battery)
 		if !strings.Contains(line, "InternalBattery") && !strings.Contains(line, "Battery") {
 			continue
@@ -75,7 +76,7 @@ func (b *darwinBatteryProvider) parsePmsetOutput(output []byte) (*BatteryStats, 
 
 		// Parse the battery status line
 		// Format: -InternalBattery-0 (id=12345678)	95%; discharging; 5:23 remaining present: true
-		
+
 		// Split by tab
 		parts := strings.Split(line, "\t")
 		if len(parts) < 2 {
@@ -85,7 +86,7 @@ func (b *darwinBatteryProvider) parsePmsetOutput(output []byte) (*BatteryStats, 
 		// Parse the status part
 		statusPart := parts[1]
 		fields := strings.Split(statusPart, ";")
-		
+
 		stats := &BatteryStats{
 			Charging: false,
 		}
@@ -102,8 +103,8 @@ func (b *darwinBatteryProvider) parsePmsetOutput(output []byte) (*BatteryStats, 
 		// Parse charging status
 		if len(fields) > 1 {
 			status := strings.TrimSpace(fields[1])
-			stats.Charging = strings.Contains(strings.ToLower(status), "charging") && 
-							!strings.Contains(strings.ToLower(status), "discharging")
+			stats.Charging = strings.Contains(strings.ToLower(status), "charging") &&
+				!strings.Contains(strings.ToLower(status), "discharging")
 		}
 
 		// Parse time remaining

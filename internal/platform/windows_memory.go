@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package platform
@@ -55,7 +56,7 @@ func (m *windowsMemoryProvider) Stats() (*MemoryStats, error) {
 
 	total := memStatus.ullTotalPhys
 	available := memStatus.ullAvailPhys
-	
+
 	// Calculate used memory
 	var used uint64
 	if total >= available {

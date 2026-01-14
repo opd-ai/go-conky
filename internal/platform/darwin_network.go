@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package platform
@@ -11,11 +12,11 @@ import (
 
 // Sysctl MIB constants for Darwin network operations
 const (
-	ctlNet          = 4  // CTL_NET
-	pfLink          = 18 // PF_LINK
-	netlinkGeneric  = 0  // NETLINK_GENERIC
-	ifmibIfdata     = 2  // IFMIB_IFDATA
-	ifdataGeneral   = 1  // IFDATA_GENERAL
+	ctlNet         = 4  // CTL_NET
+	pfLink         = 18 // PF_LINK
+	netlinkGeneric = 0  // NETLINK_GENERIC
+	ifmibIfdata    = 2  // IFMIB_IFDATA
+	ifdataGeneral  = 1  // IFDATA_GENERAL
 )
 
 // darwinNetworkProvider implements NetworkProvider for macOS/Darwin systems using getifaddrs and sysctl.

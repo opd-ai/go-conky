@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package platform
@@ -10,8 +11,8 @@ import (
 )
 
 var (
-	modKernel32GetDiskFreeSpaceEx = modKernel32.NewProc("GetDiskFreeSpaceExW")
-	modKernel32GetLogicalDrives   = modKernel32.NewProc("GetLogicalDrives")
+	modKernel32GetDiskFreeSpaceEx   = modKernel32.NewProc("GetDiskFreeSpaceExW")
+	modKernel32GetLogicalDrives     = modKernel32.NewProc("GetLogicalDrives")
 	modKernel32GetVolumeInformation = modKernel32.NewProc("GetVolumeInformationW")
 )
 

@@ -85,7 +85,7 @@ func TestNewPlatformForOS(t *testing.T) {
 			if tt.goos == "darwin" && runtime.GOOS != "darwin" {
 				t.Skip("Skipping Darwin platform test on non-Darwin system")
 			}
-			
+
 			p, err := NewPlatformForOS(tt.goos)
 			if tt.wantErr {
 				if err == nil {
