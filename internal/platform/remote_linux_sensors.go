@@ -54,9 +54,8 @@ func (s *remoteLinuxSensorProvider) Temperatures() ([]SensorReading, error) {
 
 		// Try to get label
 		labelPath := strings.Replace(path, "_input", "_label", 1)
-		label := extractSensorName(path)
-
 		labelOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s 2>/dev/null || echo ''", labelPath))
+		label := extractSensorName(path)
 		if err == nil && strings.TrimSpace(labelOutput) != "" {
 			label = strings.TrimSpace(labelOutput)
 		}
@@ -117,9 +116,8 @@ func (s *remoteLinuxSensorProvider) Fans() ([]SensorReading, error) {
 
 		// Try to get label
 		labelPath := strings.Replace(path, "_input", "_label", 1)
-		label := extractSensorName(path)
-
 		labelOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s 2>/dev/null || echo ''", labelPath))
+		label := extractSensorName(path)
 		if err == nil && strings.TrimSpace(labelOutput) != "" {
 			label = strings.TrimSpace(labelOutput)
 		}

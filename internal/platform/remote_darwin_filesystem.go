@@ -133,22 +133,10 @@ func (f *remoteDarwinFilesystemProvider) Stats(mountPoint string) (*FilesystemSt
 }
 
 func (f *remoteDarwinFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
-	// macOS doesn't have /proc/diskstats, use iostat
-	cmd := fmt.Sprintf("iostat -d %s 1 2 | tail -n 1", device)
-	output, err := f.platform.runCommand(cmd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read disk stats for %s: %w", device, err)
-	}
-
-	fields := strings.Fields(output)
-	if len(fields) < 3 {
-		return nil, fmt.Errorf("unexpected iostat output format: %s", output)
-	}
-
-	// iostat output: KB/t tps MB/s
-	// This is a simplified representation; actual byte counts aren't directly available
-	stats := &DiskIOStats{}
-
-	// We can't get exact counts, only rates, so this is limited
-	return stats, nil
+	// macOS doesn't provide cumulative disk I/O statistics via simple commands.
+	// The iostat command only provides rates (KB/t, tps, MB/s), not absolute counts.
+	// To implement this properly would require maintaining state between calls to
+	// calculate cumulative values from rates, which is beyond the scope of basic
+	// remote monitoring.
+	return nil, fmt.Errorf("disk I/O statistics not available on macOS via simple commands")
 }

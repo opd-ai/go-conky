@@ -168,11 +168,13 @@ func (p *sshPlatform) buildSSHConfig() (*ssh.ClientConfig, error) {
 	return &ssh.ClientConfig{
 		User: p.config.User,
 		Auth: authMethods,
-		// NOTE: For production use, implement proper host key verification.
-		// Options include: using known_hosts file, prompting user for verification,
-		// or implementing a custom HostKeyCallback that validates against a trusted CA.
-		// Example: ssh.FixedHostKey(knownHostKey) or custom verification callback.
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // SECURITY: Replace in production
+		// TODO: SECURITY - Replace InsecureIgnoreHostKey with proper host key verification
+		// Options for production use:
+		// 1. Use ssh.FixedHostKey(knownHostKey) with a known host key
+		// 2. Use knownhosts.New("/path/to/known_hosts") to read from known_hosts file
+		// 3. Implement custom HostKeyCallback for CA-based verification
+		// Current implementation is VULNERABLE to man-in-the-middle attacks
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}, nil
 }
