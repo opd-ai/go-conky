@@ -165,21 +165,20 @@ dist-linux:
 	@$(MAKE) build-linux
 	@for arch in amd64 arm64; do \
 		echo "Packaging $(BINARY_NAME)-linux-$$arch..."; \
-		cp README.md LICENSE $(DIST_DIR)/; \
+		cp README.md LICENSE $(BUILD_DIR)/; \
 		tar -czvf "$(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-linux-$$arch.tar.gz" \
-			-C $(BUILD_DIR) "$(BINARY_NAME)-linux-$$arch" \
-			-C ../$(DIST_DIR) README.md LICENSE; \
-		rm -f "$(DIST_DIR)/README.md" "$(DIST_DIR)/LICENSE"; \
+			-C $(BUILD_DIR) "$(BINARY_NAME)-linux-$$arch" README.md LICENSE; \
+		rm -f "$(BUILD_DIR)/README.md" "$(BUILD_DIR)/LICENSE"; \
 	done
 
 dist-windows:
 	@echo "Building Windows distribution package..."
 	@mkdir -p $(DIST_DIR)
 	@$(MAKE) build-windows
-	@cp README.md LICENSE $(DIST_DIR)/
+	@cp README.md LICENSE $(BUILD_DIR)/
 	@cd $(BUILD_DIR) && zip -q ../$(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-windows-amd64.zip \
-		$(BINARY_NAME)-windows-amd64.exe ../$(DIST_DIR)/README.md ../$(DIST_DIR)/LICENSE
-	@rm -f "$(DIST_DIR)/README.md" "$(DIST_DIR)/LICENSE"
+		$(BINARY_NAME)-windows-amd64.exe README.md LICENSE
+	@rm -f "$(BUILD_DIR)/README.md" "$(BUILD_DIR)/LICENSE"
 
 dist-darwin:
 	@echo "Building macOS distribution packages..."
@@ -187,11 +186,10 @@ dist-darwin:
 	@$(MAKE) build-darwin
 	@for arch in amd64 arm64; do \
 		echo "Packaging $(BINARY_NAME)-darwin-$$arch..."; \
-		cp README.md LICENSE $(DIST_DIR)/; \
+		cp README.md LICENSE $(BUILD_DIR)/; \
 		tar -czvf "$(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-darwin-$$arch.tar.gz" \
-			-C $(BUILD_DIR) "$(BINARY_NAME)-darwin-$$arch" \
-			-C ../$(DIST_DIR) README.md LICENSE; \
-		rm -f "$(DIST_DIR)/README.md" "$(DIST_DIR)/LICENSE"; \
+			-C $(BUILD_DIR) "$(BINARY_NAME)-darwin-$$arch" README.md LICENSE; \
+		rm -f "$(BUILD_DIR)/README.md" "$(BUILD_DIR)/LICENSE"; \
 	done
 
 dist-all: dist-linux dist-windows dist-darwin
