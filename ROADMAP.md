@@ -23,6 +23,49 @@
                           └──────────────────┘
 ```
 
+### 1.1.1 Extended Architecture with Cross-Platform Support (Phase 7)
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Application Layer                            │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌─────────────────┐    │
+│  │  Configuration  │  │  Lua Integration │  │ System Monitor  │    │
+│  │     Parser      │  │    (golua)       │  │    Backend      │    │
+│  └─────────────────┘  └──────────────────┘  └─────────────────┘    │
+└─────────────────────────────────────────────┬───────────────────────┘
+                                              │
+┌─────────────────────────────────────────────┴───────────────────────┐
+│                      Platform Abstraction Layer                      │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │                     Platform Interface                          │ │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────┐ │ │
+│  │  │ CPUProvider │ │ MemProvider │ │ NetProvider │ │FSProvider │ │ │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └───────────┘ │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────┬───────────────────────┘
+                                              │
+    ┌─────────────┬─────────────┬─────────────┼─────────────┬─────────┐
+    │             │             │             │             │         │
+┌───┴───┐    ┌───┴───┐    ┌────┴────┐   ┌────┴────┐   ┌────┴────┐   │
+│ Linux │    │Windows│    │  macOS  │   │ Android │   │ Remote  │   │
+│ /proc │    │ WMI   │    │sysctl/  │   │ /proc + │   │  SSH    │   │
+│ /sys  │    │ PDH   │    │ IOKit   │   │ Android │   │ Agent   │   │
+└───────┘    └───────┘    └─────────┘   │  APIs   │   └─────────┘   │
+                                        └─────────┘                 │
+                                                                    │
+┌───────────────────────────────────────────────────────────────────┘
+│
+│  ┌──────────────────┐    ┌──────────────────┐
+│  │  Rendering Layer │    │  Window Layer    │
+│  │  ┌────────────┐  │    │  ┌────────────┐  │
+└──┤  │   Ebiten   │  │    │  │   X11      │  │
+   │  └────────────┘  │    │  │  Wayland   │  │
+   │                  │    │  │  Windows   │  │
+   └──────────────────┘    │  │   macOS    │  │
+                           │  │  Android   │  │
+                           │  └────────────┘  │
+                           └──────────────────┘
+```
+
 ### 1.2 Module Breakdown
 
 **Configuration Parser Module**
@@ -36,6 +79,12 @@
 - Network interface monitoring
 - Hardware sensors integration
 - Extensible monitoring backend
+
+**Platform Abstraction Module (Phase 7)**
+- Cross-platform interface for system monitoring
+- Platform-specific implementations (Linux, Windows, macOS, Android)
+- Remote monitoring via SSH without remote installation
+- Unified data types across all platforms
 
 **Rendering Engine Module**
 - Ebiten-based 2D graphics pipeline
@@ -54,6 +103,7 @@
 - Desktop integration (dock/desktop/normal modes)
 - Transparency and compositing
 - Multi-monitor support
+- Cross-platform window support (Phase 7)
 
 ### 1.3 Data Flow
 ```
@@ -62,6 +112,35 @@ System Data → Monitor Backend → Lua Processing → Cairo Drawing Commands
 Ebiten Rendering Pipeline ← Cairo Compatibility Layer ← Conky Variables
                 ↓
 Window Display (X11/Wayland)
+```
+
+### 1.3.1 Cross-Platform Data Flow (Phase 7)
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Data Source Selection                         │
+│                                                                      │
+│   Local System ─────┬─────── Platform Interface ───────┬─────────   │
+│                     │                                   │            │
+│   Remote System ────┤   ┌─────────────────────────┐    │            │
+│   (via SSH)         └───│   Unified System Data   │────┘            │
+│                         └─────────────────────────┘                 │
+│                                     │                                │
+│                                     ▼                                │
+│                         ┌─────────────────────────┐                 │
+│                         │    Monitor Backend      │                 │
+│                         │    (Platform-agnostic)  │                 │
+│                         └─────────────────────────┘                 │
+│                                     │                                │
+│                                     ▼                                │
+│                         ┌─────────────────────────┐                 │
+│                         │    Lua Processing       │                 │
+│                         └─────────────────────────┘                 │
+│                                     │                                │
+│                                     ▼                                │
+│                         ┌─────────────────────────┐                 │
+│                         │    Rendering Pipeline   │                 │
+│                         └─────────────────────────┘                 │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 2. IMPLEMENTATION PHASES
@@ -175,6 +254,32 @@ Window Display (X11/Wayland)
 - [x] Memory leak detection and prevention (8 hours)
 - [x] Documentation and user guides (12 hours)
 - [x] Packaging and distribution setup (8 hours)
+
+### Phase 7: Cross-Platform & Remote Monitoring (Weeks 19-24)
+**Objectives:**
+- Extend system monitoring to support Windows, macOS, Linux, and Android platforms
+- Design and implement a clean Platform interface for OS-specific abstractions
+- Enable remote system monitoring over SSH without requiring go-conky installation on target systems
+- Maintain backward compatibility with existing Linux-focused architecture
+
+**Deliverables:**
+- Platform abstraction layer with implementations for all supported operating systems
+- Remote monitoring agent capable of SSH-based data collection
+- Cross-platform build system with platform-specific binaries
+- Comprehensive platform-specific test suites
+
+**Tasks:**
+- [ ] Design Platform interface architecture (12 hours)
+- [ ] Implement Linux Platform adapter (refactor existing code) (16 hours)
+- [ ] Implement Windows Platform adapter (24 hours)
+- [ ] Implement macOS Platform adapter (20 hours)
+- [ ] Implement Android Platform adapter (28 hours)
+- [ ] Design SSH remote monitoring protocol (8 hours)
+- [ ] Implement SSH connection management (16 hours)
+- [ ] Implement remote data collection over SSH (20 hours)
+- [ ] Cross-platform build system and CI/CD updates (12 hours)
+- [ ] Platform-specific integration testing (24 hours)
+- [ ] Documentation for cross-platform deployment (8 hours)
 
 ## 3. TECHNICAL IMPLEMENTATION DETAILS
 
@@ -522,6 +627,1036 @@ func (sm *SystemMonitor) updateSystemData() {
 }
 ```
 
+### 3.5 Cross-Platform Architecture
+
+**Platform Interface Design:**
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Application Layer                            │
+│                    (Config, Render, Lua, Window)                     │
+└─────────────────────────────────────────┬───────────────────────────┘
+                                          │
+┌─────────────────────────────────────────┴───────────────────────────┐
+│                        Platform Interface                            │
+│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐ │
+│   │ CPUProvider │  │MemProvider │  │ NetProvider │  │ FSProvider │ │
+│   └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘ │
+└─────────────────────────────────────────┬───────────────────────────┘
+                                          │
+    ┌─────────────┬─────────────┬─────────┴────────┬─────────────────┐
+    │             │             │                  │                 │
+┌───┴───┐    ┌───┴───┐    ┌────┴────┐       ┌─────┴─────┐    ┌──────┴──────┐
+│ Linux │    │Windows│    │  macOS  │       │  Android  │    │   Remote    │
+│ /proc │    │ WMI   │    │sysctl/  │       │  /proc +  │    │    SSH      │
+│ /sys  │    │ PDH   │    │IOKit    │       │  Android  │    │   Agent     │
+└───────┘    └───────┘    └─────────┘       │   APIs    │    └─────────────┘
+                                            └───────────┘
+```
+
+**Platform Interface Definition:**
+
+```go
+package platform
+
+import (
+    "context"
+    "time"
+)
+
+// Platform defines the interface for OS-specific system monitoring.
+// Each supported operating system implements this interface to provide
+// unified access to system metrics.
+type Platform interface {
+    // Name returns the platform identifier (e.g., "linux", "windows", "darwin", "android")
+    Name() string
+    
+    // Initialize prepares the platform for data collection.
+    // Returns an error if the platform cannot be initialized.
+    Initialize(ctx context.Context) error
+    
+    // Close releases any platform-specific resources.
+    Close() error
+    
+    // CPU returns the CPU metrics provider for this platform.
+    CPU() CPUProvider
+    
+    // Memory returns the memory metrics provider for this platform.
+    Memory() MemoryProvider
+    
+    // Network returns the network metrics provider for this platform.
+    Network() NetworkProvider
+    
+    // Filesystem returns the filesystem metrics provider for this platform.
+    Filesystem() FilesystemProvider
+    
+    // Battery returns the battery metrics provider for this platform.
+    // Returns nil if battery monitoring is not supported.
+    Battery() BatteryProvider
+    
+    // Sensors returns the hardware sensors provider for this platform.
+    // Returns nil if sensor monitoring is not supported.
+    Sensors() SensorProvider
+}
+
+// CPUProvider defines the interface for CPU metrics collection.
+type CPUProvider interface {
+    // Usage returns CPU usage percentages for all cores.
+    Usage() ([]float64, error)
+    
+    // TotalUsage returns the aggregate CPU usage percentage.
+    TotalUsage() (float64, error)
+    
+    // Frequency returns CPU frequencies in MHz for all cores.
+    Frequency() ([]float64, error)
+    
+    // Info returns static CPU information (model, cores, etc.).
+    Info() (*CPUInfo, error)
+    
+    // LoadAverage returns 1, 5, and 15 minute load averages.
+    // Returns an error on platforms that don't support load average (Windows).
+    LoadAverage() (float64, float64, float64, error)
+}
+
+// MemoryProvider defines the interface for memory metrics collection.
+type MemoryProvider interface {
+    // Stats returns current memory statistics.
+    Stats() (*MemoryStats, error)
+    
+    // SwapStats returns swap/page file statistics.
+    SwapStats() (*SwapStats, error)
+}
+
+// NetworkProvider defines the interface for network metrics collection.
+type NetworkProvider interface {
+    // Interfaces returns a list of network interface names.
+    Interfaces() ([]string, error)
+    
+    // Stats returns network statistics for a specific interface.
+    Stats(interfaceName string) (*NetworkStats, error)
+    
+    // AllStats returns network statistics for all interfaces.
+    AllStats() (map[string]*NetworkStats, error)
+}
+
+// FilesystemProvider defines the interface for filesystem metrics collection.
+type FilesystemProvider interface {
+    // Mounts returns a list of mounted filesystems.
+    Mounts() ([]MountInfo, error)
+    
+    // Stats returns filesystem statistics for a specific mount point.
+    Stats(mountPoint string) (*FilesystemStats, error)
+    
+    // DiskIO returns disk I/O statistics for a specific device.
+    DiskIO(device string) (*DiskIOStats, error)
+}
+
+// BatteryProvider defines the interface for battery metrics collection.
+type BatteryProvider interface {
+    // Count returns the number of batteries in the system.
+    Count() int
+    
+    // Stats returns battery statistics for a specific battery index.
+    Stats(index int) (*BatteryStats, error)
+}
+
+// SensorProvider defines the interface for hardware sensor metrics collection.
+type SensorProvider interface {
+    // Temperatures returns all temperature sensor readings.
+    Temperatures() ([]SensorReading, error)
+    
+    // Fans returns all fan speed sensor readings.
+    Fans() ([]SensorReading, error)
+}
+
+// Data types for platform metrics
+
+// CPUInfo contains static CPU information.
+type CPUInfo struct {
+    Model       string
+    Vendor      string
+    Cores       int
+    Threads     int
+    CacheSize   int64 // in bytes
+}
+
+// MemoryStats contains memory usage statistics.
+type MemoryStats struct {
+    Total       uint64
+    Used        uint64
+    Free        uint64
+    Available   uint64
+    Cached      uint64
+    Buffers     uint64
+    UsedPercent float64
+}
+
+// SwapStats contains swap/page file statistics.
+type SwapStats struct {
+    Total       uint64
+    Used        uint64
+    Free        uint64
+    UsedPercent float64
+}
+
+// NetworkStats contains network interface statistics.
+type NetworkStats struct {
+    BytesRecv   uint64
+    BytesSent   uint64
+    PacketsRecv uint64
+    PacketsSent uint64
+    ErrorsIn    uint64
+    ErrorsOut   uint64
+    DropIn      uint64
+    DropOut     uint64
+}
+
+// MountInfo contains filesystem mount information.
+type MountInfo struct {
+    Device     string
+    MountPoint string
+    FSType     string
+    Options    []string
+}
+
+// FilesystemStats contains filesystem usage statistics.
+type FilesystemStats struct {
+    Total       uint64
+    Used        uint64
+    Free        uint64
+    UsedPercent float64
+    InodesTotal uint64
+    InodesUsed  uint64
+    InodesFree  uint64
+}
+
+// DiskIOStats contains disk I/O statistics.
+type DiskIOStats struct {
+    ReadBytes   uint64
+    WriteBytes  uint64
+    ReadCount   uint64
+    WriteCount  uint64
+    ReadTime    time.Duration
+    WriteTime   time.Duration
+}
+
+// BatteryStats contains battery status information.
+type BatteryStats struct {
+    Percent      float64
+    TimeRemaining time.Duration
+    Charging     bool
+    FullCapacity uint64
+    Current      uint64
+    Voltage      float64
+}
+
+// SensorReading contains a sensor reading with metadata.
+type SensorReading struct {
+    Name        string
+    Label       string
+    Value       float64
+    Unit        string
+    Critical    float64 // threshold value (0 if not available)
+}
+```
+
+**Platform Factory Pattern:**
+
+```go
+package platform
+
+import (
+    "context"
+    "fmt"
+    "runtime"
+)
+
+// NewPlatform creates the appropriate Platform implementation for the current OS.
+// Returns an error if the current platform is not supported.
+func NewPlatform() (Platform, error) {
+    return NewPlatformForOS(runtime.GOOS)
+}
+
+// NewPlatformForOS creates a Platform implementation for the specified OS.
+// This is useful for testing or when working with remote systems.
+func NewPlatformForOS(goos string) (Platform, error) {
+    switch goos {
+    case "linux":
+        return NewLinuxPlatform(), nil
+    case "windows":
+        return NewWindowsPlatform(), nil
+    case "darwin":
+        return NewDarwinPlatform(), nil
+    case "android":
+        return NewAndroidPlatform(), nil
+    default:
+        return nil, fmt.Errorf("unsupported platform: %s", goos)
+    }
+}
+
+// NewRemotePlatform creates a Platform that collects data from a remote system via SSH.
+// The remote system does not need go-conky installed; data is collected using
+// standard shell commands and parsed locally.
+func NewRemotePlatform(config RemoteConfig) (Platform, error) {
+    return newSSHPlatform(config)
+}
+
+// RemoteConfig specifies connection parameters for remote monitoring.
+type RemoteConfig struct {
+    // Host is the hostname or IP address of the remote system.
+    Host string
+    
+    // Port is the SSH port (default: 22).
+    Port int
+    
+    // User is the SSH username.
+    User string
+    
+    // AuthMethod specifies how to authenticate.
+    AuthMethod AuthMethod
+    
+    // TargetOS specifies the operating system of the remote host.
+    // Auto-detected if empty.
+    TargetOS string
+    
+    // CommandTimeout is the timeout for individual commands (default: 5s).
+    CommandTimeout time.Duration
+    
+    // ReconnectInterval is how often to attempt reconnection on failure (default: 30s).
+    ReconnectInterval time.Duration
+}
+
+// AuthMethod defines SSH authentication methods.
+type AuthMethod interface {
+    isAuthMethod()
+}
+
+// PasswordAuth authenticates using a password.
+type PasswordAuth struct {
+    Password string
+}
+
+func (PasswordAuth) isAuthMethod() {}
+
+// KeyAuth authenticates using an SSH private key.
+type KeyAuth struct {
+    PrivateKeyPath string
+    Passphrase     string // optional, for encrypted keys
+}
+
+func (KeyAuth) isAuthMethod() {}
+
+// AgentAuth authenticates using the SSH agent.
+type AgentAuth struct{}
+
+func (AgentAuth) isAuthMethod() {}
+```
+
+**Linux Platform Implementation:**
+
+```go
+package platform
+
+import (
+    "bufio"
+    "context"
+    "fmt"
+    "os"
+    "strconv"
+    "strings"
+    "sync"
+)
+
+// linuxPlatform implements Platform for Linux systems.
+type linuxPlatform struct {
+    ctx       context.Context
+    cancel    context.CancelFunc
+    mu        sync.RWMutex
+    cpu       *linuxCPUProvider
+    memory    *linuxMemoryProvider
+    network   *linuxNetworkProvider
+    filesystem *linuxFilesystemProvider
+    battery   *linuxBatteryProvider
+    sensors   *linuxSensorProvider
+}
+
+// NewLinuxPlatform creates a new Linux platform implementation.
+func NewLinuxPlatform() Platform {
+    return &linuxPlatform{}
+}
+
+func (p *linuxPlatform) Name() string {
+    return "linux"
+}
+
+func (p *linuxPlatform) Initialize(ctx context.Context) error {
+    p.ctx, p.cancel = context.WithCancel(ctx)
+    
+    // Initialize providers
+    p.cpu = newLinuxCPUProvider()
+    p.memory = newLinuxMemoryProvider()
+    p.network = newLinuxNetworkProvider()
+    p.filesystem = newLinuxFilesystemProvider()
+    p.battery = newLinuxBatteryProvider()
+    p.sensors = newLinuxSensorProvider()
+    
+    return nil
+}
+
+func (p *linuxPlatform) Close() error {
+    if p.cancel != nil {
+        p.cancel()
+    }
+    return nil
+}
+
+func (p *linuxPlatform) CPU() CPUProvider { return p.cpu }
+func (p *linuxPlatform) Memory() MemoryProvider { return p.memory }
+func (p *linuxPlatform) Network() NetworkProvider { return p.network }
+func (p *linuxPlatform) Filesystem() FilesystemProvider { return p.filesystem }
+func (p *linuxPlatform) Battery() BatteryProvider { return p.battery }
+func (p *linuxPlatform) Sensors() SensorProvider { return p.sensors }
+
+// linuxCPUProvider reads CPU metrics from /proc/stat and /proc/cpuinfo.
+type linuxCPUProvider struct {
+    mu          sync.Mutex
+    prevStats   map[int]cpuTimes
+}
+
+type cpuTimes struct {
+    user, nice, system, idle, iowait, irq, softirq, steal uint64
+}
+
+func newLinuxCPUProvider() *linuxCPUProvider {
+    return &linuxCPUProvider{
+        prevStats: make(map[int]cpuTimes),
+    }
+}
+
+func (c *linuxCPUProvider) Usage() ([]float64, error) {
+    return c.readCPUUsage()
+}
+
+func (c *linuxCPUProvider) TotalUsage() (float64, error) {
+    usages, err := c.readCPUUsage()
+    if err != nil {
+        return 0, err
+    }
+    if len(usages) == 0 {
+        return 0, nil
+    }
+    
+    var total float64
+    for _, u := range usages {
+        total += u
+    }
+    return total / float64(len(usages)), nil
+}
+
+func (c *linuxCPUProvider) readCPUUsage() ([]float64, error) {
+    f, err := os.Open("/proc/stat")
+    if err != nil {
+        return nil, fmt.Errorf("failed to open /proc/stat: %w", err)
+    }
+    defer f.Close()
+    
+    var usages []float64
+    scanner := bufio.NewScanner(f)
+    
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    
+    for scanner.Scan() {
+        line := scanner.Text()
+        if !strings.HasPrefix(line, "cpu") {
+            break
+        }
+        
+        // Skip aggregate "cpu" line (no number suffix), process "cpu0", "cpu1", etc.
+        fields := strings.Fields(line)
+        if len(fields) < 8 {
+            continue
+        }
+        
+        // The aggregate line has "cpu" as field[0], individual cores have "cpuN"
+        if fields[0] == "cpu" {
+            continue
+        }
+        
+        cpuNum, err := strconv.Atoi(strings.TrimPrefix(fields[0], "cpu"))
+        if err != nil {
+            continue
+        }
+        
+        current := cpuTimes{
+            user:    parseUint64(fields[1]),
+            nice:    parseUint64(fields[2]),
+            system:  parseUint64(fields[3]),
+            idle:    parseUint64(fields[4]),
+            iowait:  parseUint64(fields[5]),
+            irq:     parseUint64(fields[6]),
+            softirq: parseUint64(fields[7]),
+        }
+        if len(fields) > 8 {
+            current.steal = parseUint64(fields[8])
+        }
+        
+        prev, exists := c.prevStats[cpuNum]
+        c.prevStats[cpuNum] = current
+        
+        if !exists {
+            usages = append(usages, 0)
+            continue
+        }
+        
+        // Calculate usage percentage
+        totalDelta := float64(
+            (current.user - prev.user) +
+            (current.nice - prev.nice) +
+            (current.system - prev.system) +
+            (current.idle - prev.idle) +
+            (current.iowait - prev.iowait) +
+            (current.irq - prev.irq) +
+            (current.softirq - prev.softirq) +
+            (current.steal - prev.steal))
+        
+        idleDelta := float64(current.idle - prev.idle + current.iowait - prev.iowait)
+        
+        if totalDelta > 0 {
+            usages = append(usages, 100*(1-idleDelta/totalDelta))
+        } else {
+            usages = append(usages, 0)
+        }
+    }
+    
+    return usages, nil
+}
+
+func parseUint64(s string) uint64 {
+    v, _ := strconv.ParseUint(s, 10, 64)
+    return v
+}
+```
+
+**Windows Platform Implementation:**
+
+```go
+package platform
+
+import (
+    "context"
+    "fmt"
+    "sync"
+    "syscall"
+    "unsafe"
+)
+
+// windowsPlatform implements Platform for Windows systems.
+// It uses Windows Management Instrumentation (WMI) and Performance Data Helper (PDH)
+// for system metrics collection.
+type windowsPlatform struct {
+    ctx        context.Context
+    cancel     context.CancelFunc
+    mu         sync.RWMutex
+    cpu        *windowsCPUProvider
+    memory     *windowsMemoryProvider
+    network    *windowsNetworkProvider
+    filesystem *windowsFilesystemProvider
+    battery    *windowsBatteryProvider
+    sensors    *windowsSensorProvider
+}
+
+// NewWindowsPlatform creates a new Windows platform implementation.
+func NewWindowsPlatform() Platform {
+    return &windowsPlatform{}
+}
+
+func (p *windowsPlatform) Name() string {
+    return "windows"
+}
+
+func (p *windowsPlatform) Initialize(ctx context.Context) error {
+    p.ctx, p.cancel = context.WithCancel(ctx)
+    
+    // Initialize PDH (Performance Data Helper) for CPU metrics
+    p.cpu = newWindowsCPUProvider()
+    p.memory = newWindowsMemoryProvider()
+    p.network = newWindowsNetworkProvider()
+    p.filesystem = newWindowsFilesystemProvider()
+    p.battery = newWindowsBatteryProvider()
+    p.sensors = newWindowsSensorProvider()
+    
+    return nil
+}
+
+func (p *windowsPlatform) Close() error {
+    if p.cancel != nil {
+        p.cancel()
+    }
+    // Close PDH query handles
+    if p.cpu != nil {
+        p.cpu.close()
+    }
+    return nil
+}
+
+func (p *windowsPlatform) CPU() CPUProvider { return p.cpu }
+func (p *windowsPlatform) Memory() MemoryProvider { return p.memory }
+func (p *windowsPlatform) Network() NetworkProvider { return p.network }
+func (p *windowsPlatform) Filesystem() FilesystemProvider { return p.filesystem }
+func (p *windowsPlatform) Battery() BatteryProvider { return p.battery }
+func (p *windowsPlatform) Sensors() SensorProvider { return p.sensors }
+
+// windowsMemoryProvider uses GlobalMemoryStatusEx for memory metrics.
+type windowsMemoryProvider struct{}
+
+func newWindowsMemoryProvider() *windowsMemoryProvider {
+    return &windowsMemoryProvider{}
+}
+
+// MEMORYSTATUSEX structure for GlobalMemoryStatusEx
+type memoryStatusEx struct {
+    dwLength                uint32
+    dwMemoryLoad            uint32
+    ullTotalPhys            uint64
+    ullAvailPhys            uint64
+    ullTotalPageFile        uint64
+    ullAvailPageFile        uint64
+    ullTotalVirtual         uint64
+    ullAvailVirtual         uint64
+    ullAvailExtendedVirtual uint64
+}
+
+func (m *windowsMemoryProvider) Stats() (*MemoryStats, error) {
+    kernel32 := syscall.NewLazyDLL("kernel32.dll")
+    globalMemoryStatusEx := kernel32.NewProc("GlobalMemoryStatusEx")
+    
+    var memStatus memoryStatusEx
+    memStatus.dwLength = uint32(unsafe.Sizeof(memStatus))
+    
+    ret, _, err := globalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&memStatus)))
+    if ret == 0 {
+        return nil, fmt.Errorf("GlobalMemoryStatusEx failed: %w", err)
+    }
+    
+    return &MemoryStats{
+        Total:       memStatus.ullTotalPhys,
+        Available:   memStatus.ullAvailPhys,
+        Used:        memStatus.ullTotalPhys - memStatus.ullAvailPhys,
+        Free:        memStatus.ullAvailPhys,
+        UsedPercent: float64(memStatus.dwMemoryLoad),
+    }, nil
+}
+
+func (m *windowsMemoryProvider) SwapStats() (*SwapStats, error) {
+    kernel32 := syscall.NewLazyDLL("kernel32.dll")
+    globalMemoryStatusEx := kernel32.NewProc("GlobalMemoryStatusEx")
+    
+    var memStatus memoryStatusEx
+    memStatus.dwLength = uint32(unsafe.Sizeof(memStatus))
+    
+    ret, _, err := globalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&memStatus)))
+    if ret == 0 {
+        return nil, fmt.Errorf("GlobalMemoryStatusEx failed: %w", err)
+    }
+    
+    // Calculate page file (swap) size - check for underflow since these are uint64
+    var pageFileTotal, pageFileAvail uint64
+    if memStatus.ullTotalPageFile > memStatus.ullTotalPhys &&
+       memStatus.ullAvailPageFile > memStatus.ullAvailPhys {
+        pageFileTotal = memStatus.ullTotalPageFile - memStatus.ullTotalPhys
+        pageFileAvail = memStatus.ullAvailPageFile - memStatus.ullAvailPhys
+    } else {
+        // Fallback: use total page file values when subtraction would underflow
+        pageFileTotal = memStatus.ullTotalPageFile
+        pageFileAvail = memStatus.ullAvailPageFile
+    }
+    
+    // Ensure we don't underflow on used calculation
+    var used uint64
+    if pageFileTotal > pageFileAvail {
+        used = pageFileTotal - pageFileAvail
+    }
+    var usedPercent float64
+    if pageFileTotal > 0 {
+        usedPercent = float64(used) / float64(pageFileTotal) * 100
+    }
+    
+    return &SwapStats{
+        Total:       pageFileTotal,
+        Used:        used,
+        Free:        pageFileAvail,
+        UsedPercent: usedPercent,
+    }, nil
+}
+```
+
+### 3.6 Remote Monitoring Architecture
+
+**SSH-Based Remote Monitoring:**
+
+The remote monitoring feature allows go-conky to collect system metrics from remote machines via SSH without requiring go-conky to be installed on the target system. This is achieved by executing standard shell commands and parsing their output locally.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Local go-conky Instance                        │
+│  ┌──────────────┐    ┌───────────────┐    ┌─────────────────────┐  │
+│  │ Remote       │    │ SSH Connection│    │ Command             │  │
+│  │ Platform     │────│ Manager       │────│ Executor            │  │
+│  │ Interface    │    │               │    │                     │  │
+│  └──────────────┘    └───────────────┘    └─────────────────────┘  │
+│         │                    │                      │               │
+└─────────┼────────────────────┼──────────────────────┼───────────────┘
+          │                    │                      │
+          │              SSH Connection               │
+          │                    │                      │
+          ▼                    ▼                      ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Remote System (any OS)                         │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │                  Standard Shell Commands                        │ │
+│  │  • Linux: cat /proc/stat, free -b, df -B1                      │ │
+│  │  • macOS: sysctl, vm_stat, df                                  │ │
+│  │  • Windows (PowerShell): Get-Process, Get-WmiObject            │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**SSH Platform Implementation:**
+
+```go
+package platform
+
+import (
+    "bytes"
+    "context"
+    "fmt"
+    "net"
+    "os"
+    "strings"
+    "sync"
+    "time"
+
+    "golang.org/x/crypto/ssh"
+    "golang.org/x/crypto/ssh/agent"
+)
+
+// sshPlatform implements Platform for remote systems via SSH.
+type sshPlatform struct {
+    config     RemoteConfig
+    client     *ssh.Client
+    targetOS   string
+    ctx        context.Context
+    cancel     context.CancelFunc
+    mu         sync.RWMutex
+    cmdTimeout time.Duration
+}
+
+func newSSHPlatform(config RemoteConfig) (*sshPlatform, error) {
+    // Set defaults
+    if config.Port == 0 {
+        config.Port = 22
+    }
+    if config.CommandTimeout == 0 {
+        config.CommandTimeout = 5 * time.Second
+    }
+    if config.ReconnectInterval == 0 {
+        config.ReconnectInterval = 30 * time.Second
+    }
+    
+    p := &sshPlatform{
+        config:     config,
+        cmdTimeout: config.CommandTimeout,
+    }
+    
+    return p, nil
+}
+
+func (p *sshPlatform) Name() string {
+    return fmt.Sprintf("remote-%s", p.targetOS)
+}
+
+func (p *sshPlatform) Initialize(ctx context.Context) error {
+    p.ctx, p.cancel = context.WithCancel(ctx)
+    
+    // Build SSH client config
+    sshConfig, err := p.buildSSHConfig()
+    if err != nil {
+        return fmt.Errorf("failed to build SSH config: %w", err)
+    }
+    
+    // Connect to remote host
+    addr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
+    client, err := ssh.Dial("tcp", addr, sshConfig)
+    if err != nil {
+        return fmt.Errorf("failed to connect to %s: %w", addr, err)
+    }
+    p.client = client
+    
+    // Auto-detect target OS if not specified
+    if p.config.TargetOS == "" {
+        p.targetOS, err = p.detectOS()
+        if err != nil {
+            p.client.Close()
+            return fmt.Errorf("failed to detect remote OS: %w", err)
+        }
+    } else {
+        p.targetOS = p.config.TargetOS
+    }
+    
+    return nil
+}
+
+func (p *sshPlatform) buildSSHConfig() (*ssh.ClientConfig, error) {
+    var authMethods []ssh.AuthMethod
+    
+    switch auth := p.config.AuthMethod.(type) {
+    case PasswordAuth:
+        authMethods = append(authMethods, ssh.Password(auth.Password))
+    case KeyAuth:
+        key, err := os.ReadFile(auth.PrivateKeyPath)
+        if err != nil {
+            return nil, fmt.Errorf("failed to read private key: %w", err)
+        }
+        var signer ssh.Signer
+        if auth.Passphrase != "" {
+            signer, err = ssh.ParsePrivateKeyWithPassphrase(key, []byte(auth.Passphrase))
+        } else {
+            signer, err = ssh.ParsePrivateKey(key)
+        }
+        if err != nil {
+            return nil, fmt.Errorf("failed to parse private key: %w", err)
+        }
+        authMethods = append(authMethods, ssh.PublicKeys(signer))
+    case AgentAuth:
+        socket := os.Getenv("SSH_AUTH_SOCK")
+        if socket == "" {
+            return nil, fmt.Errorf("SSH_AUTH_SOCK not set")
+        }
+        agentConn, err := net.Dial("unix", socket)
+        if err != nil {
+            return nil, fmt.Errorf("failed to connect to SSH agent: %w", err)
+        }
+        // Use the agent package to create a proper SSH agent client
+        agentClient := agent.NewClient(agentConn)
+        authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
+    default:
+        return nil, fmt.Errorf("unsupported auth method type: %T", auth)
+    }
+    
+    return &ssh.ClientConfig{
+        User:            p.config.User,
+        Auth:            authMethods,
+        // NOTE: For production use, implement proper host key verification.
+        // Options include: using known_hosts file, prompting user for verification,
+        // or implementing a custom HostKeyCallback that validates against a trusted CA.
+        // Example: ssh.FixedHostKey(knownHostKey) or custom verification callback.
+        HostKeyCallback: ssh.InsecureIgnoreHostKey(), // SECURITY: Replace in production
+        Timeout:         10 * time.Second,
+    }, nil
+}
+
+func (p *sshPlatform) detectOS() (string, error) {
+    // Try uname first (works on Linux, macOS, BSD)
+    output, err := p.runCommand("uname -s")
+    if err == nil {
+        os := strings.TrimSpace(output)
+        switch strings.ToLower(os) {
+        case "linux":
+            return "linux", nil
+        case "darwin":
+            return "darwin", nil
+        }
+    }
+    
+    // Try Windows detection via PowerShell
+    output, err = p.runCommand("$env:OS")
+    if err == nil && strings.Contains(output, "Windows") {
+        return "windows", nil
+    }
+    
+    return "", fmt.Errorf("unable to detect remote OS")
+}
+
+func (p *sshPlatform) runCommand(cmd string) (string, error) {
+    p.mu.RLock()
+    client := p.client
+    p.mu.RUnlock()
+    
+    if client == nil {
+        return "", fmt.Errorf("SSH client not connected")
+    }
+    
+    session, err := client.NewSession()
+    if err != nil {
+        return "", fmt.Errorf("failed to create session: %w", err)
+    }
+    defer session.Close()
+    
+    var stdout, stderr bytes.Buffer
+    session.Stdout = &stdout
+    session.Stderr = &stderr
+    
+    // Run command with timeout
+    done := make(chan error, 1)
+    go func() {
+        done <- session.Run(cmd)
+    }()
+    
+    select {
+    case err := <-done:
+        if err != nil {
+            return "", fmt.Errorf("command failed: %w (stderr: %s)", err, stderr.String())
+        }
+        return stdout.String(), nil
+    case <-time.After(p.cmdTimeout):
+        return "", fmt.Errorf("command timed out after %v", p.cmdTimeout)
+    case <-p.ctx.Done():
+        return "", p.ctx.Err()
+    }
+}
+
+func (p *sshPlatform) Close() error {
+    if p.cancel != nil {
+        p.cancel()
+    }
+    p.mu.Lock()
+    defer p.mu.Unlock()
+    if p.client != nil {
+        err := p.client.Close()
+        p.client = nil
+        return err
+    }
+    return nil
+}
+
+func (p *sshPlatform) CPU() CPUProvider { 
+    return newRemoteCPUProvider(p)
+}
+
+func (p *sshPlatform) Memory() MemoryProvider { 
+    return newRemoteMemoryProvider(p)
+}
+
+func (p *sshPlatform) Network() NetworkProvider { 
+    return newRemoteNetworkProvider(p)
+}
+
+func (p *sshPlatform) Filesystem() FilesystemProvider { 
+    return newRemoteFilesystemProvider(p)
+}
+
+func (p *sshPlatform) Battery() BatteryProvider { 
+    return nil // Battery monitoring typically not needed for remote servers
+}
+
+func (p *sshPlatform) Sensors() SensorProvider { 
+    return newRemoteSensorProvider(p)
+}
+
+// remoteCPUProvider collects CPU metrics from remote Linux systems via SSH.
+type remoteCPUProvider struct {
+    platform  *sshPlatform
+    mu        sync.Mutex
+    prevStats map[int]cpuTimes
+}
+
+func newRemoteCPUProvider(p *sshPlatform) *remoteCPUProvider {
+    return &remoteCPUProvider{
+        platform:  p,
+        prevStats: make(map[int]cpuTimes),
+    }
+}
+
+func (c *remoteCPUProvider) TotalUsage() (float64, error) {
+    output, err := c.platform.runCommand("cat /proc/stat | head -1")
+    if err != nil {
+        return 0, err
+    }
+    
+    // Parse "cpu  user nice system idle iowait irq softirq steal"
+    fields := strings.Fields(output)
+    if len(fields) < 5 {
+        return 0, fmt.Errorf("unexpected /proc/stat format")
+    }
+    
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    
+    current := cpuTimes{
+        user:   parseUint64(fields[1]),
+        nice:   parseUint64(fields[2]),
+        system: parseUint64(fields[3]),
+        idle:   parseUint64(fields[4]),
+    }
+    if len(fields) > 5 {
+        current.iowait = parseUint64(fields[5])
+    }
+    if len(fields) > 6 {
+        current.irq = parseUint64(fields[6])
+    }
+    if len(fields) > 7 {
+        current.softirq = parseUint64(fields[7])
+    }
+    if len(fields) > 8 {
+        current.steal = parseUint64(fields[8])
+    }
+    
+    prev, exists := c.prevStats[-1] // -1 for aggregate CPU
+    c.prevStats[-1] = current
+    
+    if !exists {
+        return 0, nil
+    }
+    
+    totalDelta := float64(
+        (current.user - prev.user) +
+        (current.nice - prev.nice) +
+        (current.system - prev.system) +
+        (current.idle - prev.idle) +
+        (current.iowait - prev.iowait) +
+        (current.irq - prev.irq) +
+        (current.softirq - prev.softirq) +
+        (current.steal - prev.steal))
+    
+    idleDelta := float64(current.idle - prev.idle + current.iowait - prev.iowait)
+    
+    if totalDelta > 0 {
+        return 100 * (1 - idleDelta/totalDelta), nil
+    }
+    return 0, nil
+}
+```
+
+**Remote Monitoring Configuration Example:**
+
+```go
+// Example: Monitor a remote Linux server
+remoteConfig := platform.RemoteConfig{
+    Host:     "server.example.com",
+    Port:     22,
+    User:     "monitor",
+    AuthMethod: platform.KeyAuth{
+        PrivateKeyPath: "/home/user/.ssh/id_rsa",
+    },
+    CommandTimeout: 5 * time.Second,
+}
+
+remotePlatform, err := platform.NewRemotePlatform(remoteConfig)
+if err != nil {
+    log.Fatalf("Failed to create remote platform: %v", err)
+}
+
+if err := remotePlatform.Initialize(context.Background()); err != nil {
+    log.Fatalf("Failed to initialize remote platform: %v", err)
+}
+defer remotePlatform.Close()
+
+// Use the remote platform like any local platform
+cpuUsage, _ := remotePlatform.CPU().TotalUsage()
+memStats, _ := remotePlatform.Memory().Stats()
+fmt.Printf("Remote CPU: %.1f%%, Memory: %.1f%%\n", cpuUsage, memStats.UsedPercent)
+```
+
 ## 4. COMPATIBILITY VERIFICATION
 
 ### 4.1 Test Configuration Suite
@@ -550,6 +1685,25 @@ func (sm *SystemMonitor) updateSystemData() {
 | Network monitoring | Complete | P1 | Interface statistics in internal/monitor/network.go |
 | Temperature sensors | Complete | P2 | hwmon integration in internal/monitor/hwmon.go |
 | Audio integration | Complete | P2 | ALSA support in internal/monitor/audio.go |
+| Cross-platform support | Planned | P1 | Phase 7: Platform interface in internal/platform/ |
+| Windows monitoring | Planned | P1 | Phase 7: WMI/PDH integration |
+| macOS monitoring | Planned | P1 | Phase 7: sysctl/IOKit integration |
+| Android monitoring | Planned | P2 | Phase 7: Android APIs + /proc parsing |
+| Remote SSH monitoring | Planned | P2 | Phase 7: SSH-based data collection |
+
+### 4.3 Cross-Platform Compatibility Matrix
+
+| Feature | Linux | Windows | macOS | Android | Remote/SSH |
+|---------|-------|---------|-------|---------|------------|
+| CPU usage | ✓ | Planned | Planned | Planned | Planned |
+| Memory stats | ✓ | Planned | Planned | Planned | Planned |
+| Network I/O | ✓ | Planned | Planned | Planned | Planned |
+| Filesystem usage | ✓ | Planned | Planned | Planned | Planned |
+| Battery status | ✓ | Planned | Planned | Planned | N/A |
+| Temperature sensors | ✓ | Planned | Planned | Limited | Planned |
+| Process list | ✓ | Planned | Planned | Limited | Planned |
+| GPU monitoring | Limited | Planned | Planned | N/A | N/A |
+| Window rendering | X11/Wayland | Planned | Planned | Planned | N/A |
 
 ## 5. DEVELOPMENT INFRASTRUCTURE
 
@@ -569,6 +1723,32 @@ conky-go/
 │   │   ├── memory.go
 │   │   ├── network.go
 │   │   └── filesystem.go
+│   ├── platform/              # Cross-platform abstraction (Phase 7)
+│   │   ├── platform.go        # Platform interface definitions
+│   │   ├── factory.go         # Platform factory pattern
+│   │   ├── linux.go           # Linux implementation
+│   │   ├── linux_cpu.go
+│   │   ├── linux_memory.go
+│   │   ├── linux_network.go
+│   │   ├── linux_filesystem.go
+│   │   ├── windows.go         # Windows implementation
+│   │   ├── windows_cpu.go
+│   │   ├── windows_memory.go
+│   │   ├── windows_network.go
+│   │   ├── windows_filesystem.go
+│   │   ├── darwin.go          # macOS implementation
+│   │   ├── darwin_cpu.go
+│   │   ├── darwin_memory.go
+│   │   ├── darwin_network.go
+│   │   ├── darwin_filesystem.go
+│   │   ├── android.go         # Android implementation
+│   │   ├── android_cpu.go
+│   │   ├── android_memory.go
+│   │   ├── remote.go          # SSH remote monitoring
+│   │   ├── remote_ssh.go
+│   │   ├── remote_cpu.go
+│   │   ├── remote_memory.go
+│   │   └── remote_network.go
 │   ├── render/                # Ebiten rendering
 │   │   ├── game.go
 │   │   ├── cairo.go
@@ -579,20 +1759,30 @@ conky-go/
 │   │   └── cairo_bindings.go
 │   └── window/                # Window management
 │       ├── x11.go
-│       └── wayland.go
+│       ├── wayland.go
+│       ├── windows.go         # Windows window management (Phase 7)
+│       ├── darwin.go          # macOS window management (Phase 7)
+│       └── android.go         # Android surface management (Phase 7)
 ├── pkg/
 │   └── conkylib/              # Public API for extensions
 ├── test/
 │   ├── configs/               # Test configurations
 │   ├── integration/           # Integration tests
-│   └── benchmarks/            # Performance tests
+│   ├── benchmarks/            # Performance tests
+│   └── platform/              # Platform-specific tests (Phase 7)
+│       ├── linux_test.go
+│       ├── windows_test.go
+│       ├── darwin_test.go
+│       └── remote_test.go
 ├── docs/
 │   ├── architecture.md
 │   ├── migration.md
-│   └── api.md
+│   ├── api.md
+│   └── cross-platform.md      # Cross-platform documentation (Phase 7)
 ├── scripts/
 │   ├── build.sh
-│   └── test.sh
+│   ├── test.sh
+│   └── cross-build.sh         # Cross-platform build script (Phase 7)
 ├── go.mod
 ├── go.sum
 ├── Makefile
@@ -643,6 +1833,39 @@ lint:
 coverage:
 	@go test -coverprofile=coverage.out ./...
 	@go tool cover -html=coverage.out -o coverage.html
+
+# Cross-platform build targets (Phase 7)
+build-linux:
+	@echo "Building for Linux (amd64)..."
+	@GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/conky-go
+	@echo "Building for Linux (arm64)..."
+	@GOOS=linux GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/conky-go
+
+build-windows:
+	@echo "Building for Windows (amd64)..."
+	@GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/conky-go
+
+build-darwin:
+	@echo "Building for macOS (amd64)..."
+	@GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/conky-go
+	@echo "Building for macOS (arm64)..."
+	@GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/conky-go
+
+build-android:
+	@echo "Building for Android (arm64)..."
+	@GOOS=android GOARCH=arm64 CGO_ENABLED=1 go build -o $(BUILD_DIR)/$(BINARY_NAME)-android-arm64 ./cmd/conky-go
+
+build-all: build-linux build-windows build-darwin
+	@echo "All platform builds complete."
+
+# Platform-specific tests (Phase 7)
+test-platform:
+	@echo "Running platform-specific tests..."
+	@go test -v ./internal/platform/...
+
+test-remote:
+	@echo "Running remote monitoring tests..."
+	@go test -v ./internal/platform/... -run Remote
 ```
 
 ### 5.3 CI/CD Pipeline
@@ -689,6 +1912,80 @@ jobs:
       with:
         name: conky-go-binary
         path: build/conky-go
+
+  # Cross-platform CI jobs (Phase 7)
+  test-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.21
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run platform tests
+      run: go test -v ./internal/platform/...
+      
+    - name: Build Windows binary
+      run: go build -o build/conky-go.exe ./cmd/conky-go
+      
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: conky-go-windows
+        path: build/conky-go.exe
+
+  test-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.21
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run platform tests
+      run: go test -v ./internal/platform/...
+      
+    - name: Build macOS binary
+      run: go build -o build/conky-go-darwin ./cmd/conky-go
+      
+    - name: Upload macOS artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: conky-go-macos
+        path: build/conky-go-darwin
+
+  cross-compile:
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.21
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Build all platforms
+      run: make build-all
+      
+    - name: Upload all artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: conky-go-all-platforms
+        path: build/
 ```
 
 ## 6. RISK MITIGATION
@@ -702,12 +1999,25 @@ jobs:
 | Cairo API complexity (180+ functions) | High | Medium | Prioritize most-used functions, implement incrementally with fallbacks |
 | Configuration compatibility issues | High | Low | Extensive testing with real configs, maintain compatibility matrix |
 | X11/Wayland integration complexity | Medium | Medium | Use existing Go libraries, focus on X11 first then add Wayland |
+| Cross-platform API differences | High | High | Use Platform interface abstraction, comprehensive platform-specific tests |
+| Windows system calls complexity | Medium | Medium | Use WMI/PDH APIs, leverage existing Go Windows packages |
+| macOS IOKit/sysctl variations | Medium | Medium | Version detection, graceful fallbacks for missing APIs |
+| Android security restrictions | Medium | High | Request necessary permissions, handle permission denials gracefully |
+| SSH connection reliability | Medium | Medium | Implement reconnection logic, connection pooling, timeout handling |
 
 ### 6.2 Compatibility Risks
 - **Legacy configuration syntax**: Extensive parser testing with corner cases
 - **Lua script behavior differences**: Golua has different error messages than standard Lua
 - **Cairo rendering precision**: Potential floating-point differences in drawing operations
 - **Font rendering differences**: May need custom font handling for exact compatibility
+
+### 6.3 Cross-Platform Risks
+- **Platform-specific rendering**: Ebiten handles cross-platform rendering, but window management differs
+- **System monitoring API availability**: Not all metrics available on all platforms (e.g., load average on Windows)
+- **Character encoding differences**: Windows uses different path separators and encodings
+- **Permission models**: Android requires explicit permissions; macOS has sandboxing restrictions
+- **SSH host key verification**: Must implement proper host key verification for production use
+- **Remote command variations**: Shell commands differ between Linux distributions and versions
 
 ## 7. PERFORMANCE TARGETS
 
@@ -745,4 +2055,83 @@ jobs:
 - Configuration file location and precedence rules
 - Integration with desktop environments and window managers
 
-This comprehensive implementation plan provides a realistic roadmap for creating a 100% feature-compatible Conky replacement using the specified technologies. The phased approach ensures steady progress while maintaining focus on core compatibility requirements. The use of Ebiten's Apache 2.0 license and golua's pure Go implementation provides a solid foundation for this ambitious project.
+**Cross-Platform Documentation (Phase 7):**
+- Windows installation and configuration guide
+- macOS installation and configuration guide
+- Android APK installation and setup guide
+- Remote monitoring setup and SSH configuration
+- Platform-specific feature availability matrix
+- Troubleshooting guide for platform-specific issues
+
+## 9. PHASE 7 TIMELINE AND MILESTONES
+
+### 9.1 Phase 7 Breakdown (Weeks 19-24)
+
+**Week 19-20: Platform Interface Foundation**
+- Design and implement Platform interface (12 hours)
+- Refactor Linux monitoring to use Platform interface (16 hours)
+- Create platform factory and auto-detection (4 hours)
+- Unit tests for platform abstraction (8 hours)
+
+**Week 21-22: Desktop Platform Implementations**
+- Implement Windows Platform adapter (24 hours)
+  - CPU monitoring via PDH (Performance Data Helper)
+  - Memory monitoring via GlobalMemoryStatusEx
+  - Network monitoring via GetIfTable/GetIfTable2
+  - Filesystem monitoring via GetDiskFreeSpaceEx
+- Implement macOS Platform adapter (20 hours)
+  - CPU monitoring via sysctl and mach APIs
+  - Memory monitoring via vm_stat and sysctl
+  - Network monitoring via getifaddrs and sysctl
+  - Filesystem monitoring via statfs
+
+**Week 23: Mobile and Remote Platforms**
+- Implement Android Platform adapter (28 hours)
+  - CPU monitoring via /proc/stat (similar to Linux)
+  - Memory monitoring via ActivityManager and /proc/meminfo
+  - Battery monitoring via BatteryManager API
+  - Network monitoring via ConnectivityManager and /proc/net
+- Design SSH remote monitoring protocol (8 hours)
+- Implement SSH connection management (16 hours)
+- Implement remote data collection (20 hours)
+
+**Week 24: Testing and Documentation**
+- Cross-platform build system updates (12 hours)
+- Platform-specific integration testing (24 hours)
+  - Linux: Ubuntu, Debian, Fedora, Arch
+  - Windows: Windows 10, Windows 11, Windows Server
+  - macOS: Monterey, Ventura, Sonoma
+  - Android: API levels 26-34
+- Documentation for cross-platform deployment (8 hours)
+
+### 9.2 Dependencies
+
+**Required Go Packages:**
+```
+golang.org/x/crypto/ssh  # SSH client for remote monitoring
+golang.org/x/sys/windows # Windows system calls
+golang.org/x/sys/unix    # Unix system calls (already used)
+```
+
+**Platform-Specific Build Requirements:**
+- **Windows**: No additional dependencies (pure Go with syscalls)
+- **macOS**: Xcode Command Line Tools for CGO (if needed for IOKit)
+- **Android**: Android NDK for CGO, gomobile for APK packaging
+- **Linux**: No changes from current requirements
+
+### 9.3 Total Estimated Hours for Phase 7
+
+| Category | Hours |
+|----------|-------|
+| Platform Interface Design | 12 |
+| Linux Platform Refactor | 16 |
+| Windows Platform Implementation | 24 |
+| macOS Platform Implementation | 20 |
+| Android Platform Implementation | 28 |
+| SSH Remote Monitoring | 44 |
+| Build System & CI/CD | 12 |
+| Testing | 24 |
+| Documentation | 8 |
+| **Total** | **188 hours** |
+
+This comprehensive implementation plan provides a realistic roadmap for creating a 100% feature-compatible Conky replacement using the specified technologies. The phased approach ensures steady progress while maintaining focus on core compatibility requirements. The use of Ebiten's Apache 2.0 license and golua's pure Go implementation provides a solid foundation for this ambitious project. Phase 7 extends this foundation to support cross-platform deployment and remote system monitoring, enabling go-conky to serve as a universal system monitoring solution.
