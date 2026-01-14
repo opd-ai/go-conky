@@ -36,7 +36,8 @@ func (n *remoteDarwinNetworkProvider) Interfaces() ([]string, error) {
 }
 
 func (n *remoteDarwinNetworkProvider) Stats(interfaceName string) (*NetworkStats, error) {
-	cmd := fmt.Sprintf("netstat -ib -I %s | tail -n 1", interfaceName)
+	// Use shell-escaped interface name
+	cmd := fmt.Sprintf("netstat -ib -I %s | tail -n 1", shellEscape(interfaceName))
 	output, err := n.platform.runCommand(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read network stats for %s: %w", interfaceName, err)

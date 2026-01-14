@@ -38,13 +38,27 @@ func (n *remoteLinuxNetworkProvider) Interfaces() ([]string, error) {
 }
 
 func (n *remoteLinuxNetworkProvider) Stats(interfaceName string) (*NetworkStats, error) {
-	cmd := fmt.Sprintf("cat /proc/net/dev | grep '%s:'", interfaceName)
-	output, err := n.platform.runCommand(cmd)
+	// Read all interfaces and search for the requested one to avoid command injection
+	output, err := n.platform.runCommand("cat /proc/net/dev | tail -n +3")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read network stats for %s: %w", interfaceName, err)
 	}
 
-	line := strings.TrimSpace(output)
+	var line string
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for _, l := range lines {
+		parts := strings.Split(l, ":")
+		if len(parts) < 2 {
+			continue
+		}
+		iface := strings.TrimSpace(parts[0])
+		if iface == interfaceName {
+			line = l
+			break
+		}
+	}
+
+	line = strings.TrimSpace(line)
 	if line == "" {
 		return nil, fmt.Errorf("interface %s not found", interfaceName)
 	}

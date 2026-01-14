@@ -9,10 +9,8 @@ import (
 
 // remoteDarwinCPUProvider collects CPU metrics from remote macOS systems via SSH.
 type remoteDarwinCPUProvider struct {
-	platform  *sshPlatform
-	mu        sync.Mutex
-	prevIdle  uint64
-	prevTotal uint64
+	platform *sshPlatform
+	mu       sync.Mutex
 }
 
 func newRemoteDarwinCPUProvider(p *sshPlatform) *remoteDarwinCPUProvider {

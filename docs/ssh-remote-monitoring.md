@@ -236,6 +236,22 @@ Alternatively, implement a custom `HostKeyCallback` that validates against a tru
 5. **Use dedicated monitoring users** with minimal privileges
 6. **Rotate credentials regularly**
 
+### Input Sanitization
+
+**IMPORTANT**: The implementation includes shell escaping for user-provided parameters (mount points, device names, interface names) to prevent command injection attacks. However, users should still be cautious:
+
+1. **Only monitor trusted systems** - Don't use this to monitor systems you don't control
+2. **Validate configuration inputs** - Ensure mount points, device names, and interface names come from trusted sources
+3. **Limit remote user privileges** - The monitoring user should have minimal permissions
+
+While the code sanitizes inputs using shell escaping and path validation, defense in depth is important. An attacker with control over filesystem paths (e.g., through NFS mounts or symbolic links) could potentially create paths that, while escaped, might still cause unexpected behavior.
+
+**For production deployments**:
+- Use dedicated monitoring users with read-only access
+- Monitor only systems you control
+- Review and validate all configuration inputs
+- Consider using file integrity monitoring for critical paths
+
 ### Required Remote Permissions
 
 The remote user needs read access to:

@@ -21,6 +21,9 @@ func newRemoteLinuxCPUProvider(p *sshPlatform) *remoteLinuxCPUProvider {
 	}
 }
 
+// TotalUsage returns the aggregate CPU usage percentage.
+// Note: The first call will return 0 because there are no previous stats to compare against.
+// At least two samples separated by a time interval are needed to calculate CPU usage.
 func (c *remoteLinuxCPUProvider) TotalUsage() (float64, error) {
 	output, err := c.platform.runCommand("cat /proc/stat | head -1")
 	if err != nil {

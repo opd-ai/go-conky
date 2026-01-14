@@ -72,8 +72,8 @@ func (f *remoteDarwinFilesystemProvider) Mounts() ([]MountInfo, error) {
 }
 
 func (f *remoteDarwinFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, error) {
-	// Use df command to get filesystem statistics
-	cmd := fmt.Sprintf("df -k '%s' | tail -n 1", mountPoint)
+	// Use df command with shell-escaped mount point
+	cmd := fmt.Sprintf("df -k %s | tail -n 1", shellEscape(mountPoint))
 	output, err := f.platform.runCommand(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get filesystem stats for %s: %w", mountPoint, err)
@@ -111,8 +111,8 @@ func (f *remoteDarwinFilesystemProvider) Stats(mountPoint string) (*FilesystemSt
 		stats.UsedPercent = float64(stats.Used) / float64(stats.Total) * 100
 	}
 
-	// Try to get inode statistics
-	cmd = fmt.Sprintf("df -i '%s' | tail -n 1", mountPoint)
+	// Try to get inode statistics with shell-escaped mount point
+	cmd = fmt.Sprintf("df -i %s | tail -n 1", shellEscape(mountPoint))
 	output, err = f.platform.runCommand(cmd)
 	if err == nil {
 		fields = strings.Fields(output)

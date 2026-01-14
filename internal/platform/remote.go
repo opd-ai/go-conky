@@ -155,12 +155,22 @@ func (p *sshPlatform) buildSSHConfig() (*ssh.ClientConfig, error) {
 		if socket == "" {
 			return nil, fmt.Errorf("SSH_AUTH_SOCK not set")
 		}
-		agentConn, err := net.Dial("unix", socket)
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to SSH agent: %w", err)
-		}
-		agentClient := agent.NewClient(agentConn)
-		authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
+		// Use a callback to defer the agent connection until it's actually needed
+		authMethods = append(authMethods, ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
+			agentConn, err := net.Dial("unix", socket)
+			if err != nil {
+				return nil, fmt.Errorf("failed to connect to SSH agent: %w", err)
+			}
+			defer agentConn.Close()
+
+			agentClient := agent.NewClient(agentConn)
+			signers, err := agentClient.Signers()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get signers from SSH agent: %w", err)
+			}
+
+			return signers, nil
+		}))
 	default:
 		return nil, fmt.Errorf("unsupported auth method type: %T", auth)
 	}
@@ -234,8 +244,14 @@ func (p *sshPlatform) runCommand(cmd string) (string, error) {
 		}
 		return stdout.String(), nil
 	case <-time.After(p.cmdTimeout):
+		// Ensure the remote command is actually terminated on timeout
+		_ = session.Signal(ssh.SIGKILL)
+		_ = session.Close()
 		return "", fmt.Errorf("command timed out after %v", p.cmdTimeout)
 	case <-p.ctx.Done():
+		// Ensure the remote command is terminated when the platform context is cancelled
+		_ = session.Signal(ssh.SIGKILL)
+		_ = session.Close()
 		return "", p.ctx.Err()
 	}
 }

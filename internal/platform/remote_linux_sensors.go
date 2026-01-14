@@ -37,8 +37,13 @@ func (s *remoteLinuxSensorProvider) Temperatures() ([]SensorReading, error) {
 			continue
 		}
 
-		// Read temperature value
-		tempOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s", path))
+		// Validate the path to prevent command injection
+		if !validatePath(path) {
+			continue
+		}
+
+		// Read temperature value using shell-escaped path
+		tempOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s", shellEscape(path)))
 		if err != nil {
 			continue
 		}
@@ -54,7 +59,7 @@ func (s *remoteLinuxSensorProvider) Temperatures() ([]SensorReading, error) {
 
 		// Try to get label
 		labelPath := strings.Replace(path, "_input", "_label", 1)
-		labelOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s 2>/dev/null || echo ''", labelPath))
+		labelOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s 2>/dev/null || echo ''", shellEscape(labelPath)))
 		label := extractSensorName(path)
 		if err == nil && strings.TrimSpace(labelOutput) != "" {
 			label = strings.TrimSpace(labelOutput)
@@ -69,7 +74,7 @@ func (s *remoteLinuxSensorProvider) Temperatures() ([]SensorReading, error) {
 
 		// Try to get critical threshold
 		critPath := strings.Replace(path, "_input", "_crit", 1)
-		critOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s 2>/dev/null || echo ''", critPath))
+		critOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s 2>/dev/null || echo ''", shellEscape(critPath)))
 		if err == nil && strings.TrimSpace(critOutput) != "" {
 			if crit, err := strconv.ParseFloat(strings.TrimSpace(critOutput), 64); err == nil {
 				reading.Critical = crit / 1000
@@ -102,8 +107,13 @@ func (s *remoteLinuxSensorProvider) Fans() ([]SensorReading, error) {
 			continue
 		}
 
-		// Read fan speed value
-		speedOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s", path))
+		// Validate the path to prevent command injection
+		if !validatePath(path) {
+			continue
+		}
+
+		// Read fan speed value using shell-escaped path
+		speedOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s", shellEscape(path)))
 		if err != nil {
 			continue
 		}
@@ -116,7 +126,7 @@ func (s *remoteLinuxSensorProvider) Fans() ([]SensorReading, error) {
 
 		// Try to get label
 		labelPath := strings.Replace(path, "_input", "_label", 1)
-		labelOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s 2>/dev/null || echo ''", labelPath))
+		labelOutput, err := s.platform.runCommand(fmt.Sprintf("cat %s 2>/dev/null || echo ''", shellEscape(labelPath)))
 		label := extractSensorName(path)
 		if err == nil && strings.TrimSpace(labelOutput) != "" {
 			label = strings.TrimSpace(labelOutput)

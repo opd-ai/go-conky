@@ -240,3 +240,47 @@ func TestSSHPlatform_Providers(t *testing.T) {
 		})
 	}
 }
+
+// TestCommandInjectionPrevention tests that user-controlled parameters are properly escaped
+func TestCommandInjectionPrevention(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		shouldErr bool
+	}{
+		{
+			name:      "safe interface name",
+			input:     "eth0",
+			shouldErr: false,
+		},
+		{
+			name:      "interface with semicolon",
+			input:     "eth0; rm -rf /",
+			shouldErr: true,
+		},
+		{
+			name:      "interface with backticks",
+			input:     "eth0`whoami`",
+			shouldErr: true,
+		},
+		{
+			name:      "safe mount point",
+			input:     "/mnt/data",
+			shouldErr: false,
+		},
+		{
+			name:      "mount point with command injection",
+			input:     "/mnt'; rm -rf /; echo '",
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test that validatePath properly rejects malicious inputs
+			if validatePath(tt.input) == tt.shouldErr {
+				t.Errorf("validatePath(%q) accepted when shouldErr=%v", tt.input, tt.shouldErr)
+			}
+		})
+	}
+}

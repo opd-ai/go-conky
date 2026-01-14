@@ -49,8 +49,8 @@ func (f *remoteLinuxFilesystemProvider) Mounts() ([]MountInfo, error) {
 }
 
 func (f *remoteLinuxFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, error) {
-	// Use df command to get filesystem statistics
-	cmd := fmt.Sprintf("df -B1 '%s' | tail -n 1", mountPoint)
+	// Use df command with shell-escaped mount point
+	cmd := fmt.Sprintf("df -B1 %s | tail -n 1", shellEscape(mountPoint))
 	output, err := f.platform.runCommand(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get filesystem stats for %s: %w", mountPoint, err)
@@ -88,8 +88,8 @@ func (f *remoteLinuxFilesystemProvider) Stats(mountPoint string) (*FilesystemSta
 		stats.UsedPercent = float64(used) / float64(total) * 100
 	}
 
-	// Try to get inode statistics
-	cmd = fmt.Sprintf("df -i '%s' | tail -n 1", mountPoint)
+	// Try to get inode statistics with shell-escaped mount point
+	cmd = fmt.Sprintf("df -i %s | tail -n 1", shellEscape(mountPoint))
 	output, err = f.platform.runCommand(cmd)
 	if err == nil {
 		fields = strings.Fields(output)
@@ -110,15 +110,27 @@ func (f *remoteLinuxFilesystemProvider) Stats(mountPoint string) (*FilesystemSta
 }
 
 func (f *remoteLinuxFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
-	// Use /proc/diskstats to get disk I/O statistics
-	cmd := fmt.Sprintf("cat /proc/diskstats | grep '%s'", device)
-	output, err := f.platform.runCommand(cmd)
+	// Read all disk stats and search for the requested device to avoid command injection
+	output, err := f.platform.runCommand("cat /proc/diskstats")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read disk stats for %s: %w", device, err)
 	}
 
-	line := strings.TrimSpace(output)
-	if line == "" {
+	var line string
+	for _, l := range strings.Split(strings.TrimSpace(output), "\n") {
+		fields := strings.Fields(l)
+		// /proc/diskstats format:
+		// major minor name reads reads_merged sectors_read time_reading writes writes_merged sectors_written time_writing ...
+		if len(fields) < 3 {
+			continue
+		}
+		if fields[2] == device {
+			line = l
+			break
+		}
+	}
+
+	if strings.TrimSpace(line) == "" {
 		return nil, fmt.Errorf("device %s not found in /proc/diskstats", device)
 	}
 
