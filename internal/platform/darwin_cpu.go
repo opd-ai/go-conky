@@ -19,14 +19,6 @@ const (
 	vmLoadavg  = 2  // VM_LOADAVG
 )
 
-// cpuTimes stores raw CPU time values from sysctl.
-type cpuTimes struct {
-	user   uint64
-	nice   uint64
-	system uint64
-	idle   uint64
-}
-
 // darwinCPUProvider implements CPUProvider for macOS/Darwin systems using sysctl and mach APIs.
 type darwinCPUProvider struct {
 	mu        sync.Mutex
