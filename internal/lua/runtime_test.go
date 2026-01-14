@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 
 	rt "github.com/arnodel/golua/runtime"
 )
@@ -497,4 +498,142 @@ func TestResourceLimits(t *testing.T) {
 	}()
 
 	_, _ = runtime.ExecuteString("heavy", code)
+}
+
+func TestLoadFileFromFS(t *testing.T) {
+	config := DefaultConfig()
+	runtime, err := New(config)
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	// Create a test filesystem with embedded Lua files
+	testFS := fstest.MapFS{
+		"scripts/hello.lua": &fstest.MapFile{
+			Data: []byte(`return "Hello from embedded FS"`),
+		},
+		"scripts/math.lua": &fstest.MapFile{
+			Data: []byte(`return 2 + 2`),
+		},
+	}
+
+	tests := []struct {
+		name    string
+		path    string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "Load hello script",
+			path:    "scripts/hello.lua",
+			want:    "Hello from embedded FS",
+			wantErr: false,
+		},
+		{
+			name:    "Load math script",
+			path:    "scripts/math.lua",
+			want:    "",
+			wantErr: false,
+		},
+		{
+			name:    "Nonexistent file",
+			path:    "scripts/nonexistent.lua",
+			want:    "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			closure, err := runtime.LoadFileFromFS(testFS, tt.path)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("LoadFileFromFS failed: %v", err)
+			}
+
+			if closure == nil {
+				t.Fatal("expected non-nil closure")
+			}
+
+			// Execute the closure
+			result, err := runtime.Execute(closure)
+			if err != nil {
+				t.Fatalf("Execute failed: %v", err)
+			}
+
+			if tt.want != "" {
+				resultStr := result.AsString()
+				if resultStr != tt.want {
+					t.Errorf("expected result %q, got %q", tt.want, resultStr)
+				}
+			}
+		})
+	}
+}
+
+func TestSetFS(t *testing.T) {
+	config := DefaultConfig()
+	runtime, err := New(config)
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	// Create a test filesystem
+	testFS := fstest.MapFS{
+		"test.lua": &fstest.MapFile{
+			Data: []byte(`return "test"`),
+		},
+	}
+
+	// SetFS should not return an error
+	runtime.SetFS(testFS)
+
+	// Verify that fsys is set
+	runtime.mu.RLock()
+	if runtime.fsys == nil {
+		t.Error("expected fsys to be set")
+	}
+	runtime.mu.RUnlock()
+
+	// Verify we can still load files
+	closure, err := runtime.LoadFileFromFS(testFS, "test.lua")
+	if err != nil {
+		t.Fatalf("LoadFileFromFS failed after SetFS: %v", err)
+	}
+
+	result, err := runtime.Execute(closure)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	if result.AsString() != "test" {
+		t.Errorf("expected result %q, got %q", "test", result.AsString())
+	}
+}
+
+func TestSetFSNil(t *testing.T) {
+	config := DefaultConfig()
+	runtime, err := New(config)
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	// Setting nil should be allowed
+	runtime.SetFS(nil)
+
+	runtime.mu.RLock()
+	if runtime.fsys != nil {
+		t.Error("expected fsys to be nil")
+	}
+	runtime.mu.RUnlock()
 }

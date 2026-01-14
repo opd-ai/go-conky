@@ -7,8 +7,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/opd-ai/go-conky/internal/profiling"
+	"github.com/opd-ai/go-conky/pkg/conky"
 )
 
 // Version is the current version of conky-go.
@@ -26,7 +29,7 @@ func run() int {
 	configPath := flag.String("c", "", "Path to configuration file (.conkyrc or Lua config)")
 	version := flag.Bool("v", false, "Print version and exit")
 	cpuProfile := flag.String("cpuprofile", "", "Write CPU profile to file")
-	memProfile := flag.String("memprofile", "", "Write memory profile to file on exit")
+	memProfile := flag.String("memprofile", "", "Write memory profile to file")
 	flag.Parse()
 
 	if *version {
@@ -70,12 +73,48 @@ func run() int {
 	}
 
 	fmt.Printf("conky-go %s starting with config: %s\n", Version, *configPath)
-	fmt.Println("Note: This is a development build. Full functionality is not yet implemented.")
 
-	// TODO: Phase 1 - Initialize system monitor
-	// TODO: Phase 3 - Initialize Ebiten rendering engine
-	// TODO: Phase 4 - Initialize Golua runtime
-	// TODO: Phase 5 - Parse configuration file
+	// Create and start using public API
+	c, err := conky.New(*configPath, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating conky instance: %v\n", err)
+		return 1
+	}
+
+	// Set up error handling
+	c.SetErrorHandler(func(err error) {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	})
+
+	// Set up event handling for lifecycle events
+	c.SetEventHandler(func(e conky.Event) {
+		fmt.Printf("[%s] %s: %s\n", e.Timestamp.Format("15:04:05"), e.Type, e.Message)
+	})
+
+	if err := c.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start: %v\n", err)
+		return 1
+	}
+
+	// Wait for termination signal
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+
+	for sig := range sigCh {
+		switch sig {
+		case syscall.SIGHUP:
+			fmt.Println("Received SIGHUP, reloading configuration...")
+			if err := c.Restart(); err != nil {
+				fmt.Fprintf(os.Stderr, "Restart failed: %v\n", err)
+			}
+		default:
+			fmt.Println("Shutting down...")
+			if err := c.Stop(); err != nil {
+				fmt.Fprintf(os.Stderr, "Stop error: %v\n", err)
+			}
+			return 0
+		}
+	}
 
 	return 0
 }

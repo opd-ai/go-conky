@@ -5,6 +5,8 @@ package config
 
 import (
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"regexp"
 )
@@ -60,6 +62,36 @@ var luaConfigPattern = regexp.MustCompile(`(?m)^\s*conky\.config\s*=`)
 // which is the Lua format marker.
 func isLuaConfig(content []byte) bool {
 	return luaConfigPattern.Match(content)
+}
+
+// ParseFromFS reads and parses a configuration file from an embedded filesystem.
+// It auto-detects the format (legacy or Lua) based on content.
+func (p *Parser) ParseFromFS(fsys fs.FS, path string) (*Config, error) {
+	content, err := fs.ReadFile(fsys, path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config from FS %s: %w", path, err)
+	}
+
+	return p.Parse(content)
+}
+
+// ParseReader parses configuration from an io.Reader.
+// The format parameter must be "legacy" or "lua".
+// Use this for dynamically generated configurations or network-loaded configs.
+func (p *Parser) ParseReader(r io.Reader, format string) (*Config, error) {
+	content, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config: %w", err)
+	}
+
+	switch format {
+	case "lua":
+		return p.luaParser.Parse(content)
+	case "legacy":
+		return p.legacyParser.Parse(content)
+	default:
+		return nil, fmt.Errorf("unknown format: %s (expected 'lua' or 'legacy')", format)
+	}
 }
 
 // Close releases resources associated with the parser.
