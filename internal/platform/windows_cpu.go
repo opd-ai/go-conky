@@ -125,14 +125,16 @@ func (c *windowsCPUProvider) closeQuery() {
 	if c.query != 0 {
 		procPdhCloseQuery.Call(c.query)
 		c.query = 0
+		c.initialized = false
 	}
 }
 
 // collectSample collects a new PDH sample if enough time has passed
 func (c *windowsCPUProvider) collectSample() error {
-	// Wait at least 100ms between samples to get meaningful data
-	if time.Since(c.lastSample) < 100*time.Millisecond {
-		time.Sleep(100 * time.Millisecond)
+	// Wait at least 100ms between samples to get meaningful data. If called
+	// more frequently, reuse the previous sample instead of blocking.
+	if !c.lastSample.IsZero() && time.Since(c.lastSample) < 100*time.Millisecond {
+		return nil
 	}
 
 	ret, _, _ := procPdhCollectQueryData.Call(c.query)

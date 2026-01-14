@@ -91,3 +91,51 @@ func TestWindowsCPUProvider_MultipleCalls(t *testing.T) {
 		t.Errorf("Second usage = %v, want 0-100", usage2)
 	}
 }
+
+func TestWindowsCPUProvider_Close(t *testing.T) {
+	provider := newWindowsCPUProvider()
+
+	// Initialize by calling TotalUsage
+	_, err := provider.TotalUsage()
+	if err != nil {
+		t.Fatalf("TotalUsage() error = %v", err)
+	}
+
+	// Close the provider
+	provider.Close()
+
+	// Verify provider can be reinitialized after close
+	usage, err := provider.TotalUsage()
+	if err != nil {
+		t.Fatalf("TotalUsage() after Close() error = %v", err)
+	}
+
+	if usage < 0 || usage > 100 {
+		t.Errorf("Usage after Close() = %v, want 0-100", usage)
+	}
+}
+
+func TestWindowsCPUProvider_CloseIdempotent(t *testing.T) {
+	provider := newWindowsCPUProvider()
+
+	// Initialize by calling TotalUsage
+	_, err := provider.TotalUsage()
+	if err != nil {
+		t.Fatalf("TotalUsage() error = %v", err)
+	}
+
+	// Close multiple times should be safe
+	provider.Close()
+	provider.Close()
+	provider.Close()
+
+	// Should still work after multiple closes
+	usage, err := provider.TotalUsage()
+	if err != nil {
+		t.Fatalf("TotalUsage() after multiple Close() error = %v", err)
+	}
+
+	if usage < 0 || usage > 100 {
+		t.Errorf("Usage after multiple Close() = %v, want 0-100", usage)
+	}
+}
