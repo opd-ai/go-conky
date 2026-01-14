@@ -20,8 +20,18 @@ func TestNewPlatform(t *testing.T) {
 		if p.Name() != "linux" {
 			t.Errorf("Expected platform name 'linux', got '%s'", p.Name())
 		}
+	} else if runtime.GOOS == "windows" {
+		if err != nil {
+			t.Fatalf("NewPlatform() failed on Windows: %v", err)
+		}
+		if p == nil {
+			t.Fatal("NewPlatform() returned nil platform on Windows")
+		}
+		if p.Name() != "windows" {
+			t.Errorf("Expected platform name 'windows', got '%s'", p.Name())
+		}
 	} else {
-		// On non-Linux systems, we expect an error for now
+		// On non-Linux/Windows systems, we expect an error for now
 		if err == nil {
 			t.Errorf("Expected error on %s platform, got nil", runtime.GOOS)
 		}
@@ -43,9 +53,10 @@ func TestNewPlatformForOS(t *testing.T) {
 			wantName: "linux",
 		},
 		{
-			name:    "Windows platform (not yet implemented)",
-			goos:    "windows",
-			wantErr: true,
+			name:     "Windows platform",
+			goos:     "windows",
+			wantErr:  false,
+			wantName: "windows",
 		},
 		{
 			name:    "macOS platform (not yet implemented)",
@@ -66,6 +77,11 @@ func TestNewPlatformForOS(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Skip platform tests if we can't build for that platform
+			if tt.goos == "windows" && runtime.GOOS != "windows" {
+				t.Skip("Skipping Windows platform test on non-Windows system")
+			}
+			
 			p, err := NewPlatformForOS(tt.goos)
 			if tt.wantErr {
 				if err == nil {
