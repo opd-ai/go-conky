@@ -8,12 +8,12 @@ This document provides a detailed technical plan for designing a public Go API t
 |---------|--------|-------|
 | 1. API Interface Design | ✅ Complete | `pkg/conky/` package created with core interface |
 | 2.1 Package Structure | ✅ Complete | Created `pkg/conky/` with conky.go, options.go, status.go, impl.go, doc.go |
-| 2.2 Internal Package Modifications | ⏳ Pending | fs.FS support for config and lua packages not yet added |
+| 2.2 Internal Package Modifications | ✅ Complete | fs.FS support added to config and lua packages |
 | 2.3 Implementation | ✅ Complete | `conkyImpl` struct with lifecycle management |
 | 3. Configuration Loading | ✅ Complete | Disk file, embedded FS, and io.Reader support |
 | 4. Lifecycle Management | ✅ Complete | Start/Stop/Restart with thread safety |
 | 5. Integration Examples | 📖 Reference | Documentation examples (not executable) |
-| 6. Migration Path | ⏳ Pending | CLI not yet refactored to use public API |
+| 6. Migration Path | ✅ Complete | CLI refactored to use public API |
 
 ## Table of Contents
 

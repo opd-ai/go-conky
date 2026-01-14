@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"sync"
 
@@ -45,6 +46,7 @@ type ConkyRuntime struct {
 	runtime *rt.Runtime
 	output  *bytes.Buffer
 	cleanup func()
+	fsys    fs.FS // Optional embedded filesystem for require() support
 	mu      sync.RWMutex
 }
 
@@ -93,7 +95,7 @@ func (cr *ConkyRuntime) LoadString(name, code string) (*rt.Closure, error) {
 	return closure, nil
 }
 
-// LoadFile reads and loads a Lua file.
+// LoadFile reads and loads a Lua file from disk.
 // The returned Closure can be executed using Execute.
 func (cr *ConkyRuntime) LoadFile(path string) (*rt.Closure, error) {
 	content, err := os.ReadFile(path)
@@ -114,6 +116,39 @@ func (cr *ConkyRuntime) LoadFile(path string) (*rt.Closure, error) {
 	}
 
 	return closure, nil
+}
+
+// LoadFileFromFS reads and loads a Lua file from an embedded filesystem.
+// This enables loading Lua scripts from embedded FS (e.g., using go:embed).
+// The returned Closure can be executed using Execute.
+func (cr *ConkyRuntime) LoadFileFromFS(fsys fs.FS, path string) (*rt.Closure, error) {
+	content, err := fs.ReadFile(fsys, path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Lua file from FS %s: %w", path, err)
+	}
+
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	closure, err := cr.runtime.CompileAndLoadLuaChunk(
+		path,
+		content,
+		rt.TableValue(cr.runtime.GlobalEnv()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load Lua file %s: %w", path, err)
+	}
+
+	return closure, nil
+}
+
+// SetFS sets the filesystem used for Lua's require/dofile functions.
+// This allows Lua scripts to load additional files from embedded filesystems.
+// If fs is nil, only disk files can be loaded via require/dofile.
+func (cr *ConkyRuntime) SetFS(fsys fs.FS) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.fsys = fsys
 }
 
 // Execute runs a compiled Lua closure within resource limits.

@@ -3,7 +3,9 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -294,6 +296,146 @@ func TestParseActualTestConfigs(t *testing.T) {
 			}
 			if len(cfg.Text.Template) == 0 {
 				t.Error("expected non-empty text template")
+			}
+		})
+	}
+}
+
+func TestParserParseFromFS(t *testing.T) {
+	p, err := NewParser()
+	if err != nil {
+		t.Fatalf("NewParser failed: %v", err)
+	}
+	defer p.Close()
+
+	// Create a test filesystem with embedded config
+	testFS := fstest.MapFS{
+		"configs/test.lua": &fstest.MapFile{
+			Data: []byte(`
+conky.config = {
+	update_interval = 2,
+	own_window = true,
+	own_window_type = 'desktop',
+}
+
+conky.text = [[
+CPU: ${cpu}%
+Memory: ${memperc}%
+]]
+`),
+		},
+		"configs/legacy.conkyrc": &fstest.MapFile{
+			Data: []byte(`# Legacy config
+background no
+update_interval 1.0
+
+TEXT
+Test content
+`),
+		},
+	}
+
+	tests := []struct {
+		name     string
+		path     string
+		wantType string
+	}{
+		{"Lua config from FS", "configs/test.lua", "lua"},
+		{"Legacy config from FS", "configs/legacy.conkyrc", "legacy"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := p.ParseFromFS(testFS, tt.path)
+			if err != nil {
+				t.Fatalf("ParseFromFS failed: %v", err)
+			}
+
+			if cfg == nil {
+				t.Fatal("expected non-nil config")
+			}
+
+			if len(cfg.Text.Template) == 0 {
+				t.Error("expected non-empty text template")
+			}
+		})
+	}
+}
+
+func TestParserParseFromFSError(t *testing.T) {
+	p, err := NewParser()
+	if err != nil {
+		t.Fatalf("NewParser failed: %v", err)
+	}
+	defer p.Close()
+
+	testFS := fstest.MapFS{}
+
+	_, err = p.ParseFromFS(testFS, "nonexistent.lua")
+	if err == nil {
+		t.Error("expected error for nonexistent file")
+	}
+}
+
+func TestParserParseReader(t *testing.T) {
+	p, err := NewParser()
+	if err != nil {
+		t.Fatalf("NewParser failed: %v", err)
+	}
+	defer p.Close()
+
+	tests := []struct {
+		name    string
+		content string
+		format  string
+		wantErr bool
+	}{
+		{
+			name: "Lua config from reader",
+			content: `
+conky.config = { update_interval = 1 }
+conky.text = [[CPU: ${cpu}%]]
+`,
+			format:  "lua",
+			wantErr: false,
+		},
+		{
+			name: "Legacy config from reader",
+			content: `background no
+update_interval 1.0
+
+TEXT
+Test
+`,
+			format:  "legacy",
+			wantErr: false,
+		},
+		{
+			name:    "Invalid format",
+			content: "some content",
+			format:  "invalid",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := strings.NewReader(tt.content)
+			cfg, err := p.ParseReader(reader, tt.format)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("ParseReader failed: %v", err)
+			}
+
+			if cfg == nil {
+				t.Fatal("expected non-nil config")
 			}
 		})
 	}

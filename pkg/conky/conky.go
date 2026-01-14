@@ -1,6 +1,7 @@
 package conky
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/fs"
@@ -123,13 +124,7 @@ func NewFromFS(fsys fs.FS, configPath string, opts *Options) (Conky, error) {
 	}
 	defer parser.Close()
 
-	// Read config from embedded filesystem
-	content, err := fs.ReadFile(fsys, configPath)
-	if err != nil {
-		return nil, fmt.Errorf("read config from FS %s: %w", configPath, err)
-	}
-
-	cfg, err := parser.Parse(content)
+	cfg, err := parser.ParseFromFS(fsys, configPath)
 	if err != nil {
 		return nil, fmt.Errorf("parse config from FS: %w", err)
 	}
@@ -146,11 +141,7 @@ func NewFromFS(fsys fs.FS, configPath string, opts *Options) (Conky, error) {
 				return nil, err
 			}
 			defer p.Close()
-			content, err := fs.ReadFile(fsys, configPath)
-			if err != nil {
-				return nil, err
-			}
-			return p.Parse(content)
+			return p.ParseFromFS(fsys, configPath)
 		},
 	}, nil
 }
@@ -188,7 +179,7 @@ func NewFromReader(r io.Reader, format string, opts *Options) (Conky, error) {
 	}
 	defer parser.Close()
 
-	cfg, err := parser.Parse(content)
+	cfg, err := parser.ParseReader(bytes.NewReader(content), format)
 	if err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
@@ -203,7 +194,7 @@ func NewFromReader(r io.Reader, format string, opts *Options) (Conky, error) {
 				return nil, err
 			}
 			defer p.Close()
-			return p.Parse(content)
+			return p.ParseReader(bytes.NewReader(content), format)
 		},
 		configContent: content,
 		configFormat:  format,
