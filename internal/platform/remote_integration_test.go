@@ -45,35 +45,24 @@ func TestSSHRemoteIntegration(t *testing.T) {
 		CommandTimeout: 10 * time.Second,
 	}
 
-	t.Run("Connection", func(t *testing.T) {
-		platform, err := NewRemotePlatform(config)
-		if err != nil {
-			t.Fatalf("Failed to create remote platform: %v", err)
-		}
-		defer platform.Close()
+	// Create platform once and reuse it for all subtests to avoid connection exhaustion
+	platform, err := NewRemotePlatform(config)
+	if err != nil {
+		t.Fatalf("Failed to create remote platform: %v", err)
+	}
+	defer platform.Close()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-		if err := platform.Initialize(ctx); err != nil {
-			t.Fatalf("Failed to initialize platform: %v", err)
-		}
+	if err := platform.Initialize(ctx); err != nil {
+		t.Fatalf("Failed to initialize platform: %v", err)
+	}
 
-		t.Logf("Connected to %s as %s, detected OS: %s", host, user, platform.Name())
-	})
+	t.Logf("Connected to %s as %s, detected OS: %s", host, user, platform.Name())
 
+	// All subtests now reuse the same platform connection
 	t.Run("CPU_Stats", func(t *testing.T) {
-		platform, err := NewRemotePlatform(config)
-		if err != nil {
-			t.Fatalf("Failed to create remote platform: %v", err)
-		}
-		defer platform.Close()
-
-		ctx := context.Background()
-		if err := platform.Initialize(ctx); err != nil {
-			t.Fatalf("Failed to initialize platform: %v", err)
-		}
-
 		cpu := platform.CPU()
 		if cpu == nil {
 			t.Fatal("CPU provider is nil")
@@ -106,17 +95,6 @@ func TestSSHRemoteIntegration(t *testing.T) {
 	})
 
 	t.Run("Memory_Stats", func(t *testing.T) {
-		platform, err := NewRemotePlatform(config)
-		if err != nil {
-			t.Fatalf("Failed to create remote platform: %v", err)
-		}
-		defer platform.Close()
-
-		ctx := context.Background()
-		if err := platform.Initialize(ctx); err != nil {
-			t.Fatalf("Failed to initialize platform: %v", err)
-		}
-
 		memory := platform.Memory()
 		if memory == nil {
 			t.Fatal("Memory provider is nil")
@@ -140,17 +118,6 @@ func TestSSHRemoteIntegration(t *testing.T) {
 	})
 
 	t.Run("Network_Stats", func(t *testing.T) {
-		platform, err := NewRemotePlatform(config)
-		if err != nil {
-			t.Fatalf("Failed to create remote platform: %v", err)
-		}
-		defer platform.Close()
-
-		ctx := context.Background()
-		if err := platform.Initialize(ctx); err != nil {
-			t.Fatalf("Failed to initialize platform: %v", err)
-		}
-
 		network := platform.Network()
 		if network == nil {
 			t.Fatal("Network provider is nil")
@@ -176,17 +143,6 @@ func TestSSHRemoteIntegration(t *testing.T) {
 	})
 
 	t.Run("Filesystem_Stats", func(t *testing.T) {
-		platform, err := NewRemotePlatform(config)
-		if err != nil {
-			t.Fatalf("Failed to create remote platform: %v", err)
-		}
-		defer platform.Close()
-
-		ctx := context.Background()
-		if err := platform.Initialize(ctx); err != nil {
-			t.Fatalf("Failed to initialize platform: %v", err)
-		}
-
 		filesystem := platform.Filesystem()
 		if filesystem == nil {
 			t.Fatal("Filesystem provider is nil")
@@ -215,17 +171,6 @@ func TestSSHRemoteIntegration(t *testing.T) {
 	})
 
 	t.Run("Sensors", func(t *testing.T) {
-		platform, err := NewRemotePlatform(config)
-		if err != nil {
-			t.Fatalf("Failed to create remote platform: %v", err)
-		}
-		defer platform.Close()
-
-		ctx := context.Background()
-		if err := platform.Initialize(ctx); err != nil {
-			t.Fatalf("Failed to initialize platform: %v", err)
-		}
-
 		sensors := platform.Sensors()
 		if sensors == nil {
 			t.Log("Sensor monitoring not available on this platform")
