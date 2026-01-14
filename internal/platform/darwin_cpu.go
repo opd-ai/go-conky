@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package platform
@@ -12,10 +13,10 @@ import (
 
 // Sysctl MIB constants for Darwin
 const (
-	ctlKern      = 1  // CTL_KERN
-	ctlVM        = 2  // CTL_VM
-	kernCPTime   = 82 // KERN_CP_TIME
-	vmLoadavg    = 2  // VM_LOADAVG
+	ctlKern    = 1  // CTL_KERN
+	ctlVM      = 2  // CTL_VM
+	kernCPTime = 82 // KERN_CP_TIME
+	vmLoadavg  = 2  // VM_LOADAVG
 )
 
 // cpuTimes stores raw CPU time values from sysctl.
@@ -76,9 +77,9 @@ func (c *darwinCPUProvider) TotalUsage() (float64, error) {
 
 	totalDelta := float64(
 		(current.user - prev.user) +
-		(current.system - prev.system) +
-		(current.idle - prev.idle) +
-		(current.nice - prev.nice))
+			(current.system - prev.system) +
+			(current.idle - prev.idle) +
+			(current.nice - prev.nice))
 
 	idleDelta := float64(current.idle - prev.idle)
 
@@ -163,10 +164,10 @@ func (c *darwinCPUProvider) LoadAverage() (float64, float64, float64, error) {
 	}
 
 	mib := []int32{ctlKern, vmLoadavg}
-	
+
 	var la loadavg
 	n := uintptr(unsafe.Sizeof(la))
-	
+
 	_, _, errno := syscall.Syscall6(
 		syscall.SYS___SYSCTL,
 		uintptr(unsafe.Pointer(&mib[0])),
@@ -176,7 +177,7 @@ func (c *darwinCPUProvider) LoadAverage() (float64, float64, float64, error) {
 		0,
 		0,
 	)
-	
+
 	if errno != 0 {
 		return 0, 0, 0, fmt.Errorf("sysctl VM_LOADAVG failed: %w", errno)
 	}
@@ -199,10 +200,10 @@ func (c *darwinCPUProvider) getHostCPULoadInfo() (cpuTimes, error) {
 	// Try to get CPU times using sysctl kern.cp_time
 	// This is an array of [user, nice, system, idle]
 	mib := []int32{ctlKern, kernCPTime}
-	
+
 	var times [4]uint64
 	n := uintptr(unsafe.Sizeof(times))
-	
+
 	_, _, errno := syscall.Syscall6(
 		syscall.SYS___SYSCTL,
 		uintptr(unsafe.Pointer(&mib[0])),
@@ -212,7 +213,7 @@ func (c *darwinCPUProvider) getHostCPULoadInfo() (cpuTimes, error) {
 		0,
 		0,
 	)
-	
+
 	if errno != 0 {
 		return cpuTimes{}, fmt.Errorf("sysctl KERN_CP_TIME failed: %w", errno)
 	}

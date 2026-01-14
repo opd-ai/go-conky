@@ -129,8 +129,8 @@ func TestLinuxBatteryProvider_Stats_ChargeBased(t *testing.T) {
 	files := map[string]string{
 		"capacity":    "50",
 		"status":      "Charging",
-		"charge_now":  "2500000", // 2.5 Ah in µAh
-		"charge_full": "5000000", // 5 Ah in µAh
+		"charge_now":  "2500000",  // 2.5 Ah in µAh
+		"charge_full": "5000000",  // 5 Ah in µAh
 		"voltage_now": "12000000", // 12V in µV
 	}
 

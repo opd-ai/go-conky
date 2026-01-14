@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package platform
@@ -38,7 +39,7 @@ func (m *darwinMemoryProvider) Stats() (*MemoryStats, error) {
 	// Get VM statistics using sysctl vm.swapusage (for free/used calculation)
 	// macOS doesn't have a simple "free memory" concept like Linux
 	// We need to use vm_stat data through host_statistics64
-	
+
 	vmStat, err := m.getVMStatistics()
 	if err != nil {
 		return nil, fmt.Errorf("getting VM statistics: %w", err)
@@ -56,10 +57,10 @@ func (m *darwinMemoryProvider) Stats() (*MemoryStats, error) {
 
 	// Used = active + wired
 	used := active + wired
-	
+
 	// Available = free + inactive + speculative (memory that can be reclaimed)
 	available := free + inactive + speculative + purgeable
-	
+
 	// Ensure available doesn't exceed total
 	if available > totalMem {
 		available = totalMem
@@ -86,20 +87,20 @@ func (m *darwinMemoryProvider) Stats() (*MemoryStats, error) {
 func (m *darwinMemoryProvider) SwapStats() (*SwapStats, error) {
 	// Use sysctl vm.swapusage to get swap information
 	// This returns a struct with total, used, and free swap
-	
+
 	type xswUsage struct {
-		total uint64
-		used  uint64
-		free  uint64
-		_     uint32 // padding for alignment
+		total     uint64
+		used      uint64
+		free      uint64
+		_         uint32 // padding for alignment
 		encrypted bool
 	}
 
 	mib := []int32{ctlVM, vmSwapusage}
-	
+
 	var swapUsage xswUsage
 	n := uintptr(unsafe.Sizeof(swapUsage))
-	
+
 	_, _, errno := syscall.Syscall6(
 		syscall.SYS___SYSCTL,
 		uintptr(unsafe.Pointer(&mib[0])),
@@ -109,7 +110,7 @@ func (m *darwinMemoryProvider) SwapStats() (*SwapStats, error) {
 		0,
 		0,
 	)
-	
+
 	if errno != 0 {
 		return nil, fmt.Errorf("sysctl VM_SWAPUSAGE failed: %w", errno)
 	}
@@ -143,7 +144,7 @@ type vmStatistics struct {
 func (m *darwinMemoryProvider) getVMStatistics() (*vmStatistics, error) {
 	// Try to get VM stats from sysctl vm.* values
 	// Note: These are approximations as macOS doesn't expose all vm_stat data via sysctl
-	
+
 	// Get page size first
 	pageSize, err := sysctlUint64("hw.pagesize")
 	if err != nil {
@@ -157,10 +158,10 @@ func (m *darwinMemoryProvider) getVMStatistics() (*vmStatistics, error) {
 	if val, err := sysctlUint64("vm.page_free_count"); err == nil {
 		stats.freeCount = val
 	}
-	
+
 	// For other stats, we'll need to use an alternative approach
 	// Since direct sysctl access is limited, we estimate based on available data
-	
+
 	// Get memory pressure (if available) to estimate active/inactive
 	// This is a simplified approach
 	totalMem, _ := sysctlUint64("hw.memsize")

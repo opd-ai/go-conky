@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package platform
@@ -9,9 +10,9 @@ import (
 )
 
 var (
-	modIphlpapi       = syscall.NewLazyDLL("iphlpapi.dll")
-	procGetIfTable2   = modIphlpapi.NewProc("GetIfTable2")
-	procFreeMibTable  = modIphlpapi.NewProc("FreeMibTable")
+	modIphlpapi      = syscall.NewLazyDLL("iphlpapi.dll")
+	procGetIfTable2  = modIphlpapi.NewProc("GetIfTable2")
+	procFreeMibTable = modIphlpapi.NewProc("FreeMibTable")
 )
 
 const (
@@ -21,47 +22,47 @@ const (
 
 // mibIfRow2 matches a subset of the Windows MIB_IF_ROW2 structure
 type mibIfRow2 struct {
-	InterfaceLuid          uint64
-	InterfaceIndex         uint32
-	InterfaceGuid          [16]byte
-	Alias                  [MAX_INTERFACE_NAME_LEN + 1]uint16
-	Description            [MAX_INTERFACE_NAME_LEN + 1]uint16
-	PhysicalAddressLength  uint32
-	PhysicalAddress        [32]byte
-	PermanentPhysicalAddress [32]byte
-	Mtu                    uint32
-	Type                   uint32
-	TunnelType             uint32
-	MediaType              uint32
-	PhysicalMediumType     uint32
-	AccessType             uint32
-	DirectionType          uint32
+	InterfaceLuid               uint64
+	InterfaceIndex              uint32
+	InterfaceGuid               [16]byte
+	Alias                       [MAX_INTERFACE_NAME_LEN + 1]uint16
+	Description                 [MAX_INTERFACE_NAME_LEN + 1]uint16
+	PhysicalAddressLength       uint32
+	PhysicalAddress             [32]byte
+	PermanentPhysicalAddress    [32]byte
+	Mtu                         uint32
+	Type                        uint32
+	TunnelType                  uint32
+	MediaType                   uint32
+	PhysicalMediumType          uint32
+	AccessType                  uint32
+	DirectionType               uint32
 	InterfaceAndOperStatusFlags byte
-	OperStatus             uint32
-	AdminStatus            uint32
-	MediaConnectState      uint32
-	NetworkGuid            [16]byte
-	ConnectionType         uint32
-	TransmitLinkSpeed      uint64
-	ReceiveLinkSpeed       uint64
-	InOctets               uint64
-	InUcastPkts            uint64
-	InNUcastPkts           uint64
-	InDiscards             uint64
-	InErrors               uint64
-	InUnknownProtos        uint64
-	InUcastOctets          uint64
-	InMulticastOctets      uint64
-	InBroadcastOctets      uint64
-	OutOctets              uint64
-	OutUcastPkts           uint64
-	OutNUcastPkts          uint64
-	OutDiscards            uint64
-	OutErrors              uint64
-	OutUcastOctets         uint64
-	OutMulticastOctets     uint64
-	OutBroadcastOctets     uint64
-	OutQLen                uint64
+	OperStatus                  uint32
+	AdminStatus                 uint32
+	MediaConnectState           uint32
+	NetworkGuid                 [16]byte
+	ConnectionType              uint32
+	TransmitLinkSpeed           uint64
+	ReceiveLinkSpeed            uint64
+	InOctets                    uint64
+	InUcastPkts                 uint64
+	InNUcastPkts                uint64
+	InDiscards                  uint64
+	InErrors                    uint64
+	InUnknownProtos             uint64
+	InUcastOctets               uint64
+	InMulticastOctets           uint64
+	InBroadcastOctets           uint64
+	OutOctets                   uint64
+	OutUcastPkts                uint64
+	OutNUcastPkts               uint64
+	OutDiscards                 uint64
+	OutErrors                   uint64
+	OutUcastOctets              uint64
+	OutMulticastOctets          uint64
+	OutBroadcastOctets          uint64
+	OutQLen                     uint64
 }
 
 // mibIfTable2 matches the Windows MIB_IF_TABLE2 structure

@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package platform
@@ -12,19 +13,19 @@ import (
 )
 
 var (
-	modPdh                 = syscall.NewLazyDLL("pdh.dll")
-	procPdhOpenQueryW      = modPdh.NewProc("PdhOpenQueryW")
-	procPdhAddCounterW     = modPdh.NewProc("PdhAddCounterW")
-	procPdhCollectQueryData = modPdh.NewProc("PdhCollectQueryData")
+	modPdh                          = syscall.NewLazyDLL("pdh.dll")
+	procPdhOpenQueryW               = modPdh.NewProc("PdhOpenQueryW")
+	procPdhAddCounterW              = modPdh.NewProc("PdhAddCounterW")
+	procPdhCollectQueryData         = modPdh.NewProc("PdhCollectQueryData")
 	procPdhGetFormattedCounterValue = modPdh.NewProc("PdhGetFormattedCounterValue")
-	procPdhCloseQuery      = modPdh.NewProc("PdhCloseQuery")
+	procPdhCloseQuery               = modPdh.NewProc("PdhCloseQuery")
 )
 
 const (
-	PDH_FMT_DOUBLE = 0x00000200
-	PDH_INVALID_DATA = 0xC0000BC6
+	PDH_FMT_DOUBLE     = 0x00000200
+	PDH_INVALID_DATA   = 0xC0000BC6
 	PDH_INVALID_HANDLE = 0xC0000BBC
-	PDH_NO_DATA = 0x800007D5
+	PDH_NO_DATA        = 0x800007D5
 )
 
 // pdhCounterValue matches the Windows PDH_FMT_COUNTERVALUE structure for double values
@@ -35,12 +36,12 @@ type pdhCounterValue struct {
 
 // windowsCPUProvider implements CPUProvider for Windows systems using PDH API
 type windowsCPUProvider struct {
-	mu          sync.Mutex
-	query       uintptr
-	counterTotal uintptr
+	mu             sync.Mutex
+	query          uintptr
+	counterTotal   uintptr
 	countersPerCPU []uintptr
-	lastSample  time.Time
-	initialized bool
+	lastSample     time.Time
+	initialized    bool
 }
 
 func newWindowsCPUProvider() *windowsCPUProvider {

@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package platform
@@ -30,31 +31,31 @@ func (f *darwinFilesystemProvider) Mounts() ([]MountInfo, error) {
 
 	var mounts []MountInfo
 	scanner := bufio.NewScanner(bytes.NewReader(output))
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		// Format: /dev/disk1s1 on / (apfs, local, journaled)
 		// or: map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)
-		
+
 		parts := strings.Split(line, " on ")
 		if len(parts) != 2 {
 			continue
 		}
-		
+
 		device := parts[0]
-		
+
 		// Split the rest by " ("
 		rest := strings.Split(parts[1], " (")
 		if len(rest) != 2 {
 			continue
 		}
-		
+
 		mountPoint := rest[0]
-		
+
 		// Extract filesystem type and options
 		optsStr := strings.TrimSuffix(rest[1], ")")
 		opts := strings.Split(optsStr, ", ")
-		
+
 		fsType := ""
 		if len(opts) > 0 {
 			fsType = opts[0]
@@ -114,7 +115,7 @@ func (f *darwinFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
 	// macOS requires IOKit to get detailed disk I/O statistics
 	// For a pure Go implementation, we would need to use CGO to access IOKit
 	// As a fallback, we return zero values with a note that detailed stats are unavailable
-	
+
 	// TODO: Implement using iostat parsing or IOKit (requires CGO)
 	return &DiskIOStats{
 		ReadBytes:  0,

@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package platform
@@ -55,11 +56,11 @@ func (s *darwinSensorProvider) Fans() ([]SensorReading, error) {
 // CPU die temperature: 45.00 C
 func (s *darwinSensorProvider) parsePowermetricsOutput(output []byte) ([]SensorReading, error) {
 	var readings []SensorReading
-	
+
 	scanner := bufio.NewScanner(bytes.NewReader(output))
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		// Look for temperature lines
 		if strings.Contains(strings.ToLower(line), "temperature") && strings.Contains(line, "C") {
 			reading := s.parseTemperatureLine(line)
@@ -114,11 +115,11 @@ func (s *darwinSensorProvider) parseTemperatureLine(line string) *SensorReading 
 // Fan: 2000 rpm
 func (s *darwinSensorProvider) parseFanOutput(output []byte) ([]SensorReading, error) {
 	var readings []SensorReading
-	
+
 	scanner := bufio.NewScanner(bytes.NewReader(output))
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		// Look for fan lines
 		if strings.Contains(strings.ToLower(line), "fan") && strings.Contains(strings.ToLower(line), "rpm") {
 			reading := s.parseFanLine(line)

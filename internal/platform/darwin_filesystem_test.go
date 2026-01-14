@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package platform
@@ -71,12 +72,12 @@ func TestDarwinFilesystemProvider_Stats(t *testing.T) {
 	// Check inode stats
 	if stats.InodesTotal > 0 {
 		if stats.InodesUsed > stats.InodesTotal {
-			t.Errorf("Used inodes (%d) should not exceed total (%d)", 
+			t.Errorf("Used inodes (%d) should not exceed total (%d)",
 				stats.InodesUsed, stats.InodesTotal)
 		}
 
 		if stats.InodesFree > stats.InodesTotal {
-			t.Errorf("Free inodes (%d) should not exceed total (%d)", 
+			t.Errorf("Free inodes (%d) should not exceed total (%d)",
 				stats.InodesFree, stats.InodesTotal)
 		}
 	}

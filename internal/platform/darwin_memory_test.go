@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package platform
@@ -67,7 +68,7 @@ func TestDarwinMemoryProvider_SwapStats(t *testing.T) {
 				diff = -diff
 			}
 			if diff > 1024*1024 { // 1 MB tolerance
-				t.Errorf("Used + Free (%d) should equal Total (%d), diff: %d", 
+				t.Errorf("Used + Free (%d) should equal Total (%d), diff: %d",
 					stats.Used+stats.Free, stats.Total, diff)
 			}
 		}
