@@ -179,7 +179,7 @@ func NewFromReader(r io.Reader, format string, opts *Options) (Conky, error) {
 	}
 	defer parser.Close()
 
-	cfg, err := parser.ParseReader(io.NopCloser(bytes.NewReader(content)), format)
+	cfg, err := parser.ParseReader(bytes.NewReader(content), format)
 	if err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
@@ -194,7 +194,7 @@ func NewFromReader(r io.Reader, format string, opts *Options) (Conky, error) {
 				return nil, err
 			}
 			defer p.Close()
-			return p.ParseReader(io.NopCloser(bytes.NewReader(content)), format)
+			return p.ParseReader(bytes.NewReader(content), format)
 		},
 		configContent: content,
 		configFormat:  format,

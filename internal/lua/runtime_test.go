@@ -2,6 +2,7 @@ package lua
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -533,7 +534,7 @@ func TestLoadFileFromFS(t *testing.T) {
 		{
 			name:    "Load math script",
 			path:    "scripts/math.lua",
-			want:    "",
+			want:    "4", // 2 + 2 = 4
 			wantErr: false,
 		},
 		{
@@ -570,7 +571,18 @@ func TestLoadFileFromFS(t *testing.T) {
 			}
 
 			if tt.want != "" {
-				resultStr := result.AsString()
+				// Convert result to string based on its type
+				var resultStr string
+				switch v := result.Interface().(type) {
+				case string:
+					resultStr = v
+				case int64:
+					resultStr = fmt.Sprintf("%d", v)
+				case float64:
+					resultStr = fmt.Sprintf("%g", v)
+				default:
+					resultStr = result.AsString()
+				}
 				if resultStr != tt.want {
 					t.Errorf("expected result %q, got %q", tt.want, resultStr)
 				}

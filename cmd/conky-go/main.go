@@ -99,6 +99,7 @@ func run() int {
 	// Wait for termination signal
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	defer signal.Stop(sigCh)
 
 	for sig := range sigCh {
 		switch sig {
