@@ -73,6 +73,20 @@ func (cb *CairoBindings) registerFunctions() {
 	cb.runtime.SetGoFunction("cairo_paint", cb.paint, 0, false)
 	cb.runtime.SetGoFunction("cairo_paint_with_alpha", cb.paintWithAlpha, 1, false)
 
+	// Text functions
+	cb.runtime.SetGoFunction("cairo_select_font_face", cb.selectFontFace, 3, false)
+	cb.runtime.SetGoFunction("cairo_set_font_size", cb.setFontSize, 1, false)
+	cb.runtime.SetGoFunction("cairo_show_text", cb.showText, 1, false)
+	cb.runtime.SetGoFunction("cairo_text_extents", cb.textExtents, 1, false)
+
+	// Transformation functions
+	cb.runtime.SetGoFunction("cairo_translate", cb.translate, 2, false)
+	cb.runtime.SetGoFunction("cairo_rotate", cb.rotate, 1, false)
+	cb.runtime.SetGoFunction("cairo_scale", cb.scale, 2, false)
+	cb.runtime.SetGoFunction("cairo_save", cb.save, 0, false)
+	cb.runtime.SetGoFunction("cairo_restore", cb.restore, 0, false)
+	cb.runtime.SetGoFunction("cairo_identity_matrix", cb.identityMatrix, 0, false)
+
 	// Register Cairo constants
 	cb.registerConstants()
 }
@@ -92,6 +106,15 @@ func (cb *CairoBindings) registerConstants() {
 	// Antialias constants
 	cb.runtime.SetGlobal("CAIRO_ANTIALIAS_NONE", rt.IntValue(0))
 	cb.runtime.SetGlobal("CAIRO_ANTIALIAS_DEFAULT", rt.IntValue(1))
+
+	// Font slant constants
+	cb.runtime.SetGlobal("CAIRO_FONT_SLANT_NORMAL", rt.IntValue(int64(render.FontSlantNormal)))
+	cb.runtime.SetGlobal("CAIRO_FONT_SLANT_ITALIC", rt.IntValue(int64(render.FontSlantItalic)))
+	cb.runtime.SetGlobal("CAIRO_FONT_SLANT_OBLIQUE", rt.IntValue(int64(render.FontSlantOblique)))
+
+	// Font weight constants
+	cb.runtime.SetGlobal("CAIRO_FONT_WEIGHT_NORMAL", rt.IntValue(int64(render.FontWeightNormal)))
+	cb.runtime.SetGlobal("CAIRO_FONT_WEIGHT_BOLD", rt.IntValue(int64(render.FontWeightBold)))
 }
 
 // --- Color Functions ---
@@ -387,5 +410,140 @@ func (cb *CairoBindings) paintWithAlpha(t *rt.Thread, c *rt.GoCont) (rt.Cont, er
 	}
 
 	cb.renderer.PaintWithAlpha(alpha)
+	return c.Next(), nil
+}
+
+// --- Text Functions ---
+
+// selectFontFace handles cairo_select_font_face(family, slant, weight)
+func (cb *CairoBindings) selectFontFace(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	family, err := c.StringArg(0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_select_font_face: family: %w", err)
+	}
+	slant, err := c.IntArg(1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_select_font_face: slant: %w", err)
+	}
+	weight, err := c.IntArg(2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_select_font_face: weight: %w", err)
+	}
+
+	// Validate slant value (0-2)
+	if slant < 0 || slant > 2 {
+		return nil, fmt.Errorf("cairo_select_font_face: invalid slant value %d (must be 0-2)", slant)
+	}
+
+	// Validate weight value (0-1)
+	if weight < 0 || weight > 1 {
+		return nil, fmt.Errorf("cairo_select_font_face: invalid weight value %d (must be 0-1)", weight)
+	}
+
+	cb.renderer.SelectFontFace(family, render.FontSlant(slant), render.FontWeight(weight))
+	return c.Next(), nil
+}
+
+// setFontSize handles cairo_set_font_size(size)
+func (cb *CairoBindings) setFontSize(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	size, err := c.FloatArg(0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_set_font_size: %w", err)
+	}
+
+	cb.renderer.SetFontSize(size)
+	return c.Next(), nil
+}
+
+// showText handles cairo_show_text(text)
+func (cb *CairoBindings) showText(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	text, err := c.StringArg(0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_show_text: %w", err)
+	}
+
+	cb.renderer.ShowText(text)
+	return c.Next(), nil
+}
+
+// textExtents handles cairo_text_extents(text) and returns a table with extents
+func (cb *CairoBindings) textExtents(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	text, err := c.StringArg(0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_text_extents: %w", err)
+	}
+
+	extents := cb.renderer.TextExtentsResult(text)
+
+	// Create a Lua table with the text extents
+	extentsTable := rt.NewTable()
+	extentsTable.Set(rt.StringValue("x_bearing"), rt.FloatValue(extents.XBearing))
+	extentsTable.Set(rt.StringValue("y_bearing"), rt.FloatValue(extents.YBearing))
+	extentsTable.Set(rt.StringValue("width"), rt.FloatValue(extents.Width))
+	extentsTable.Set(rt.StringValue("height"), rt.FloatValue(extents.Height))
+	extentsTable.Set(rt.StringValue("x_advance"), rt.FloatValue(extents.XAdvance))
+	extentsTable.Set(rt.StringValue("y_advance"), rt.FloatValue(extents.YAdvance))
+
+	return c.PushingNext1(t.Runtime, rt.TableValue(extentsTable)), nil
+}
+
+// --- Transformation Functions ---
+
+// translate handles cairo_translate(tx, ty)
+func (cb *CairoBindings) translate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	tx, err := c.FloatArg(0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_translate: tx: %w", err)
+	}
+	ty, err := c.FloatArg(1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_translate: ty: %w", err)
+	}
+
+	cb.renderer.Translate(tx, ty)
+	return c.Next(), nil
+}
+
+// rotate handles cairo_rotate(angle)
+func (cb *CairoBindings) rotate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	angle, err := c.FloatArg(0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rotate: %w", err)
+	}
+
+	cb.renderer.Rotate(angle)
+	return c.Next(), nil
+}
+
+// scale handles cairo_scale(sx, sy)
+func (cb *CairoBindings) scale(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	sx, err := c.FloatArg(0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_scale: sx: %w", err)
+	}
+	sy, err := c.FloatArg(1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_scale: sy: %w", err)
+	}
+
+	cb.renderer.Scale(sx, sy)
+	return c.Next(), nil
+}
+
+// save handles cairo_save()
+func (cb *CairoBindings) save(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	cb.renderer.Save()
+	return c.Next(), nil
+}
+
+// restore handles cairo_restore()
+func (cb *CairoBindings) restore(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	cb.renderer.Restore()
+	return c.Next(), nil
+}
+
+// identityMatrix handles cairo_identity_matrix()
+func (cb *CairoBindings) identityMatrix(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	cb.renderer.IdentityMatrix()
 	return c.Next(), nil
 }
