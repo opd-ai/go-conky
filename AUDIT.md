@@ -98,9 +98,9 @@ Total Gaps Found: 9
 
 **Implementation Location:** `internal/lua/cairo_bindings.go:46-95`
 
-**Status:** 🔄 **Partially Fixed** - Text, transform, and surface management functions added
+**Status:** 🔄 **Partially Fixed** - Text, transform, surface management, and path/clip query functions added
 
-**Fix Details:** Added the most commonly used Cairo text, transformation, and surface management functions:
+**Fix Details:** Added the most commonly used Cairo text, transformation, surface management, and path/clip query functions:
 
 1. **Text Functions (4 functions):**
    - `cairo_select_font_face(family, slant, weight)` - Set font family, slant, and weight
@@ -116,29 +116,45 @@ Total Gaps Found: 9
    - `cairo_restore()` - Pop drawing state from stack
    - `cairo_identity_matrix()` - Reset transformation matrix
 
-3. **Surface Management Functions (5 new functions):**
+3. **Surface Management Functions (5 functions):**
    - `cairo_xlib_surface_create(display, drawable, visual, width, height)` - Create X11-compatible surface
    - `cairo_image_surface_create(format, width, height)` - Create image surface
    - `cairo_create(surface)` - Create a Cairo context from a surface
    - `cairo_destroy(cr)` - Destroy a Cairo context
    - `cairo_surface_destroy(surface)` - Destroy a Cairo surface
 
-4. **New Constants:**
+4. **Path Query Functions (3 functions - NEW):**
+   - `cairo_get_current_point(cr)` - Returns the current point (x, y) in the path
+   - `cairo_has_current_point(cr)` - Returns true if a current point is defined
+   - `cairo_path_extents(cr)` - Returns the bounding box (x1, y1, x2, y2) of the current path
+
+5. **Clip Query Functions (2 functions - NEW):**
+   - `cairo_clip_extents(cr)` - Returns the bounding box (x1, y1, x2, y2) of the current clip region
+   - `cairo_in_clip(cr, x, y)` - Returns true if the given point is inside the clip region
+
+6. **New Constants:**
    - `CAIRO_FONT_SLANT_NORMAL`, `CAIRO_FONT_SLANT_ITALIC`, `CAIRO_FONT_SLANT_OBLIQUE`
    - `CAIRO_FONT_WEIGHT_NORMAL`, `CAIRO_FONT_WEIGHT_BOLD`
    - `CAIRO_FORMAT_ARGB32`, `CAIRO_FORMAT_RGB24`, `CAIRO_FORMAT_A8`, `CAIRO_FORMAT_A1`, `CAIRO_FORMAT_RGB16_565`
 
-**Current Function Count:** ~41 implemented functions (up from 35)
+**Current Function Count:** ~46 implemented functions (up from 41)
 
 **Implementation Files:**
-- `internal/render/cairo.go` - Added CairoSurface type, CairoContext type, surface management methods, relative path functions, and clip functions
-- `internal/render/cairo_test.go` - Comprehensive tests for surface and context management, relative paths, and clipping
-- `internal/lua/cairo_bindings.go` - Added Lua bindings for surface management, relative path, and clip functions
+- `internal/render/cairo.go` - Added path bounding box tracking, PathExtents, HasCurrentPoint, ClipExtents, InClip methods
+- `internal/render/cairo_test.go` - Comprehensive tests for path/clip query functions
+- `internal/lua/cairo_bindings.go` - Added Lua bindings for path/clip query functions
 - `internal/lua/cairo_bindings_test.go` - Tests for new Lua bindings
 - `internal/lua/cairo_module.go` - Added surface functions to cairo module
 - `internal/lua/errors.go` - Added new error types for surface operations
 
-**Newly Added Functions (6 functions):**
+**Newly Added Functions (January 15, 2026 - 5 functions):**
+1. `cairo_get_current_point(cr)` - Get current point coordinates (x, y)
+2. `cairo_has_current_point(cr)` - Check if current point exists (boolean)
+3. `cairo_path_extents(cr)` - Get path bounding box (x1, y1, x2, y2)
+4. `cairo_clip_extents(cr)` - Get clip region bounding box (x1, y1, x2, y2)
+5. `cairo_in_clip(cr, x, y)` - Test if point is inside clip region (boolean)
+
+**Previously Added Functions (6 functions):**
 1. `cairo_rel_move_to(dx, dy)` - Move current point by relative offset
 2. `cairo_rel_line_to(dx, dy)` - Draw line by relative offset
 3. `cairo_rel_curve_to(dx1, dy1, dx2, dy2, dx3, dy3)` - Draw cubic Bézier curve with relative control points
@@ -147,14 +163,40 @@ Total Gaps Found: 9
 6. `cairo_reset_clip()` - Reset clip region to infinite
 
 **Remaining Work:** Additional Cairo functions for full compatibility:
-- Pattern functions: `cairo_pattern_create_*`, `cairo_set_source`
-- More clip functions: `cairo_clip_extents`, `cairo_in_clip`
-- Path query functions: `cairo_get_current_point`, `cairo_path_extents`
+- Pattern functions: `cairo_pattern_create_linear`, `cairo_pattern_create_radial`, `cairo_set_source`
+- Gradient functions: `cairo_pattern_add_color_stop_rgb`, `cairo_pattern_add_color_stop_rgba`
 
-**Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, and clipping state tracking now work (clip regions are recorded but not yet enforced during drawing). Users can create surfaces, contexts, use relative drawing commands, and define clip regions for future enforcement. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly with context-based drawing.
+**Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, clipping, and path/clip queries now work. Users can query path bounds and clip regions for layout calculations. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly with context-based drawing.
 
 **Usage Example:**
 ```lua
+-- Path query functions example:
+cairo_move_to(cr, 10, 20)
+cairo_line_to(cr, 100, 50)
+cairo_line_to(cr, 50, 100)
+
+-- Get current point
+local x, y = cairo_get_current_point(cr)
+print("Current point: " .. x .. ", " .. y)  -- 50, 100
+
+-- Get path bounds for layout calculations
+local x1, y1, x2, y2 = cairo_path_extents(cr)
+print("Path bounds: " .. x1 .. "," .. y1 .. " to " .. x2 .. "," .. y2)
+
+-- Clip query functions example:
+cairo_rectangle(cr, 0, 0, 200, 200)
+cairo_clip(cr)
+
+-- Get clip bounds
+local cx1, cy1, cx2, cy2 = cairo_clip_extents(cr)
+print("Clip bounds: " .. cx1 .. "," .. cy1 .. " to " .. cx2 .. "," .. cy2)
+
+-- Test if point is in clip
+if cairo_in_clip(cr, 100, 100) then
+    print("Point is inside clip region")
+end
+```
+
 -- Surface management now works with proper context-based drawing:
 if conky_window == nil then return end
 local cs = cairo_xlib_surface_create(
@@ -414,7 +456,7 @@ c.Start() // No window, monitor runs in background
 | Gap # | Description | Severity | Category | Status |
 |-------|-------------|----------|----------|--------|
 | 1 | Variable count (42 vs 200+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 10 system info variables |
-| 2 | Cairo functions (41 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 21 functions (text/transform/surface/relative path/clip) |
+| 2 | Cairo functions (46 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 26 functions (text/transform/surface/relative path/clip/query) |
 | 3 | `require 'cairo'` pattern not supported | Moderate | Feature Gap | ✅ Fixed - cairo module and conky_window implemented |
 | 4 | Uptime format mismatch | Minor | Behavioral Nuance | ✅ Fixed - docs updated to match implementation |
 | 5 | `--convert` CLI flag not implemented | Minor | Feature Gap | ✅ Fixed - CLI flag implemented in main.go |
