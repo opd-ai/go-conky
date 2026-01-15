@@ -1125,10 +1125,19 @@ func (cr *CairoRenderer) Clip() {
 	// so the clip path is safe from future modifications.
 	cr.clipPath = cr.path
 	cr.hasClip = true
+	// Save the path bounds as clip bounds
+	cr.clipMinX = cr.pathMinX
+	cr.clipMinY = cr.pathMinY
+	cr.clipMaxX = cr.pathMaxX
+	cr.clipMaxY = cr.pathMaxY
 
 	// Clear the current path (as per Cairo behavior)
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathMinX = 0
+	cr.pathMinY = 0
+	cr.pathMaxX = 0
+	cr.pathMaxY = 0
 }
 
 // ClipPreserve establishes a new clip region without clearing the current path.
@@ -1153,6 +1162,11 @@ func (cr *CairoRenderer) ClipPreserve() {
 	// restore the current point so subsequent path operations can continue.
 	cr.clipPath = cr.path
 	cr.hasClip = true
+	// Save the path bounds as clip bounds
+	cr.clipMinX = cr.pathMinX
+	cr.clipMinY = cr.pathMinY
+	cr.clipMaxX = cr.pathMaxX
+	cr.clipMaxY = cr.pathMaxY
 
 	// Create a new path but preserve the current point for continued drawing.
 	// This avoids the aliasing issue where modifying the current path
@@ -1164,6 +1178,11 @@ func (cr *CairoRenderer) ClipPreserve() {
 	cr.path.MoveTo(currentX, currentY)
 	cr.pathStartX = currentX
 	cr.pathStartY = currentY
+	// Reset path bounds and add current point
+	cr.pathMinX = currentX
+	cr.pathMinY = currentY
+	cr.pathMaxX = currentX
+	cr.pathMaxY = currentY
 	cr.hasPath = true // Explicitly set for consistency with MoveTo
 }
 
@@ -1177,6 +1196,10 @@ func (cr *CairoRenderer) ResetClip() {
 
 	cr.clipPath = nil
 	cr.hasClip = false
+	cr.clipMinX = 0
+	cr.clipMinY = 0
+	cr.clipMaxX = 0
+	cr.clipMaxY = 0
 }
 
 // HasClip returns whether a clip region is currently set.
