@@ -525,3 +525,398 @@ func TestCairoRenderer_ConcurrentPathBuilding(t *testing.T) {
 
 	wg.Wait()
 }
+
+// --- Text Function Tests ---
+
+func TestCairoRenderer_SelectFontFace(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Test setting font face
+	cr.SelectFontFace("GoMono", FontSlantNormal, FontWeightBold)
+
+	// Verify by checking that no panic occurs and renderer is still valid
+	if cr == nil {
+		t.Error("Renderer should not be nil after SelectFontFace")
+	}
+}
+
+func TestCairoRenderer_SetFontSize(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Test setting various font sizes
+	testCases := []struct {
+		name     string
+		size     float64
+		expected float64
+	}{
+		{"normal size", 16.0, 16.0},
+		{"large size", 48.0, 48.0},
+		{"small size", 8.0, 8.0},
+		{"zero size defaults to 14", 0, 14.0},
+		{"negative size defaults to 14", -5, 14.0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cr.SetFontSize(tc.size)
+			if cr.GetFontSize() != tc.expected {
+				t.Errorf("Expected font size %f, got %f", tc.expected, cr.GetFontSize())
+			}
+		})
+	}
+}
+
+func TestCairoRenderer_ShowText(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set up a position
+	cr.MoveTo(10, 20)
+
+	// ShowText should not panic even without a screen
+	cr.ShowText("Hello, World!")
+
+	// After showing text, current point should have advanced
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected current point after ShowText")
+	}
+	// X should be > 10 because text advances the cursor
+	if x <= 10 {
+		t.Errorf("Expected X > 10 after ShowText, got %f", x)
+	}
+	// Y should remain at 20
+	if y != 20 {
+		t.Errorf("Expected Y to remain 20, got %f", y)
+	}
+}
+
+func TestCairoRenderer_TextExtentsResult(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set a font size
+	cr.SetFontSize(16)
+
+	// Get text extents
+	extents := cr.TextExtentsResult("Hello")
+
+	// Width should be positive
+	if extents.Width <= 0 {
+		t.Errorf("Expected positive width, got %f", extents.Width)
+	}
+
+	// Height should be positive
+	if extents.Height <= 0 {
+		t.Errorf("Expected positive height, got %f", extents.Height)
+	}
+
+	// XAdvance should be equal to width for simple text
+	if extents.XAdvance != extents.Width {
+		t.Errorf("Expected XAdvance (%f) to equal Width (%f)", extents.XAdvance, extents.Width)
+	}
+}
+
+func TestCairoRenderer_TextExtentsEmptyString(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Get text extents for empty string
+	extents := cr.TextExtentsResult("")
+
+	// Width should be zero for empty string
+	if extents.Width != 0 {
+		t.Errorf("Expected zero width for empty string, got %f", extents.Width)
+	}
+}
+
+func TestCairoRenderer_FontSlantConstants(t *testing.T) {
+	// Verify font slant constants have correct values
+	if FontSlantNormal != 0 {
+		t.Errorf("Expected FontSlantNormal = 0, got %d", FontSlantNormal)
+	}
+	if FontSlantItalic != 1 {
+		t.Errorf("Expected FontSlantItalic = 1, got %d", FontSlantItalic)
+	}
+	if FontSlantOblique != 2 {
+		t.Errorf("Expected FontSlantOblique = 2, got %d", FontSlantOblique)
+	}
+}
+
+func TestCairoRenderer_FontWeightConstants(t *testing.T) {
+	// Verify font weight constants have correct values
+	if FontWeightNormal != 0 {
+		t.Errorf("Expected FontWeightNormal = 0, got %d", FontWeightNormal)
+	}
+	if FontWeightBold != 1 {
+		t.Errorf("Expected FontWeightBold = 1, got %d", FontWeightBold)
+	}
+}
+
+// --- Transformation Function Tests ---
+
+func TestCairoRenderer_Translate(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Initial translation should be (0, 0)
+	tx, ty := cr.GetTranslate()
+	if tx != 0 || ty != 0 {
+		t.Errorf("Expected initial translation (0, 0), got (%f, %f)", tx, ty)
+	}
+
+	// Apply translation
+	cr.Translate(100, 200)
+	tx, ty = cr.GetTranslate()
+	if tx != 100 || ty != 200 {
+		t.Errorf("Expected translation (100, 200), got (%f, %f)", tx, ty)
+	}
+
+	// Translations accumulate
+	cr.Translate(50, 25)
+	tx, ty = cr.GetTranslate()
+	if tx != 150 || ty != 225 {
+		t.Errorf("Expected accumulated translation (150, 225), got (%f, %f)", tx, ty)
+	}
+}
+
+func TestCairoRenderer_Rotate(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Initial rotation should be 0
+	if cr.GetRotation() != 0 {
+		t.Errorf("Expected initial rotation 0, got %f", cr.GetRotation())
+	}
+
+	// Apply rotation (pi/4 = 45 degrees)
+	cr.Rotate(math.Pi / 4)
+	if math.Abs(cr.GetRotation()-math.Pi/4) > 0.001 {
+		t.Errorf("Expected rotation pi/4, got %f", cr.GetRotation())
+	}
+
+	// Rotations accumulate
+	cr.Rotate(math.Pi / 4)
+	if math.Abs(cr.GetRotation()-math.Pi/2) > 0.001 {
+		t.Errorf("Expected accumulated rotation pi/2, got %f", cr.GetRotation())
+	}
+}
+
+func TestCairoRenderer_Scale(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Initial scale should be (1, 1)
+	sx, sy := cr.GetScale()
+	if sx != 1 || sy != 1 {
+		t.Errorf("Expected initial scale (1, 1), got (%f, %f)", sx, sy)
+	}
+
+	// Apply scale
+	cr.Scale(2, 3)
+	sx, sy = cr.GetScale()
+	if sx != 2 || sy != 3 {
+		t.Errorf("Expected scale (2, 3), got (%f, %f)", sx, sy)
+	}
+
+	// Scales multiply
+	cr.Scale(0.5, 2)
+	sx, sy = cr.GetScale()
+	if sx != 1 || sy != 6 {
+		t.Errorf("Expected accumulated scale (1, 6), got (%f, %f)", sx, sy)
+	}
+}
+
+func TestCairoRenderer_SaveRestore(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set initial state
+	cr.SetSourceRGB(1, 0, 0)
+	cr.SetLineWidth(5)
+	cr.Translate(100, 200)
+	cr.SetFontSize(24)
+
+	// Save state
+	cr.Save()
+
+	// Modify state
+	cr.SetSourceRGB(0, 1, 0)
+	cr.SetLineWidth(10)
+	cr.Translate(50, 50)
+	cr.SetFontSize(48)
+
+	// Verify modified state
+	if cr.GetLineWidth() != 10 {
+		t.Errorf("Expected modified line width 10, got %f", cr.GetLineWidth())
+	}
+
+	// Restore state
+	cr.Restore()
+
+	// Verify restored state
+	clr := cr.GetCurrentColor()
+	if clr.R != 255 || clr.G != 0 || clr.B != 0 {
+		t.Errorf("Expected restored color (255, 0, 0), got (%d, %d, %d)", clr.R, clr.G, clr.B)
+	}
+	if cr.GetLineWidth() != 5 {
+		t.Errorf("Expected restored line width 5, got %f", cr.GetLineWidth())
+	}
+	tx, ty := cr.GetTranslate()
+	if tx != 100 || ty != 200 {
+		t.Errorf("Expected restored translation (100, 200), got (%f, %f)", tx, ty)
+	}
+	if cr.GetFontSize() != 24 {
+		t.Errorf("Expected restored font size 24, got %f", cr.GetFontSize())
+	}
+}
+
+func TestCairoRenderer_SaveRestoreMultipleLevels(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set state and save multiple times
+	cr.SetLineWidth(1)
+	cr.Save()
+
+	cr.SetLineWidth(2)
+	cr.Save()
+
+	cr.SetLineWidth(3)
+	cr.Save()
+
+	cr.SetLineWidth(4)
+
+	// Verify current state
+	if cr.GetLineWidth() != 4 {
+		t.Errorf("Expected line width 4, got %f", cr.GetLineWidth())
+	}
+
+	// Restore and verify each level
+	cr.Restore()
+	if cr.GetLineWidth() != 3 {
+		t.Errorf("Expected line width 3 after first restore, got %f", cr.GetLineWidth())
+	}
+
+	cr.Restore()
+	if cr.GetLineWidth() != 2 {
+		t.Errorf("Expected line width 2 after second restore, got %f", cr.GetLineWidth())
+	}
+
+	cr.Restore()
+	if cr.GetLineWidth() != 1 {
+		t.Errorf("Expected line width 1 after third restore, got %f", cr.GetLineWidth())
+	}
+}
+
+func TestCairoRenderer_RestoreEmptyStack(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set some state
+	cr.SetLineWidth(5)
+	cr.Translate(100, 100)
+
+	// Restore on empty stack should do nothing (not panic)
+	cr.Restore()
+
+	// State should be unchanged
+	if cr.GetLineWidth() != 5 {
+		t.Errorf("Expected line width 5 unchanged, got %f", cr.GetLineWidth())
+	}
+	tx, ty := cr.GetTranslate()
+	if tx != 100 || ty != 100 {
+		t.Errorf("Expected translation (100, 100) unchanged, got (%f, %f)", tx, ty)
+	}
+}
+
+func TestCairoRenderer_IdentityMatrix(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Apply transformations
+	cr.Translate(100, 200)
+	cr.Rotate(math.Pi)
+	cr.Scale(2, 3)
+
+	// Reset with IdentityMatrix
+	cr.IdentityMatrix()
+
+	// Verify all transformations are reset
+	tx, ty := cr.GetTranslate()
+	if tx != 0 || ty != 0 {
+		t.Errorf("Expected translation (0, 0) after identity, got (%f, %f)", tx, ty)
+	}
+	if cr.GetRotation() != 0 {
+		t.Errorf("Expected rotation 0 after identity, got %f", cr.GetRotation())
+	}
+	sx, sy := cr.GetScale()
+	if sx != 1 || sy != 1 {
+		t.Errorf("Expected scale (1, 1) after identity, got (%f, %f)", sx, sy)
+	}
+}
+
+func TestCairoRenderer_TransformPointIntegration(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Apply transformations and verify they affect text placement
+	cr.Translate(50, 50)
+	cr.MoveTo(10, 10)
+	cr.ShowText("Test")
+
+	// The text should have been drawn at transformed coordinates
+	// (We can't directly verify the drawing, but we can check state)
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected current point after ShowText")
+	}
+	// Position should still be in local coordinates
+	// (transformation is applied during drawing)
+	if y != 10 {
+		t.Errorf("Expected Y to remain 10, got %f", y)
+	}
+	if x <= 10 {
+		t.Errorf("Expected X > 10 after text advance, got %f", x)
+	}
+}
+
+// TestCairoRenderer_ConcurrentTransformations tests concurrent transformation access.
+func TestCairoRenderer_ConcurrentTransformations(t *testing.T) {
+	cr := NewCairoRenderer()
+	const numGoroutines = 10
+	const numOperations = 50
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < numOperations; j++ {
+				cr.Save()
+				cr.Translate(float64(id*10), float64(j*10))
+				cr.Rotate(float64(id) / 10)
+				cr.Scale(1.0+float64(id)/100, 1.0+float64(j)/100)
+				cr.GetTranslate()
+				cr.GetRotation()
+				cr.GetScale()
+				cr.Restore()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// TestCairoRenderer_ConcurrentTextOperations tests concurrent text operations.
+func TestCairoRenderer_ConcurrentTextOperations(t *testing.T) {
+	cr := NewCairoRenderer()
+	const numGoroutines = 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				cr.SelectFontFace("GoMono", FontSlant(j%3), FontWeight(j%2))
+				cr.SetFontSize(float64(12 + id + j))
+				cr.GetFontSize()
+				cr.TextExtentsResult("Test string")
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}

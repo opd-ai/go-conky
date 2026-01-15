@@ -2,6 +2,7 @@
 package lua
 
 import (
+	"math"
 	"testing"
 
 	"github.com/opd-ai/go-conky/internal/render"
@@ -553,5 +554,460 @@ func TestCairoBindings_InvalidLineJoinValue(t *testing.T) {
 				t.Error("Expected error for invalid line join value, got nil")
 			}
 		})
+	}
+}
+
+// --- Text Function Tests ---
+
+func TestCairoBindings_SelectFontFace(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test setting font face
+	_, err = runtime.ExecuteString("test", `
+		cairo_select_font_face("GoMono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_select_font_face: %v", err)
+	}
+
+	// Verify we have a renderer (font state is internal)
+	if cb.Renderer() == nil {
+		t.Error("Renderer should not be nil")
+	}
+}
+
+func TestCairoBindings_SetFontSize(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test setting font size
+	_, err = runtime.ExecuteString("test", "cairo_set_font_size(24)")
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_set_font_size: %v", err)
+	}
+
+	// Verify font size was set
+	fontSize := cb.Renderer().GetFontSize()
+	if fontSize != 24 {
+		t.Errorf("Expected font size 24, got %f", fontSize)
+	}
+}
+
+func TestCairoBindings_ShowText(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test showing text (should not panic even without a screen)
+	_, err = runtime.ExecuteString("test", `
+		cairo_move_to(10, 20)
+		cairo_show_text("Hello, World!")
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_show_text: %v", err)
+	}
+}
+
+func TestCairoBindings_TextExtents(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test getting text extents
+	result, err := runtime.ExecuteString("test", `
+		local extents = cairo_text_extents("Hello")
+		return extents.width > 0
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_text_extents: %v", err)
+	}
+
+	// Verify we got a truthy result (width > 0)
+	if !result.AsBool() {
+		t.Error("Expected text extents width to be > 0")
+	}
+}
+
+func TestCairoBindings_TextExtentsFields(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test all fields in text extents
+	_, err = runtime.ExecuteString("test", `
+		local extents = cairo_text_extents("Test")
+		-- Check that all fields exist
+		assert(extents.x_bearing ~= nil, "x_bearing should exist")
+		assert(extents.y_bearing ~= nil, "y_bearing should exist")
+		assert(extents.width ~= nil, "width should exist")
+		assert(extents.height ~= nil, "height should exist")
+		assert(extents.x_advance ~= nil, "x_advance should exist")
+		assert(extents.y_advance ~= nil, "y_advance should exist")
+	`)
+	if err != nil {
+		t.Fatalf("Failed to verify text extents fields: %v", err)
+	}
+}
+
+func TestCairoBindings_FontConstants(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Verify font constants are set
+	tests := []struct {
+		name  string
+		value int64
+	}{
+		{"CAIRO_FONT_SLANT_NORMAL", 0},
+		{"CAIRO_FONT_SLANT_ITALIC", 1},
+		{"CAIRO_FONT_SLANT_OBLIQUE", 2},
+		{"CAIRO_FONT_WEIGHT_NORMAL", 0},
+		{"CAIRO_FONT_WEIGHT_BOLD", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := runtime.GetGlobal(tt.name)
+			if result.IsNil() {
+				t.Errorf("Constant %s not found", tt.name)
+				return
+			}
+			intVal, ok := result.TryInt()
+			if !ok {
+				t.Errorf("Constant %s is not an integer", tt.name)
+				return
+			}
+			if intVal != tt.value {
+				t.Errorf("Constant %s = %d, want %d", tt.name, intVal, tt.value)
+			}
+		})
+	}
+}
+
+// --- Transformation Function Tests ---
+
+func TestCairoBindings_Translate(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test translate
+	_, err = runtime.ExecuteString("test", "cairo_translate(100, 200)")
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_translate: %v", err)
+	}
+
+	// Verify translation
+	tx, ty := cb.Renderer().GetTranslate()
+	if tx != 100 || ty != 200 {
+		t.Errorf("Expected translation (100, 200), got (%f, %f)", tx, ty)
+	}
+}
+
+func TestCairoBindings_Rotate(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test rotate
+	_, err = runtime.ExecuteString("test", "cairo_rotate(math.pi / 4)")
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_rotate: %v", err)
+	}
+
+	// Verify rotation (pi/4 = 0.785...)
+	rotation := cb.Renderer().GetRotation()
+	expected := math.Pi / 4
+	if rotation < expected-0.01 || rotation > expected+0.01 {
+		t.Errorf("Expected rotation ~%f, got %f", expected, rotation)
+	}
+}
+
+func TestCairoBindings_Scale(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test scale
+	_, err = runtime.ExecuteString("test", "cairo_scale(2, 3)")
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_scale: %v", err)
+	}
+
+	// Verify scale
+	sx, sy := cb.Renderer().GetScale()
+	if sx != 2 || sy != 3 {
+		t.Errorf("Expected scale (2, 3), got (%f, %f)", sx, sy)
+	}
+}
+
+func TestCairoBindings_SaveRestore(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test save/restore
+	_, err = runtime.ExecuteString("test", `
+		-- Set initial state
+		cairo_set_line_width(5)
+		cairo_translate(50, 50)
+		
+		-- Save state
+		cairo_save()
+		
+		-- Modify state
+		cairo_set_line_width(10)
+		cairo_translate(100, 100)
+		
+		-- Restore state
+		cairo_restore()
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute save/restore: %v", err)
+	}
+
+	// Verify line width was restored
+	lineWidth := cb.Renderer().GetLineWidth()
+	if lineWidth != 5 {
+		t.Errorf("Expected line width 5 after restore, got %f", lineWidth)
+	}
+
+	// Verify translation was restored
+	tx, ty := cb.Renderer().GetTranslate()
+	if tx != 50 || ty != 50 {
+		t.Errorf("Expected translation (50, 50) after restore, got (%f, %f)", tx, ty)
+	}
+}
+
+func TestCairoBindings_IdentityMatrix(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Apply some transformations
+	_, err = runtime.ExecuteString("test", `
+		cairo_translate(100, 200)
+		cairo_rotate(math.pi)
+		cairo_scale(2, 3)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to apply transformations: %v", err)
+	}
+
+	// Reset with identity_matrix
+	_, err = runtime.ExecuteString("test", "cairo_identity_matrix()")
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_identity_matrix: %v", err)
+	}
+
+	// Verify all transformations are reset
+	tx, ty := cb.Renderer().GetTranslate()
+	if tx != 0 || ty != 0 {
+		t.Errorf("Expected translation (0, 0) after identity, got (%f, %f)", tx, ty)
+	}
+
+	rotation := cb.Renderer().GetRotation()
+	if rotation != 0 {
+		t.Errorf("Expected rotation 0 after identity, got %f", rotation)
+	}
+
+	sx, sy := cb.Renderer().GetScale()
+	if sx != 1 || sy != 1 {
+		t.Errorf("Expected scale (1, 1) after identity, got (%f, %f)", sx, sy)
+	}
+}
+
+func TestCairoBindings_InvalidFontSlant(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test invalid slant value
+	_, err = runtime.ExecuteString("test", `
+		cairo_select_font_face("GoMono", 5, CAIRO_FONT_WEIGHT_NORMAL)
+	`)
+	if err == nil {
+		t.Error("Expected error for invalid slant value, got nil")
+	}
+}
+
+func TestCairoBindings_InvalidFontWeight(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test invalid weight value
+	_, err = runtime.ExecuteString("test", `
+		cairo_select_font_face("GoMono", CAIRO_FONT_SLANT_NORMAL, 5)
+	`)
+	if err == nil {
+		t.Error("Expected error for invalid weight value, got nil")
+	}
+}
+
+func TestCairoBindings_RestoreEmptyStack(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test restore on empty stack (should not error)
+	_, err = runtime.ExecuteString("test", "cairo_restore()")
+	if err != nil {
+		t.Fatalf("cairo_restore on empty stack should not error: %v", err)
+	}
+}
+
+func TestCairoBindings_ComplexTextAndTransforms(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Complex script using text and transforms
+	luaCode := `
+		-- Set up font
+		cairo_select_font_face("GoMono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD)
+		cairo_set_font_size(16)
+		
+		-- Save state
+		cairo_save()
+		
+		-- Apply transformations
+		cairo_translate(100, 100)
+		cairo_rotate(math.pi / 6)
+		cairo_scale(1.5, 1.5)
+		
+		-- Set color and draw text
+		cairo_set_source_rgba(1, 0, 0, 0.8)
+		cairo_move_to(0, 0)
+		cairo_show_text("Transformed Text")
+		
+		-- Get text extents
+		local extents = cairo_text_extents("Hello")
+		
+		-- Restore original state
+		cairo_restore()
+		
+		-- Reset transformation
+		cairo_identity_matrix()
+		
+		return extents.width > 0
+	`
+
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute complex text and transforms code: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected text extents width to be > 0")
 	}
 }

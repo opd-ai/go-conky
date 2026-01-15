@@ -28,7 +28,71 @@ type CairoRenderer struct {
 	pathCurrentX float32
 	pathCurrentY float32
 	hasPath      bool
-	mu           sync.Mutex
+	// Text rendering fields
+	textRenderer *TextRenderer
+	fontFamily   string
+	fontSlant    FontSlant
+	fontWeight   FontWeight
+	fontSize     float64
+	// Transformation state
+	translateX float64
+	translateY float64
+	rotation   float64
+	scaleX     float64
+	scaleY     float64
+	// State stack for save/restore
+	stateStack []cairoState
+	mu         sync.Mutex
+}
+
+// cairoState holds a snapshot of the drawing state for save/restore.
+type cairoState struct {
+	currentColor color.RGBA
+	lineWidth    float32
+	lineCap      LineCap
+	lineJoin     LineJoin
+	antialias    bool
+	fontFamily   string
+	fontSlant    FontSlant
+	fontWeight   FontWeight
+	fontSize     float64
+	translateX   float64
+	translateY   float64
+	rotation     float64
+	scaleX       float64
+	scaleY       float64
+}
+
+// FontSlant represents Cairo font slant styles.
+type FontSlant int
+
+const (
+	// FontSlantNormal is the normal (upright) font slant.
+	FontSlantNormal FontSlant = iota
+	// FontSlantItalic is the italic font slant.
+	FontSlantItalic
+	// FontSlantOblique is the oblique font slant.
+	FontSlantOblique
+)
+
+// FontWeight represents Cairo font weight styles.
+type FontWeight int
+
+const (
+	// FontWeightNormal is the normal font weight.
+	FontWeightNormal FontWeight = iota
+	// FontWeightBold is the bold font weight.
+	FontWeightBold
+)
+
+// TextExtents contains text measurement information.
+type TextExtents struct {
+	XBearing float64
+	YBearing float64
+	Width    float64
+	Height   float64
+	XAdvance float64
+	YAdvance float64
 }
 
 // LineCap represents the style of line end points.
@@ -66,6 +130,17 @@ func NewCairoRenderer() *CairoRenderer {
 		antialias:    true,
 		path:         &vector.Path{},
 		hasPath:      false,
+		textRenderer: NewTextRenderer(),
+		fontFamily:   "GoMono",
+		fontSlant:    FontSlantNormal,
+		fontWeight:   FontWeightNormal,
+		fontSize:     14.0,
+		translateX:   0,
+		translateY:   0,
+		rotation:     0,
+		scaleX:       1.0,
+		scaleY:       1.0,
+		stateStack:   make([]cairoState, 0),
 	}
 }
 
@@ -560,4 +635,248 @@ func clampToByte(v float64) uint8 {
 		return 255
 	}
 	return uint8(v * 255)
+}
+
+// --- Text Functions ---
+
+// SelectFontFace sets the font family, slant, and weight for text rendering.
+// This is equivalent to cairo_select_font_face.
+func (cr *CairoRenderer) SelectFontFace(family string, slant FontSlant, weight FontWeight) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.fontFamily = family
+	cr.fontSlant = slant
+	cr.fontWeight = weight
+
+	// Map Cairo slant/weight to internal FontStyle
+	style := cr.mapToFontStyle(slant, weight)
+	cr.textRenderer.SetFont(family, style)
+}
+
+// mapToFontStyle converts Cairo slant/weight to internal FontStyle.
+// Must be called while holding the mutex.
+func (cr *CairoRenderer) mapToFontStyle(slant FontSlant, weight FontWeight) FontStyle {
+	if weight == FontWeightBold {
+		if slant == FontSlantItalic || slant == FontSlantOblique {
+			return FontStyleBoldItalic
+		}
+		return FontStyleBold
+	}
+	if slant == FontSlantItalic || slant == FontSlantOblique {
+		return FontStyleItalic
+	}
+	return FontStyleRegular
+}
+
+// SetFontSize sets the font size for text rendering.
+// This is equivalent to cairo_set_font_size.
+func (cr *CairoRenderer) SetFontSize(size float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if size <= 0 {
+		size = 14.0
+	}
+	cr.fontSize = size
+	cr.textRenderer.SetFontSize(size)
+}
+
+// GetFontSize returns the current font size.
+func (cr *CairoRenderer) GetFontSize() float64 {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.fontSize
+}
+
+// ShowText renders text at the current point.
+// This is equivalent to cairo_show_text.
+// If no path exists, text is rendered at (0, 0).
+func (cr *CairoRenderer) ShowText(text string) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	// Get current position (or 0,0 if no path)
+	x := float64(cr.pathCurrentX)
+	y := float64(cr.pathCurrentY)
+
+	// Only draw if we have a screen
+	if cr.screen != nil {
+		// Apply transformation
+		tx, ty := cr.transformPoint(x, y)
+
+		// Draw text using the text renderer
+		cr.textRenderer.DrawText(cr.screen, text, tx, ty, cr.currentColor)
+	}
+
+	// Update current point by advancing by text width
+	// (this happens regardless of whether we have a screen)
+	w, _ := cr.textRenderer.MeasureText(text)
+	cr.pathCurrentX = float32(x + w)
+	cr.hasPath = true
+}
+
+// TextExtentsResult returns the measurements of the given text.
+// This is equivalent to cairo_text_extents.
+func (cr *CairoRenderer) TextExtentsResult(text string) TextExtents {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	w, h := cr.textRenderer.MeasureText(text)
+
+	return TextExtents{
+		XBearing: 0,
+		YBearing: -h, // Negative because text extends upward from baseline
+		Width:    w,
+		Height:   h,
+		XAdvance: w,
+		YAdvance: 0,
+	}
+}
+
+// --- Transformation Functions ---
+
+// Translate moves the coordinate system origin.
+// This is equivalent to cairo_translate.
+func (cr *CairoRenderer) Translate(tx, ty float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.translateX += tx
+	cr.translateY += ty
+}
+
+// GetTranslate returns the current translation values.
+func (cr *CairoRenderer) GetTranslate() (x, y float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.translateX, cr.translateY
+}
+
+// Rotate rotates the coordinate system by an angle in radians.
+// This is equivalent to cairo_rotate.
+func (cr *CairoRenderer) Rotate(angle float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.rotation += angle
+}
+
+// GetRotation returns the current rotation in radians.
+func (cr *CairoRenderer) GetRotation() float64 {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.rotation
+}
+
+// Scale scales the coordinate system.
+// This is equivalent to cairo_scale.
+func (cr *CairoRenderer) Scale(sx, sy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.scaleX *= sx
+	cr.scaleY *= sy
+}
+
+// GetScale returns the current scale factors.
+func (cr *CairoRenderer) GetScale() (sx, sy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.scaleX, cr.scaleY
+}
+
+// Save saves the current drawing state to a stack.
+// This is equivalent to cairo_save.
+func (cr *CairoRenderer) Save() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	state := cairoState{
+		currentColor: cr.currentColor,
+		lineWidth:    cr.lineWidth,
+		lineCap:      cr.lineCap,
+		lineJoin:     cr.lineJoin,
+		antialias:    cr.antialias,
+		fontFamily:   cr.fontFamily,
+		fontSlant:    cr.fontSlant,
+		fontWeight:   cr.fontWeight,
+		fontSize:     cr.fontSize,
+		translateX:   cr.translateX,
+		translateY:   cr.translateY,
+		rotation:     cr.rotation,
+		scaleX:       cr.scaleX,
+		scaleY:       cr.scaleY,
+	}
+	cr.stateStack = append(cr.stateStack, state)
+}
+
+// Restore restores the drawing state from the stack.
+// This is equivalent to cairo_restore.
+// If the stack is empty, this function does nothing.
+func (cr *CairoRenderer) Restore() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if len(cr.stateStack) == 0 {
+		return
+	}
+
+	// Pop the last state
+	lastIdx := len(cr.stateStack) - 1
+	state := cr.stateStack[lastIdx]
+	cr.stateStack = cr.stateStack[:lastIdx]
+
+	// Restore all state
+	cr.currentColor = state.currentColor
+	cr.lineWidth = state.lineWidth
+	cr.lineCap = state.lineCap
+	cr.lineJoin = state.lineJoin
+	cr.antialias = state.antialias
+	cr.fontFamily = state.fontFamily
+	cr.fontSlant = state.fontSlant
+	cr.fontWeight = state.fontWeight
+	cr.fontSize = state.fontSize
+	cr.translateX = state.translateX
+	cr.translateY = state.translateY
+	cr.rotation = state.rotation
+	cr.scaleX = state.scaleX
+	cr.scaleY = state.scaleY
+
+	// Update text renderer to match restored state
+	cr.textRenderer.SetFontSize(state.fontSize)
+	style := cr.mapToFontStyle(state.fontSlant, state.fontWeight)
+	cr.textRenderer.SetFont(state.fontFamily, style)
+}
+
+// transformPoint applies the current transformation to a point.
+// Must be called while holding the mutex.
+func (cr *CairoRenderer) transformPoint(x, y float64) (tx, ty float64) {
+	// Early return if transformation is identity
+	if cr.scaleX == 1 && cr.scaleY == 1 && cr.rotation == 0 && cr.translateX == 0 && cr.translateY == 0 {
+		return x, y
+	}
+
+	// Apply scale
+	x *= cr.scaleX
+	y *= cr.scaleY
+
+	// Apply rotation
+	if cr.rotation != 0 {
+		cos := math.Cos(cr.rotation)
+		sin := math.Sin(cr.rotation)
+		x, y = x*cos-y*sin, x*sin+y*cos
+	}
+
+	// Apply translation
+	tx = x + cr.translateX
+	ty = y + cr.translateY
+
+	return tx, ty
+}
+
+// IdentityMatrix resets the transformation matrix to identity.
+func (cr *CairoRenderer) IdentityMatrix() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.translateX = 0
+	cr.translateY = 0
+	cr.rotation = 0
+	cr.scaleX = 1.0
+	cr.scaleY = 1.0
 }
