@@ -146,8 +146,8 @@ Conky-Go supports the most commonly used Conky variables:
 | `${swap}` | Used swap (human) | `512M` |
 | `${swapmax}` | Total swap (human) | `8G` |
 | `${swapperc}` | Swap usage percent | `6` |
-| `${uptime}` | System uptime | `2d 5h 23m` |
-| `${uptime_short}` | Short uptime format | `2d 5:23` |
+| `${uptime}` | System uptime | `2d 5h 23m 45s` |
+| `${uptime_short}` | Short uptime format | `2d 5h 23m` |
 
 ### Filesystem
 
@@ -351,4 +351,6 @@ If you encounter issues migrating:
 | Audio integration | ✅ Supported | ALSA via /proc/asound |
 | X11 window hints | ✅ Supported | Desktop integration |
 | Wayland support | 🔄 Planned | Future release |
-| Windows support | 🔄 Planned | Future release |
+| Windows support | ✅ Supported | Phase 7 - WMI/PDH APIs |
+| macOS support | ✅ Supported | Phase 7 - sysctl/IOKit |
+| Remote SSH monitoring | ✅ Supported | Linux/macOS targets |
