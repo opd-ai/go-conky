@@ -523,3 +523,9 @@ func (sd *SystemData) setSysInfo(sysInfo SystemInfo) {
 	defer sd.mu.Unlock()
 	sd.SysInfo = sysInfo
 }
+
+// copySysInfo returns a copy of the system info.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copySysInfo() SystemInfo {
+	return sd.SysInfo
+}

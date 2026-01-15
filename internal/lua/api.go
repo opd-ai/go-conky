@@ -557,10 +557,10 @@ func formatSpeed(bytesPerSec float64) string {
 
 // resolveLoadAvg resolves the ${loadavg} variable.
 // Accepts an optional argument to select which load average to return:
-// - No argument or "1": 1-minute load average
+// - No argument: all three load averages ("load1 load5 load15")
+// - "1": 1-minute load average
 // - "5": 5-minute load average
 // - "15": 15-minute load average
-// - Otherwise returns all three: "load1 load5 load15"
 func (api *ConkyAPI) resolveLoadAvg(args []string) string {
 	sysInfo := api.sysProvider.SysInfo()
 

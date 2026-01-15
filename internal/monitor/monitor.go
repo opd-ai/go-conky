@@ -231,7 +231,7 @@ func (sm *SystemMonitor) Data() SystemData {
 		Process:    sm.data.copyProcess(),
 		Battery:    sm.data.copyBattery(),
 		Audio:      sm.data.copyAudio(),
-		SysInfo:    sm.data.SysInfo,
+		SysInfo:    sm.data.copySysInfo(),
 	}
 }
 

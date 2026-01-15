@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -144,49 +145,20 @@ func (r *sysInfoReader) readLoadAvg() (load1, load5, load15 float64, err error) 
 }
 
 // getMachine returns the machine hardware name.
-// This is typically "x86_64", "aarch64", etc.
+// Uses Go's runtime.GOARCH for reliable architecture detection.
 func (r *sysInfoReader) getMachine() string {
-	// Try to read from /sys/class/dmi/id/arch_type first (most reliable)
-	data, err := os.ReadFile("/sys/kernel/arch")
-	if err == nil {
-		arch := strings.TrimSpace(string(data))
-		if arch != "" {
-			return arch
-		}
+	// Use Go's built-in architecture detection which is reliable
+	// and aligns with the 'lazy programmer' philosophy
+	switch runtime.GOARCH {
+	case "amd64":
+		return "x86_64"
+	case "386":
+		return "i686"
+	case "arm64":
+		return "aarch64"
+	case "arm":
+		return "armv7l"
+	default:
+		return runtime.GOARCH
 	}
-
-	// Fallback: use uname -m equivalent via /proc/cpuinfo
-	file, err := os.Open("/proc/cpuinfo")
-	if err != nil {
-		return "unknown"
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Look for "flags" line which contains CPU capabilities
-		if strings.HasPrefix(line, "flags") || strings.HasPrefix(line, "Features") {
-			// Check for lm (long mode) flag - indicates 64-bit x86
-			if strings.Contains(line, " lm ") || strings.HasSuffix(line, " lm") {
-				return "x86_64"
-			}
-			// If no lm flag, it's 32-bit x86
-			return "i686"
-		}
-		// ARM architecture detection
-		if strings.HasPrefix(line, "CPU architecture") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				archNum := strings.TrimSpace(parts[1])
-				// ARM architecture 8 or higher is 64-bit
-				if archNum == "8" || archNum == "9" {
-					return "aarch64"
-				}
-				return "armv" + archNum + "l"
-			}
-		}
-	}
-
-	return "unknown"
 }
