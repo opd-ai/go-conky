@@ -3,6 +3,7 @@
 package render
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"sync"
@@ -310,5 +311,62 @@ func TestGameNilErrorHandler(t *testing.T) {
 	err := game.Update()
 	if err != nil {
 		t.Errorf("Update() error = %v", err)
+	}
+}
+
+func TestGameSetContext(t *testing.T) {
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(DefaultConfig(), renderer)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	game.SetContext(ctx)
+
+	// Should not return error when context is not cancelled
+	err := game.Update()
+	if err != nil {
+		t.Errorf("Update() error = %v, want nil", err)
+	}
+
+	// Cancel context and verify Update returns ErrGameTerminated
+	cancel()
+
+	err = game.Update()
+	if err != ErrGameTerminated {
+		t.Errorf("Update() error = %v, want %v", err, ErrGameTerminated)
+	}
+}
+
+func TestGameUpdateWithCancelledContext(t *testing.T) {
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(DefaultConfig(), renderer)
+
+	// Create an already cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	game.SetContext(ctx)
+
+	err := game.Update()
+	if err != ErrGameTerminated {
+		t.Errorf("Update() error = %v, want %v", err, ErrGameTerminated)
+	}
+}
+
+func TestGameUpdateWithNilContext(t *testing.T) {
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(DefaultConfig(), renderer)
+
+	// No context set - should work normally
+	err := game.Update()
+	if err != nil {
+		t.Errorf("Update() error = %v, want nil", err)
+	}
+}
+
+func TestErrGameTerminated(t *testing.T) {
+	if ErrGameTerminated == nil {
+		t.Error("ErrGameTerminated should not be nil")
+	}
+	if ErrGameTerminated.Error() != "game terminated" {
+		t.Errorf("ErrGameTerminated.Error() = %q, want %q", ErrGameTerminated.Error(), "game terminated")
 	}
 }

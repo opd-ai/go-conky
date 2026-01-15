@@ -4,6 +4,8 @@
 package render
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"image/color"
 	"os"
@@ -12,6 +14,9 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+// ErrGameTerminated is returned when the game loop is terminated via context cancellation.
+var ErrGameTerminated = errors.New("game terminated")
 
 // ErrorHandler is a function type for handling errors during game updates.
 type ErrorHandler func(err error)
@@ -41,6 +46,7 @@ type Game struct {
 	lines        []TextLine
 	mu           sync.RWMutex
 	running      bool
+	ctx          context.Context
 }
 
 // NewGame creates a new Game instance with the provided configuration.
@@ -81,6 +87,14 @@ func (g *Game) SetDataProvider(dp DataProvider) {
 	g.dataProvider = dp
 }
 
+// SetContext sets a context for the game loop. When the context is cancelled,
+// the game loop will terminate gracefully.
+func (g *Game) SetContext(ctx context.Context) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.ctx = ctx
+}
+
 // SetLines sets the text lines to be rendered.
 func (g *Game) SetLines(lines []TextLine) {
 	g.mu.Lock()
@@ -108,6 +122,15 @@ func (g *Game) ClearLines() {
 func (g *Game) Update() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+
+	// Check for context cancellation (used for programmatic shutdown)
+	if g.ctx != nil {
+		select {
+		case <-g.ctx.Done():
+			return ErrGameTerminated
+		default:
+		}
+	}
 
 	// Update system data at configured intervals
 	if g.dataProvider != nil && time.Since(g.lastUpdate) >= g.config.UpdateInterval {
