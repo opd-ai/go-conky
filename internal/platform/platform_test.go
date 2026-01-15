@@ -31,8 +31,18 @@ func TestNewPlatform(t *testing.T) {
 		if p.Name() != "windows" {
 			t.Errorf("Expected platform name 'windows', got '%s'", p.Name())
 		}
+	case "darwin":
+		if err != nil {
+			t.Fatalf("NewPlatform() failed on macOS: %v", err)
+		}
+		if p == nil {
+			t.Fatal("NewPlatform() returned nil platform on macOS")
+		}
+		if p.Name() != "darwin" {
+			t.Errorf("Expected platform name 'darwin', got '%s'", p.Name())
+		}
 	default:
-		// On non-Linux/Windows systems, we expect an error for now
+		// On unsupported systems, we expect an error
 		if err == nil {
 			t.Errorf("Expected error on %s platform, got nil", runtime.GOOS)
 		}
