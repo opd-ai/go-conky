@@ -416,6 +416,9 @@ type CairoRenderer struct {
 	lineCap      LineCap
 	lineJoin     LineJoin
 	antialias    bool
+	dashPattern  []float64
+	dashOffset   float64
+	miterLimit   float64
 	path         *vector.Path
 	pathStartX   float32
 	pathStartY   float32
@@ -464,6 +467,9 @@ type cairoState struct {
 	lineCap       LineCap
 	lineJoin      LineJoin
 	antialias     bool
+	dashPattern   []float64
+	dashOffset    float64
+	miterLimit    float64
 	fontFamily    string
 	fontSlant     FontSlant
 	fontWeight    FontWeight
@@ -693,6 +699,71 @@ func (cr *CairoRenderer) GetAntialias() bool {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	return cr.antialias
+}
+
+// SetDash sets the dash pattern for stroking.
+// dashes is a slice of positive values specifying on/off lengths.
+// offset specifies where in the pattern to start.
+// This is equivalent to cairo_set_dash.
+func (cr *CairoRenderer) SetDash(dashes []float64, offset float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.dashPattern = make([]float64, len(dashes))
+	copy(cr.dashPattern, dashes)
+	cr.dashOffset = offset
+}
+
+// GetDash returns the current dash pattern and offset.
+func (cr *CairoRenderer) GetDash() ([]float64, float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	dashes := make([]float64, len(cr.dashPattern))
+	copy(dashes, cr.dashPattern)
+	return dashes, cr.dashOffset
+}
+
+// GetDashCount returns the number of elements in the dash pattern.
+func (cr *CairoRenderer) GetDashCount() int {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return len(cr.dashPattern)
+}
+
+// SetMiterLimit sets the miter limit for stroking.
+// This is equivalent to cairo_set_miter_limit.
+func (cr *CairoRenderer) SetMiterLimit(limit float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.miterLimit = limit
+}
+
+// GetMiterLimit returns the current miter limit.
+func (cr *CairoRenderer) GetMiterLimit() float64 {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.miterLimit
+}
+
+// SetFillRule sets the fill rule for fill operations.
+// This is a no-op placeholder for Cairo compatibility.
+func (cr *CairoRenderer) SetFillRule(_ int) {
+	// Ebiten's vector package uses even-odd fill rule by default
+}
+
+// GetFillRule returns the current fill rule.
+func (cr *CairoRenderer) GetFillRule() int {
+	return 0 // CAIRO_FILL_RULE_WINDING
+}
+
+// SetOperator sets the compositing operator.
+// This is a no-op placeholder for Cairo compatibility.
+func (cr *CairoRenderer) SetOperator(_ int) {
+	// Ebiten uses its own blend modes
+}
+
+// GetOperator returns the current operator.
+func (cr *CairoRenderer) GetOperator() int {
+	return 2 // CAIRO_OPERATOR_OVER (default)
 }
 
 // --- Path Building Functions ---

@@ -132,6 +132,25 @@ func (cb *CairoBindings) registerFunctions() {
 	cb.runtime.SetGoFunction("cairo_matrix_transform_point", cb.matrixTransformPoint, 3, false)
 	cb.runtime.SetGoFunction("cairo_matrix_transform_distance", cb.matrixTransformDistance, 3, false)
 
+	// Dash and miter functions
+	cb.runtime.SetGoFunction("cairo_set_dash", cb.setDash, 2, true)
+	cb.runtime.SetGoFunction("cairo_get_dash", cb.getDash, 0, true)
+	cb.runtime.SetGoFunction("cairo_get_dash_count", cb.getDashCount, 0, true)
+	cb.runtime.SetGoFunction("cairo_set_miter_limit", cb.setMiterLimit, 1, true)
+	cb.runtime.SetGoFunction("cairo_get_miter_limit", cb.getMiterLimit, 0, true)
+
+	// Fill rule and operator functions
+	cb.runtime.SetGoFunction("cairo_set_fill_rule", cb.setFillRule, 1, true)
+	cb.runtime.SetGoFunction("cairo_get_fill_rule", cb.getFillRule, 0, true)
+	cb.runtime.SetGoFunction("cairo_set_operator", cb.setOperator, 1, true)
+	cb.runtime.SetGoFunction("cairo_get_operator", cb.getOperator, 0, true)
+
+	// Getter functions for line properties
+	cb.runtime.SetGoFunction("cairo_get_line_width", cb.getLineWidth, 0, true)
+	cb.runtime.SetGoFunction("cairo_get_line_cap", cb.getLineCap, 0, true)
+	cb.runtime.SetGoFunction("cairo_get_line_join", cb.getLineJoin, 0, true)
+	cb.runtime.SetGoFunction("cairo_get_antialias", cb.getAntialias, 0, true)
+
 	// Register Cairo constants
 	cb.registerConstants()
 
@@ -176,6 +195,26 @@ func (cb *CairoBindings) registerConstants() {
 	cb.runtime.SetGlobal("CAIRO_EXTEND_REPEAT", rt.IntValue(int64(render.PatternExtendRepeat)))
 	cb.runtime.SetGlobal("CAIRO_EXTEND_REFLECT", rt.IntValue(int64(render.PatternExtendReflect)))
 	cb.runtime.SetGlobal("CAIRO_EXTEND_PAD", rt.IntValue(int64(render.PatternExtendPad)))
+
+	// Fill rule constants
+	cb.runtime.SetGlobal("CAIRO_FILL_RULE_WINDING", rt.IntValue(0))
+	cb.runtime.SetGlobal("CAIRO_FILL_RULE_EVEN_ODD", rt.IntValue(1))
+
+	// Operator constants (common ones)
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_CLEAR", rt.IntValue(0))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_SOURCE", rt.IntValue(1))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_OVER", rt.IntValue(2))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_IN", rt.IntValue(3))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_OUT", rt.IntValue(4))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_ATOP", rt.IntValue(5))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_DEST", rt.IntValue(6))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_DEST_OVER", rt.IntValue(7))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_DEST_IN", rt.IntValue(8))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_DEST_OUT", rt.IntValue(9))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_DEST_ATOP", rt.IntValue(10))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_XOR", rt.IntValue(11))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_ADD", rt.IntValue(12))
+	cb.runtime.SetGlobal("CAIRO_OPERATOR_SATURATE", rt.IntValue(13))
 }
 
 // registerSurfaceFunctions registers surface management functions.
@@ -1665,4 +1704,249 @@ func getMatrixArg(args []rt.Value, idx int) (*render.CairoMatrix, error) {
 		}
 	}
 	return nil, fmt.Errorf("argument %d is not a matrix", idx)
+}
+
+// --- Dash and Miter Functions ---
+
+// setDash handles cairo_set_dash(dashes, offset)
+func (cb *CairoBindings) setDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	offset := 0
+	renderer := cb.renderer
+	// Check if first arg is a context
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				offset = 1
+			}
+		}
+	}
+	// Get dashes table
+	if offset >= len(args) {
+		return c.Next(), nil
+	}
+	dashesVal := args[offset]
+	dashOffset := 0.0
+	if offset+1 < len(args) {
+		if f, ok := args[offset+1].TryFloat(); ok {
+			dashOffset = f
+		} else if i, ok := args[offset+1].TryInt(); ok {
+			dashOffset = float64(i)
+		}
+	}
+	// Parse dashes table
+	var dashes []float64
+	if tbl, ok := dashesVal.TryTable(); ok {
+		tbl.ForEach(func(k, v rt.Value) {
+			if f, ok := v.TryFloat(); ok {
+				dashes = append(dashes, f)
+			} else if i, ok := v.TryInt(); ok {
+				dashes = append(dashes, float64(i))
+			}
+		})
+	}
+	renderer.SetDash(dashes, dashOffset)
+	return c.Next(), nil
+}
+
+// getDash handles cairo_get_dash() -> returns dashes table, offset
+func (cb *CairoBindings) getDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	dashes, offset := renderer.GetDash()
+	// Create Lua table for dashes
+	dashTable := rt.NewTable()
+	for i, d := range dashes {
+		dashTable.Set(rt.IntValue(int64(i+1)), rt.FloatValue(d))
+	}
+	return c.PushingNext(t.Runtime, rt.TableValue(dashTable), rt.FloatValue(offset)), nil
+}
+
+// getDashCount handles cairo_get_dash_count()
+func (cb *CairoBindings) getDashCount(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	count := renderer.GetDashCount()
+	return c.PushingNext1(t.Runtime, rt.IntValue(int64(count))), nil
+}
+
+// setMiterLimit handles cairo_set_miter_limit(limit)
+func (cb *CairoBindings) setMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	offset := 0
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				offset = 1
+			}
+		}
+	}
+	limit, _ := getFloatArg(args, offset)
+	renderer.SetMiterLimit(limit)
+	return c.Next(), nil
+}
+
+// getMiterLimit handles cairo_get_miter_limit()
+func (cb *CairoBindings) getMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	limit := renderer.GetMiterLimit()
+	return c.PushingNext1(t.Runtime, rt.FloatValue(limit)), nil
+}
+
+// --- Fill Rule and Operator Functions ---
+
+// setFillRule handles cairo_set_fill_rule(rule)
+func (cb *CairoBindings) setFillRule(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	offset := 0
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				offset = 1
+			}
+		}
+	}
+	rule, _ := getIntArg(args, offset)
+	renderer.SetFillRule(int(rule))
+	return c.Next(), nil
+}
+
+// getFillRule handles cairo_get_fill_rule()
+func (cb *CairoBindings) getFillRule(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	rule := renderer.GetFillRule()
+	return c.PushingNext1(t.Runtime, rt.IntValue(int64(rule))), nil
+}
+
+// setOperator handles cairo_set_operator(op)
+func (cb *CairoBindings) setOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	offset := 0
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				offset = 1
+			}
+		}
+	}
+	op, _ := getIntArg(args, offset)
+	renderer.SetOperator(int(op))
+	return c.Next(), nil
+}
+
+// getOperator handles cairo_get_operator()
+func (cb *CairoBindings) getOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	op := renderer.GetOperator()
+	return c.PushingNext1(t.Runtime, rt.IntValue(int64(op))), nil
+}
+
+// --- Line Property Getters ---
+
+// getLineWidth handles cairo_get_line_width()
+func (cb *CairoBindings) getLineWidth(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	width := renderer.GetLineWidth()
+	return c.PushingNext1(t.Runtime, rt.FloatValue(width)), nil
+}
+
+// getLineCap handles cairo_get_line_cap()
+func (cb *CairoBindings) getLineCap(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	cap := renderer.GetLineCap()
+	return c.PushingNext1(t.Runtime, rt.IntValue(int64(cap))), nil
+}
+
+// getLineJoin handles cairo_get_line_join()
+func (cb *CairoBindings) getLineJoin(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	join := renderer.GetLineJoin()
+	return c.PushingNext1(t.Runtime, rt.IntValue(int64(join))), nil
+}
+
+// getAntialias handles cairo_get_antialias()
+func (cb *CairoBindings) getAntialias(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := collectArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	aa := renderer.GetAntialias()
+	if aa {
+		return c.PushingNext1(t.Runtime, rt.IntValue(1)), nil // CAIRO_ANTIALIAS_DEFAULT
+	}
+	return c.PushingNext1(t.Runtime, rt.IntValue(0)), nil // CAIRO_ANTIALIAS_NONE
 }
