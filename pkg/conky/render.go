@@ -9,6 +9,14 @@ import (
 	"github.com/opd-ai/go-conky/internal/render"
 )
 
+// Rendering defaults for the game runner.
+const (
+	defaultBackgroundAlpha = 200  // Semi-transparent background
+	defaultTextStartY      = 20.0 // Initial Y position for text
+	defaultLineHeight      = 18.0 // Vertical spacing between lines
+	defaultTextStartX      = 10.0 // Initial X position for text
+)
+
 // gameRunner provides the Ebiten game integration for rendering.
 type gameRunner struct {
 	game *render.Game
@@ -49,7 +57,7 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	}
 	// Default background is semi-transparent black
 	if bgColor == (color.RGBA{}) {
-		bgColor = color.RGBA{R: 0, G: 0, B: 0, A: 200}
+		bgColor = color.RGBA{R: 0, G: 0, B: 0, A: defaultBackgroundAlpha}
 	}
 	// Default text color is white
 	if textColor == (color.RGBA{}) {
@@ -73,15 +81,15 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	// Set up initial text lines from configuration template
 	if len(textLines) > 0 {
 		lines := make([]render.TextLine, 0, len(textLines))
-		y := 20.0 // Start position
+		y := defaultTextStartY
 		for _, text := range textLines {
 			lines = append(lines, render.TextLine{
 				Text:  text,
-				X:     10,
+				X:     defaultTextStartX,
 				Y:     y,
 				Color: textColor,
 			})
-			y += 18 // Line height
+			y += defaultLineHeight
 		}
 		gr.game.SetLines(lines)
 	}
