@@ -2411,3 +2411,164 @@ func TestCairoBindings_SurfaceFlush(t *testing.T) {
 		t.Fatalf("Failed to execute surface flush test: %v", err)
 	}
 }
+
+func TestCairoBindings_DashFunctions(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Verify dash pattern can be set and retrieved
+	_, err = runtime.ExecuteString("test", `
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(surface)
+		
+		-- Set a dash pattern
+		cairo_set_dash(cr, {10, 5, 3, 5}, 0)
+		
+		-- Get dash count
+		local count = cairo_get_dash_count(cr)
+		assert(count == 4, "Expected 4 dash elements, got " .. tostring(count))
+		
+		-- Get dash pattern
+		local dashes, offset = cairo_get_dash(cr)
+		assert(offset == 0, "Expected offset 0, got " .. tostring(offset))
+		
+		cairo_destroy(cr)
+		cairo_surface_destroy(surface)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute dash test: %v", err)
+	}
+
+	// Verify the renderer has the dash set
+	dashes, offset := cb.Renderer().GetDash()
+	if len(dashes) != 4 {
+		t.Errorf("Expected 4 dash elements, got %d", len(dashes))
+	}
+	if offset != 0 {
+		t.Errorf("Expected offset 0, got %f", offset)
+	}
+}
+
+func TestCairoBindings_MiterLimit(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	_, err = runtime.ExecuteString("test", `
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(surface)
+		
+		cairo_set_miter_limit(cr, 10.0)
+		local limit = cairo_get_miter_limit(cr)
+		assert(limit == 10.0, "Expected miter limit 10.0, got " .. tostring(limit))
+		
+		cairo_destroy(cr)
+		cairo_surface_destroy(surface)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute miter limit test: %v", err)
+	}
+
+	if cb.Renderer().GetMiterLimit() != 10.0 {
+		t.Errorf("Expected miter limit 10.0, got %f", cb.Renderer().GetMiterLimit())
+	}
+}
+
+func TestCairoBindings_LinePropertyGetters(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	_, err = runtime.ExecuteString("test", `
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(surface)
+		
+		-- Test line width getter
+		cairo_set_line_width(cr, 3.0)
+		local width = cairo_get_line_width(cr)
+		assert(width == 3.0, "Expected line width 3.0, got " .. tostring(width))
+		
+		-- Test line cap getter
+		cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND)
+		local cap = cairo_get_line_cap(cr)
+		assert(cap == CAIRO_LINE_CAP_ROUND, "Expected CAIRO_LINE_CAP_ROUND")
+		
+		-- Test line join getter
+		cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL)
+		local join = cairo_get_line_join(cr)
+		assert(join == CAIRO_LINE_JOIN_BEVEL, "Expected CAIRO_LINE_JOIN_BEVEL")
+		
+		-- Test antialias getter
+		cairo_set_antialias(cr, CAIRO_ANTIALIAS_NONE)
+		local aa = cairo_get_antialias(cr)
+		assert(aa == CAIRO_ANTIALIAS_NONE, "Expected CAIRO_ANTIALIAS_NONE")
+		
+		cairo_destroy(cr)
+		cairo_surface_destroy(surface)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute line property getters test: %v", err)
+	}
+}
+
+func TestCairoBindings_FillRuleOperator(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Verify constants exist and functions work
+	_, err = runtime.ExecuteString("test", `
+		assert(CAIRO_FILL_RULE_WINDING ~= nil, "CAIRO_FILL_RULE_WINDING should exist")
+		assert(CAIRO_FILL_RULE_EVEN_ODD ~= nil, "CAIRO_FILL_RULE_EVEN_ODD should exist")
+		assert(CAIRO_OPERATOR_OVER ~= nil, "CAIRO_OPERATOR_OVER should exist")
+		assert(CAIRO_OPERATOR_SOURCE ~= nil, "CAIRO_OPERATOR_SOURCE should exist")
+		
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(surface)
+		
+		-- Test fill rule
+		cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD)
+		local rule = cairo_get_fill_rule(cr)
+		-- fill rule is a no-op so always returns winding (0)
+		
+		-- Test operator
+		cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE)
+		local op = cairo_get_operator(cr)
+		-- operator is a no-op so always returns OVER (2)
+		
+		cairo_destroy(cr)
+		cairo_surface_destroy(surface)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute fill rule/operator test: %v", err)
+	}
+}

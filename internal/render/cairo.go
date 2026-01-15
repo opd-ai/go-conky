@@ -1502,6 +1502,10 @@ func (cr *CairoRenderer) Save() {
 		matrixCopy = cr.matrix.Copy()
 	}
 
+	// Copy the dash pattern
+	dashCopy := make([]float64, len(cr.dashPattern))
+	copy(dashCopy, cr.dashPattern)
+
 	state := cairoState{
 		currentColor:  cr.currentColor,
 		sourcePattern: cr.sourcePattern,
@@ -1509,6 +1513,9 @@ func (cr *CairoRenderer) Save() {
 		lineCap:       cr.lineCap,
 		lineJoin:      cr.lineJoin,
 		antialias:     cr.antialias,
+		dashPattern:   dashCopy,
+		dashOffset:    cr.dashOffset,
+		miterLimit:    cr.miterLimit,
 		fontFamily:    cr.fontFamily,
 		fontSlant:     cr.fontSlant,
 		fontWeight:    cr.fontWeight,
@@ -1552,6 +1559,9 @@ func (cr *CairoRenderer) Restore() {
 	cr.lineCap = state.lineCap
 	cr.lineJoin = state.lineJoin
 	cr.antialias = state.antialias
+	cr.dashPattern = state.dashPattern
+	cr.dashOffset = state.dashOffset
+	cr.miterLimit = state.miterLimit
 	cr.fontFamily = state.fontFamily
 	cr.fontSlant = state.fontSlant
 	cr.fontWeight = state.fontWeight

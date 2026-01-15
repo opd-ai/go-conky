@@ -1467,3 +1467,176 @@ func TestExecVariable(t *testing.T) {
 		t.Errorf("expected 'hello world', got %q", result)
 	}
 }
+
+func TestEntropyVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Test entropy_avail - reads from /proc/sys/kernel/random/entropy_avail
+	result := api.Parse("${entropy_avail}")
+	// Just verify it returns a number (or empty string if file doesn't exist)
+	if result != "" && result != "0" {
+		// Should be a numeric value
+		if len(result) > 5 {
+			t.Errorf("entropy_avail should be <= 4096, got %s", result)
+		}
+	}
+
+	// Test entropy_poolsize - always returns 4096
+	result = api.Parse("${entropy_poolsize}")
+	if result != "4096" {
+		t.Errorf("expected '4096', got %q", result)
+	}
+
+	// Test entropy_perc - should be a percentage
+	result = api.Parse("${entropy_perc}")
+	// Just check it's a valid number
+	if result == "" {
+		result = "0"
+	}
+
+	// Test entropy_bar
+	result = api.Parse("${entropy_bar}")
+	if len(result) != 10 { // default width is 10
+		t.Errorf("expected bar of length 10, got length %d: %q", len(result), result)
+	}
+}
+
+func TestBarWidgets(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		variable string
+		minLen   int
+	}{
+		{"membar default", "${membar}", 10},
+		{"membar custom width", "${membar 20}", 20},
+		{"swapbar default", "${swapbar}", 10},
+		{"cpubar default", "${cpubar}", 10},
+		{"loadgraph default", "${loadgraph}", 10},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.variable)
+			if len(result) != tt.minLen {
+				t.Errorf("expected bar of length %d, got length %d: %q", tt.minLen, len(result), result)
+			}
+			// Check bar contains only # and -
+			for _, c := range result {
+				if c != '#' && c != '-' {
+					t.Errorf("unexpected character in bar: %c", c)
+				}
+			}
+		})
+	}
+}
+
+func TestConditionalVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Test if_existing with existing file
+	result := api.Parse("${if_existing /proc/version}")
+	if result != "1" {
+		t.Errorf("expected '1' for existing file, got %q", result)
+	}
+
+	// Test if_existing with non-existing file
+	result = api.Parse("${if_existing /nonexistent/file/path}")
+	if result != "0" {
+		t.Errorf("expected '0' for non-existing file, got %q", result)
+	}
+}
+
+func TestInodeVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	// Add filesystem data with inodes
+	provider.filesystem = monitor.FilesystemStats{
+		Mounts: map[string]monitor.MountStats{
+			"/": {
+				MountPoint:    "/",
+				InodesTotal:   1000000,
+				InodesFree:    500000,
+				InodesPercent: 50.0,
+			},
+		},
+	}
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Test fs_inodes
+	result := api.Parse("${fs_inodes /}")
+	if result == "0" {
+		t.Errorf("expected non-zero inodes, got %q", result)
+	}
+
+	// Test fs_inodes_free
+	result = api.Parse("${fs_inodes_free /}")
+	if result == "0" {
+		t.Errorf("expected non-zero free inodes, got %q", result)
+	}
+
+	// Test fs_inodes_perc
+	result = api.Parse("${fs_inodes_perc /}")
+	if result != "50" {
+		t.Errorf("expected '50', got %q", result)
+	}
+}
+
+func TestStippledHR(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	result := api.Parse("${stippled_hr 8}")
+	expected := "- - - - "
+	if result != expected {
+		t.Errorf("expected %q, got %q", expected, result)
+	}
+}

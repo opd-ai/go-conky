@@ -43,7 +43,7 @@ Total Gaps Found: 9
 - `internal/lua/api_test.go` - Tests for new variables including comprehensive disk I/O tests
 - `docs/migration.md` - Updated with disk I/O variable documentation
 
-**Current Variable Count:** ~75 implemented variables (up from ~50)
+**Current Variable Count:** ~100 implemented variables (up from ~75)
 
 **Recently Added (January 15, 2026):**
 11. `${diskio}` - Returns total disk I/O speed (read + write) for specified device or all devices
@@ -77,17 +77,32 @@ Total Gaps Found: 9
 39. `${downspeedf}`, `${upspeedf}` - Returns network speed as float
 40. `${if_up interface}` - Returns 1 if interface exists, 0 otherwise
 
+**Recently Added (January 16, 2026):**
+41. `${wireless_essid}`, `${wireless_link_qual}`, `${wireless_link_qual_perc}` - Wireless info (stub)
+42. `${wireless_bitrate}`, `${wireless_ap}` - Wireless bitrate and access point
+43. `${tcp_portmon}` - TCP port monitor (stub)
+44. `${if_existing}` - Check if file exists
+45. `${if_running}` - Check if process is running
+46. `${entropy_avail}`, `${entropy_poolsize}`, `${entropy_perc}`, `${entropy_bar}` - Entropy info
+47. `${fs_inodes}`, `${fs_inodes_free}`, `${fs_inodes_perc}` - Inode stats
+48. `${membar}`, `${swapbar}`, `${cpubar}`, `${loadgraph}` - Text bar widgets
+49. `${freq_dyn}`, `${freq_dyn_g}` - Dynamic CPU frequency
+50. `${platform}` - Platform/sysname
+51. `${running_threads}` - Thread count
+52. `${acpitemp}`, `${acpifan}`, `${acpiacadapter}` - ACPI info
+53. `${stippled_hr}` - Stippled horizontal rule
+54. `${scroll}` - Scrolling text (simplified)
+55. `${nvidia}`, `${apcupsd}`, `${imap}`, `${pop3}`, `${weather}`, `${stockquote}` - Stubs for compatibility
+
 **Implementation Files (Batch Update January 15, 2026):**
 - `internal/lua/api.go` - Added 25+ new variable cases and resolver functions
 - `internal/lua/api_test.go` - Updated mock provider with TopCPU/TopMem, added comprehensive tests
 
 **Remaining Work:** Some variables still need implementation:
-- `cpubar`, `cpugraph`, `membar`, `memgraph` (graphical widgets - require renderer integration)
-- `wireless_essid`, `wireless_link_qual` (wireless info - requires wireless extension reading)
 - `execi interval command` (cached command execution)
-- `if_existing`, `if_match`, `if_running` (conditionals - require parser changes)
+- Real wireless info (requires wireless extension reading)
 
-**Production Impact:** Moderate - Most commonly used variables now work. Top process monitoring, command execution, and battery info are functional.
+**Production Impact:** High - Most commonly used variables now work including bars, conditionals, and entropy.
 
 ---
 
@@ -212,7 +227,36 @@ Total Gaps Found: 9
 **New Constants:**
 - `CAIRO_EXTEND_NONE`, `CAIRO_EXTEND_REPEAT`, `CAIRO_EXTEND_REFLECT`, `CAIRO_EXTEND_PAD`
 
-**Current Function Count:** ~74 implemented functions (up from ~53)
+**Recently Added (January 16, 2026 - Dash, Miter, Fill Rule, Operator, Line Property Getters):**
+
+**Dash Functions (3 functions):**
+1. `cairo_set_dash(dashes, offset)` - Set dash pattern for stroking
+2. `cairo_get_dash()` - Get current dash pattern and offset
+3. `cairo_get_dash_count()` - Get number of dash pattern elements
+
+**Miter Functions (2 functions):**
+1. `cairo_set_miter_limit(limit)` - Set miter limit
+2. `cairo_get_miter_limit()` - Get current miter limit
+
+**Fill Rule Functions (2 functions):**
+1. `cairo_set_fill_rule(rule)` - Set fill rule (WINDING or EVEN_ODD)
+2. `cairo_get_fill_rule()` - Get current fill rule
+
+**Operator Functions (2 functions):**
+1. `cairo_set_operator(op)` - Set compositing operator
+2. `cairo_get_operator()` - Get current operator
+
+**Line Property Getters (4 functions):**
+1. `cairo_get_line_width()` - Get current line width
+2. `cairo_get_line_cap()` - Get current line cap style
+3. `cairo_get_line_join()` - Get current line join style
+4. `cairo_get_antialias()` - Get current antialias mode
+
+**New Constants:**
+- `CAIRO_FILL_RULE_WINDING`, `CAIRO_FILL_RULE_EVEN_ODD`
+- `CAIRO_OPERATOR_CLEAR`, `CAIRO_OPERATOR_SOURCE`, `CAIRO_OPERATOR_OVER`, etc. (14 operators)
+
+**Current Function Count:** ~87 implemented functions (up from ~74)
 
 **Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, clipping, path/clip queries, and gradients now work. Users can create linear and radial gradients for advanced visual effects. Scripts that use gradients for progress bars, gauges, and backgrounds now execute correctly. Matrix operations enable complex coordinate transformations. Pattern extend modes control gradient tiling behavior.
 

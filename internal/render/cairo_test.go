@@ -1832,3 +1832,140 @@ func TestCairoRenderer_MatrixConcurrency(t *testing.T) {
 
 	wg.Wait()
 }
+
+// --- Dash Pattern Tests ---
+
+func TestCairoRenderer_SetGetDash(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Initially empty dash
+	dashes, offset := cr.GetDash()
+	if len(dashes) != 0 {
+		t.Errorf("Expected empty dash pattern initially, got %v", dashes)
+	}
+	if offset != 0 {
+		t.Errorf("Expected offset 0 initially, got %f", offset)
+	}
+
+	// Set a dash pattern
+	cr.SetDash([]float64{10, 5, 3, 5}, 2.5)
+
+	dashes, offset = cr.GetDash()
+	if len(dashes) != 4 {
+		t.Errorf("Expected 4 dash elements, got %d", len(dashes))
+	}
+	if offset != 2.5 {
+		t.Errorf("Expected offset 2.5, got %f", offset)
+	}
+
+	// Verify dash count
+	if cr.GetDashCount() != 4 {
+		t.Errorf("Expected dash count 4, got %d", cr.GetDashCount())
+	}
+}
+
+func TestCairoRenderer_DashSaveRestore(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set dash pattern
+	cr.SetDash([]float64{10, 5}, 0)
+
+	// Save state
+	cr.Save()
+
+	// Modify dash
+	cr.SetDash([]float64{20, 10, 5, 10}, 5.0)
+
+	// Verify modification
+	if cr.GetDashCount() != 4 {
+		t.Errorf("Expected dash count 4 after modification, got %d", cr.GetDashCount())
+	}
+
+	// Restore should bring back original dash
+	cr.Restore()
+
+	if cr.GetDashCount() != 2 {
+		t.Errorf("Expected dash count 2 after restore, got %d", cr.GetDashCount())
+	}
+}
+
+// --- Miter Limit Tests ---
+
+func TestCairoRenderer_SetGetMiterLimit(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Default miter limit is 0
+	if cr.GetMiterLimit() != 0 {
+		t.Errorf("Expected default miter limit 0, got %f", cr.GetMiterLimit())
+	}
+
+	// Set miter limit
+	cr.SetMiterLimit(10.0)
+	if cr.GetMiterLimit() != 10.0 {
+		t.Errorf("Expected miter limit 10.0, got %f", cr.GetMiterLimit())
+	}
+
+	// Set another value
+	cr.SetMiterLimit(5.5)
+	if cr.GetMiterLimit() != 5.5 {
+		t.Errorf("Expected miter limit 5.5, got %f", cr.GetMiterLimit())
+	}
+}
+
+func TestCairoRenderer_MiterLimitSaveRestore(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set miter limit
+	cr.SetMiterLimit(10.0)
+
+	// Save state
+	cr.Save()
+
+	// Modify miter limit
+	cr.SetMiterLimit(20.0)
+
+	if cr.GetMiterLimit() != 20.0 {
+		t.Errorf("Expected miter limit 20.0 after modification, got %f", cr.GetMiterLimit())
+	}
+
+	// Restore should bring back original
+	cr.Restore()
+
+	if cr.GetMiterLimit() != 10.0 {
+		t.Errorf("Expected miter limit 10.0 after restore, got %f", cr.GetMiterLimit())
+	}
+}
+
+// --- Fill Rule and Operator Tests ---
+
+func TestCairoRenderer_FillRule(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// These are no-ops but should not panic
+	cr.SetFillRule(0) // WINDING
+	if cr.GetFillRule() != 0 {
+		t.Errorf("Expected fill rule 0, got %d", cr.GetFillRule())
+	}
+
+	cr.SetFillRule(1) // EVEN_ODD
+	// Still returns 0 as it's a no-op
+	if cr.GetFillRule() != 0 {
+		t.Errorf("Expected fill rule 0 (no-op), got %d", cr.GetFillRule())
+	}
+}
+
+func TestCairoRenderer_Operator(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// These are no-ops but should not panic
+	cr.SetOperator(1) // SOURCE
+	if cr.GetOperator() != 2 {
+		t.Errorf("Expected operator 2 (OVER default), got %d", cr.GetOperator())
+	}
+
+	cr.SetOperator(0) // CLEAR
+	// Still returns 2 as it's a no-op
+	if cr.GetOperator() != 2 {
+		t.Errorf("Expected operator 2 (no-op), got %d", cr.GetOperator())
+	}
+}
