@@ -847,6 +847,11 @@ func (cr *CairoRenderer) Restore() {
 // transformPoint applies the current transformation to a point.
 // Must be called while holding the mutex.
 func (cr *CairoRenderer) transformPoint(x, y float64) (tx, ty float64) {
+	// Early return if transformation is identity
+	if cr.scaleX == 1 && cr.scaleY == 1 && cr.rotation == 0 && cr.translateX == 0 && cr.translateY == 0 {
+		return x, y
+	}
+
 	// Apply scale
 	x *= cr.scaleX
 	y *= cr.scaleY

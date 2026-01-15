@@ -2,6 +2,7 @@
 package lua
 
 import (
+	"math"
 	"testing"
 
 	"github.com/opd-ai/go-conky/internal/render"
@@ -776,7 +777,7 @@ func TestCairoBindings_Rotate(t *testing.T) {
 
 	// Verify rotation (pi/4 = 0.785...)
 	rotation := cb.Renderer().GetRotation()
-	expected := 3.14159265358979 / 4
+	expected := math.Pi / 4
 	if rotation < expected-0.01 || rotation > expected+0.01 {
 		t.Errorf("Expected rotation ~%f, got %f", expected, rotation)
 	}
