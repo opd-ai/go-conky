@@ -67,7 +67,9 @@ func (cm *CairoModule) UpdateWindowInfo(width, height int, display, drawable, vi
 }
 
 // registerModule registers the cairo module as a global and in package.loaded.
-// This allows Lua scripts to use `require 'cairo'` or access `cairo` directly.
+// The recommended pattern is to use the global cairo table directly (e.g., cairo.set_source_rgb()).
+// NOTE: require('cairo') is registered in package.loaded but may fail in resource-limited
+// contexts because Golua's require function is not marked as CPU/memory-safe.
 func (cm *CairoModule) registerModule() {
 	// Create the cairo module table
 	cairoTable := rt.NewTable()
@@ -195,13 +197,13 @@ func (cm *CairoModule) registerFunctionsAsGlobals() {
 	cm.runtime.SetGlobal("CAIRO_ANTIALIAS_DEFAULT", rt.IntValue(1))
 }
 
-// setupConkyWindow initializes the conky_window global with default values.
-// This ensures that scripts checking `if conky_window == nil` work correctly.
+// setupConkyWindow initializes the conky_window global to nil.
+// Scripts check `if conky_window == nil` to determine if the window is available.
+// When the rendering loop starts, UpdateWindowInfo() sets conky_window to a table
+// with width, height, display, drawable, and visual properties.
 func (cm *CairoModule) setupConkyWindow() {
-	// Initially set conky_window to nil until the rendering loop starts
+	// Set conky_window to nil until the rendering loop starts
 	// and calls UpdateWindowInfo with actual dimensions.
-	// We set it to an empty table so scripts can check `if conky_window == nil`
-	// and get false when the window is available.
 	cm.runtime.SetGlobal("conky_window", rt.NilValue)
 }
 
