@@ -13,4 +13,10 @@ var (
 
 	// ErrInvalidLineJoin is returned when an invalid line join value is provided.
 	ErrInvalidLineJoin = errors.New("invalid line join value")
+
+	// ErrInvalidSurface is returned when an invalid surface userdata is provided.
+	ErrInvalidSurface = errors.New("expected surface userdata")
+
+	// ErrContextCreation is returned when creating a Cairo context fails.
+	ErrContextCreation = errors.New("failed to create context (surface may be destroyed)")
 )

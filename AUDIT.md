@@ -64,17 +64,17 @@ Total Gaps Found: 9
 
 **Implementation Location:** `internal/lua/cairo_bindings.go:46-95`
 
-**Status:** 🔄 **Partially Fixed** - Text and transform functions added
+**Status:** 🔄 **Partially Fixed** - Text, transform, and surface management functions added
 
-**Fix Details:** Added the most commonly used Cairo text and transformation functions:
+**Fix Details:** Added the most commonly used Cairo text, transformation, and surface management functions:
 
-1. **Text Functions (4 new functions):**
+1. **Text Functions (4 functions):**
    - `cairo_select_font_face(family, slant, weight)` - Set font family, slant, and weight
    - `cairo_set_font_size(size)` - Set font size for text rendering
    - `cairo_show_text(text)` - Render text at current point
    - `cairo_text_extents(text)` - Get text measurements (returns table with width, height, etc.)
 
-2. **Transformation Functions (6 new functions):**
+2. **Transformation Functions (6 functions):**
    - `cairo_translate(tx, ty)` - Move coordinate system origin
    - `cairo_rotate(angle)` - Rotate coordinate system (radians)
    - `cairo_scale(sx, sy)` - Scale coordinate system
@@ -82,41 +82,61 @@ Total Gaps Found: 9
    - `cairo_restore()` - Pop drawing state from stack
    - `cairo_identity_matrix()` - Reset transformation matrix
 
-3. **New Constants:**
+3. **Surface Management Functions (5 new functions):**
+   - `cairo_xlib_surface_create(display, drawable, visual, width, height)` - Create X11-compatible surface
+   - `cairo_image_surface_create(format, width, height)` - Create image surface
+   - `cairo_create(surface)` - Create a Cairo context from a surface
+   - `cairo_destroy(cr)` - Destroy a Cairo context
+   - `cairo_surface_destroy(surface)` - Destroy a Cairo surface
+
+4. **New Constants:**
    - `CAIRO_FONT_SLANT_NORMAL`, `CAIRO_FONT_SLANT_ITALIC`, `CAIRO_FONT_SLANT_OBLIQUE`
    - `CAIRO_FONT_WEIGHT_NORMAL`, `CAIRO_FONT_WEIGHT_BOLD`
+   - `CAIRO_FORMAT_ARGB32`, `CAIRO_FORMAT_RGB24`, `CAIRO_FORMAT_A8`, `CAIRO_FORMAT_A1`, `CAIRO_FORMAT_RGB16_565`
 
-**Current Function Count:** ~30 implemented functions (up from 20)
+**Current Function Count:** ~35 implemented functions (up from 30)
 
 **Implementation Files:**
-- `internal/render/cairo.go` - Added text rendering, transformation, and state stack support
-- `internal/render/cairo_test.go` - Comprehensive tests for new functionality
-- `internal/lua/cairo_bindings.go` - Added Lua bindings for new Cairo functions
+- `internal/render/cairo.go` - Added CairoSurface type, CairoContext type, and surface management methods
+- `internal/render/cairo_test.go` - Comprehensive tests for surface and context management
+- `internal/lua/cairo_bindings.go` - Added Lua bindings for surface management functions
 - `internal/lua/cairo_bindings_test.go` - Tests for new Lua bindings
+- `internal/lua/cairo_module.go` - Added surface functions to cairo module
+- `internal/lua/errors.go` - Added new error types for surface operations
 
-**Remaining Work:** Surface and context management functions still need implementation:
-- `cairo_xlib_surface_create`, `cairo_create`, `cairo_destroy`, `cairo_surface_destroy`
+**Remaining Work:** Additional Cairo functions for full compatibility:
 - Additional path functions: `cairo_rel_move_to`, `cairo_rel_line_to`, `cairo_rel_curve_to`
 - Pattern functions: `cairo_pattern_create_*`, `cairo_set_source`
 - Clip functions: `cairo_clip`, `cairo_reset_clip`
 
-**Production Impact:** Moderate - Text rendering and basic transformations now work. Users can display styled text, apply transformations, and use save/restore for complex drawing. Example code from migration.md for text functions will now execute.
+**Production Impact:** Moderate - Text rendering, transformations, and surface management now work. Users can create surfaces, contexts, and properly manage Cairo resources. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly with context-based drawing.
 
 **Usage Example:**
 ```lua
--- Text functions now work:
-cairo_select_font_face("GoMono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD)
-cairo_set_font_size(16)
-cairo_move_to(10, 30)
-cairo_show_text("Hello, World!")
+-- Surface management now works with proper context-based drawing:
+if conky_window == nil then return end
+local cs = cairo_xlib_surface_create(
+    conky_window.display,
+    conky_window.drawable,
+    conky_window.visual,
+    conky_window.width,
+    conky_window.height)
+local cr = cairo_create(cs)
 
--- Transformations now work:
-cairo_save()
-cairo_translate(100, 100)
-cairo_rotate(math.pi / 4)
-cairo_scale(1.5, 1.5)
--- ... drawing operations ...
-cairo_restore()
+-- Draw with the context - cr is passed as first argument
+cairo_set_source_rgb(cr, 1, 0, 0)
+cairo_rectangle(cr, 10, 10, 100, 50)
+cairo_fill(cr)
+
+-- Text functions work with context:
+cairo_select_font_face(cr, "GoMono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD)
+cairo_set_font_size(cr, 16)
+cairo_move_to(cr, 10, 30)
+cairo_show_text(cr, "Hello, World!")
+
+-- Clean up
+cairo_destroy(cr)
+cairo_surface_destroy(cs)
 ```
 
 ---
@@ -352,7 +372,7 @@ c.Start() // No window, monitor runs in background
 | Gap # | Description | Severity | Category | Status |
 |-------|-------------|----------|----------|--------|
 | 1 | Variable count (42 vs 200+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 10 system info variables |
-| 2 | Cairo functions (30 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 10 text/transform functions |
+| 2 | Cairo functions (35 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 15 text/transform/surface functions |
 | 3 | `require 'cairo'` pattern not supported | Moderate | Feature Gap | ✅ Fixed - cairo module and conky_window implemented |
 | 4 | Uptime format mismatch | Minor | Behavioral Nuance | ✅ Fixed - docs updated to match implementation |
 | 5 | `--convert` CLI flag not implemented | Minor | Feature Gap | ✅ Fixed - CLI flag implemented in main.go |
@@ -416,4 +436,4 @@ c.Start() // No window, monitor runs in background
 
 8. ~~**Fix Go version requirement** - Change "Go 1.24+" to a currently available version.~~ ✅ FIXED - Go 1.24 is now available and used in go.mod
 
-9. **Implement remaining Cairo surface functions** - Add `cairo_xlib_surface_create`, `cairo_create`, `cairo_destroy`, `cairo_surface_destroy` for full compatibility.
+9. ~~**Implement remaining Cairo surface functions** - Add `cairo_xlib_surface_create`, `cairo_create`, `cairo_destroy`, `cairo_surface_destroy` for full compatibility.~~ ✅ FIXED - Surface management functions implemented with CairoSurface and CairoContext types

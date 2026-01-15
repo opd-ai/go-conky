@@ -920,3 +920,233 @@ func TestCairoRenderer_ConcurrentTextOperations(t *testing.T) {
 
 	wg.Wait()
 }
+
+// --- Surface Management Tests ---
+
+func TestNewCairoSurface(t *testing.T) {
+	surface := NewCairoSurface(100, 200)
+	if surface == nil {
+		t.Fatal("NewCairoSurface returned nil")
+	}
+
+	if surface.Width() != 100 {
+		t.Errorf("Expected width 100, got %d", surface.Width())
+	}
+	if surface.Height() != 200 {
+		t.Errorf("Expected height 200, got %d", surface.Height())
+	}
+	if surface.IsDestroyed() {
+		t.Error("Surface should not be destroyed initially")
+	}
+	if surface.Image() == nil {
+		t.Error("Surface image should not be nil")
+	}
+}
+
+func TestNewCairoSurface_ZeroDimensions(t *testing.T) {
+	// Zero dimensions should be clamped to 1
+	surface := NewCairoSurface(0, 0)
+	if surface == nil {
+		t.Fatal("NewCairoSurface returned nil for zero dimensions")
+	}
+	if surface.Width() != 1 || surface.Height() != 1 {
+		t.Errorf("Expected dimensions (1,1) for zero input, got (%d,%d)", surface.Width(), surface.Height())
+	}
+}
+
+func TestNewCairoSurface_NegativeDimensions(t *testing.T) {
+	// Negative dimensions should be clamped to 1
+	surface := NewCairoSurface(-10, -20)
+	if surface == nil {
+		t.Fatal("NewCairoSurface returned nil for negative dimensions")
+	}
+	if surface.Width() != 1 || surface.Height() != 1 {
+		t.Errorf("Expected dimensions (1,1) for negative input, got (%d,%d)", surface.Width(), surface.Height())
+	}
+}
+
+func TestNewCairoXlibSurface(t *testing.T) {
+	// Test that NewCairoXlibSurface creates a valid surface
+	// The display, drawable, visual parameters are for compatibility only
+	surface := NewCairoXlibSurface(0, 0, 0, 640, 480)
+	if surface == nil {
+		t.Fatal("NewCairoXlibSurface returned nil")
+	}
+
+	if surface.Width() != 640 {
+		t.Errorf("Expected width 640, got %d", surface.Width())
+	}
+	if surface.Height() != 480 {
+		t.Errorf("Expected height 480, got %d", surface.Height())
+	}
+}
+
+func TestCairoSurface_Destroy(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+
+	// Surface should not be destroyed initially
+	if surface.IsDestroyed() {
+		t.Error("Surface should not be destroyed initially")
+	}
+
+	// Destroy the surface
+	surface.Destroy()
+
+	// Surface should be marked as destroyed
+	if !surface.IsDestroyed() {
+		t.Error("Surface should be destroyed after Destroy()")
+	}
+
+	// Image should be nil after destruction
+	if surface.Image() != nil {
+		t.Error("Image should be nil after Destroy()")
+	}
+
+	// Calling Destroy again should not panic
+	surface.Destroy()
+}
+
+func TestNewCairoContext(t *testing.T) {
+	surface := NewCairoSurface(200, 150)
+	ctx := NewCairoContext(surface)
+
+	if ctx == nil {
+		t.Fatal("NewCairoContext returned nil")
+	}
+
+	if ctx.Renderer() == nil {
+		t.Error("Context renderer should not be nil")
+	}
+
+	if ctx.Surface() != surface {
+		t.Error("Context surface should match the input surface")
+	}
+
+	if ctx.IsDestroyed() {
+		t.Error("Context should not be destroyed initially")
+	}
+}
+
+func TestNewCairoContext_NilSurface(t *testing.T) {
+	ctx := NewCairoContext(nil)
+	if ctx != nil {
+		t.Error("NewCairoContext should return nil for nil surface")
+	}
+}
+
+func TestNewCairoContext_DestroyedSurface(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+	surface.Destroy()
+
+	ctx := NewCairoContext(surface)
+	if ctx != nil {
+		t.Error("NewCairoContext should return nil for destroyed surface")
+	}
+}
+
+func TestCairoContext_Destroy(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+	ctx := NewCairoContext(surface)
+
+	// Context should not be destroyed initially
+	if ctx.IsDestroyed() {
+		t.Error("Context should not be destroyed initially")
+	}
+
+	// Destroy the context
+	ctx.Destroy()
+
+	// Context should be marked as destroyed
+	if !ctx.IsDestroyed() {
+		t.Error("Context should be destroyed after Destroy()")
+	}
+
+	// Renderer should be nil after destruction
+	if ctx.Renderer() != nil {
+		t.Error("Renderer should be nil after Destroy()")
+	}
+
+	// Surface should NOT be destroyed (that's handled separately)
+	if surface.IsDestroyed() {
+		t.Error("Surface should not be destroyed when context is destroyed")
+	}
+
+	// Calling Destroy again should not panic
+	ctx.Destroy()
+}
+
+func TestCairoContext_DrawingOperations(t *testing.T) {
+	surface := NewCairoSurface(200, 200)
+	ctx := NewCairoContext(surface)
+
+	// Get the renderer and perform some drawing operations
+	renderer := ctx.Renderer()
+	if renderer == nil {
+		t.Fatal("Renderer should not be nil")
+	}
+
+	// These operations should not panic
+	renderer.SetSourceRGB(1, 0, 0)
+	renderer.SetLineWidth(2)
+	renderer.MoveTo(10, 10)
+	renderer.LineTo(50, 50)
+	renderer.Rectangle(60, 60, 30, 30)
+	renderer.Stroke()
+
+	renderer.SetSourceRGBA(0, 1, 0, 0.5)
+	renderer.Rectangle(100, 100, 50, 50)
+	renderer.Fill()
+
+	// Clean up
+	ctx.Destroy()
+	surface.Destroy()
+}
+
+// TestCairoSurface_ConcurrentAccess tests thread safety of surface operations.
+func TestCairoSurface_ConcurrentAccess(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+	const numGoroutines = 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				surface.Width()
+				surface.Height()
+				surface.IsDestroyed()
+				surface.Image()
+			}
+		}()
+	}
+
+	wg.Wait()
+	surface.Destroy()
+}
+
+// TestCairoContext_ConcurrentAccess tests thread safety of context operations.
+func TestCairoContext_ConcurrentAccess(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+	ctx := NewCairoContext(surface)
+	const numGoroutines = 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				ctx.IsDestroyed()
+				ctx.Renderer()
+				ctx.Surface()
+			}
+		}()
+	}
+
+	wg.Wait()
+	ctx.Destroy()
+	surface.Destroy()
+}
