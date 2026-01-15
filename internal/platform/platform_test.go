@@ -10,7 +10,8 @@ import (
 // TestNewPlatform tests the factory function for creating platform instances.
 func TestNewPlatform(t *testing.T) {
 	p, err := NewPlatform()
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		if err != nil {
 			t.Fatalf("NewPlatform() failed on Linux: %v", err)
 		}
@@ -20,7 +21,7 @@ func TestNewPlatform(t *testing.T) {
 		if p.Name() != "linux" {
 			t.Errorf("Expected platform name 'linux', got '%s'", p.Name())
 		}
-	} else if runtime.GOOS == "windows" {
+	case "windows":
 		if err != nil {
 			t.Fatalf("NewPlatform() failed on Windows: %v", err)
 		}
@@ -30,80 +31,37 @@ func TestNewPlatform(t *testing.T) {
 		if p.Name() != "windows" {
 			t.Errorf("Expected platform name 'windows', got '%s'", p.Name())
 		}
-	} else {
-		// On non-Linux/Windows systems, we expect an error for now
+	case "darwin":
+		if err != nil {
+			t.Fatalf("NewPlatform() failed on macOS: %v", err)
+		}
+		if p == nil {
+			t.Fatal("NewPlatform() returned nil platform on macOS")
+		}
+		if p.Name() != "darwin" {
+			t.Errorf("Expected platform name 'darwin', got '%s'", p.Name())
+		}
+	default:
+		// On unsupported systems, we expect an error
 		if err == nil {
 			t.Errorf("Expected error on %s platform, got nil", runtime.GOOS)
 		}
 	}
 }
 
-// TestNewPlatformForOS tests creating platform instances for specific operating systems.
-func TestNewPlatformForOS(t *testing.T) {
-	tests := []struct {
-		name     string
-		goos     string
-		wantErr  bool
-		wantName string
-	}{
-		{
-			name:     "Linux platform",
-			goos:     "linux",
-			wantErr:  false,
-			wantName: "linux",
-		},
-		{
-			name:     "Windows platform",
-			goos:     "windows",
-			wantErr:  false,
-			wantName: "windows",
-		},
-		{
-			name:     "macOS platform",
-			goos:     "darwin",
-			wantErr:  false,
-			wantName: "darwin",
-		},
-		{
-			name:    "Android platform (not yet implemented)",
-			goos:    "android",
-			wantErr: true,
-		},
-		{
-			name:    "Unsupported platform",
-			goos:    "plan9",
-			wantErr: true,
-		},
+// TestNewPlatformCurrentOS tests creating a platform instance for the current operating system.
+// Note: This test now only tests the current platform since NewPlatformForOS was removed
+// to support proper build tag separation.
+func TestNewPlatformCurrentOS(t *testing.T) {
+	p, err := NewPlatform()
+	if err != nil {
+		t.Fatalf("NewPlatform() failed: %v", err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Skip platform tests if we can't build for that platform
-			if tt.goos == "windows" && runtime.GOOS != "windows" {
-				t.Skip("Skipping Windows platform test on non-Windows system")
-			}
-			if tt.goos == "darwin" && runtime.GOOS != "darwin" {
-				t.Skip("Skipping Darwin platform test on non-Darwin system")
-			}
-
-			p, err := NewPlatformForOS(tt.goos)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("Expected error for %s, got nil", tt.goos)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("NewPlatformForOS(%s) failed: %v", tt.goos, err)
-			}
-			if p == nil {
-				t.Fatalf("NewPlatformForOS(%s) returned nil platform", tt.goos)
-			}
-			if p.Name() != tt.wantName {
-				t.Errorf("Expected platform name '%s', got '%s'", tt.wantName, p.Name())
-			}
-		})
+	if p == nil {
+		t.Fatal("NewPlatform() returned nil platform")
+	}
+	if p.Name() != runtime.GOOS {
+		t.Errorf("Expected platform name '%s', got '%s'", runtime.GOOS, p.Name())
 	}
 }
 
@@ -113,7 +71,7 @@ func TestLinuxPlatformLifecycle(t *testing.T) {
 		t.Skip("Skipping Linux-specific test on non-Linux platform")
 	}
 
-	p, err := NewPlatformForOS("linux")
+	p, err := NewPlatform()
 	if err != nil {
 		t.Fatalf("Failed to create Linux platform: %v", err)
 	}
@@ -155,7 +113,7 @@ func TestLinuxPlatformContextCancellation(t *testing.T) {
 		t.Skip("Skipping Linux-specific test on non-Linux platform")
 	}
 
-	p, err := NewPlatformForOS("linux")
+	p, err := NewPlatform()
 	if err != nil {
 		t.Fatalf("Failed to create Linux platform: %v", err)
 	}
@@ -188,7 +146,7 @@ func TestPlatformProvidersInterface(t *testing.T) {
 		t.Skip("Skipping Linux-specific test on non-Linux platform")
 	}
 
-	p, err := NewPlatformForOS("linux")
+	p, err := NewPlatform()
 	if err != nil {
 		t.Fatalf("Failed to create Linux platform: %v", err)
 	}
@@ -207,20 +165,50 @@ func TestPlatformProvidersInterface(t *testing.T) {
 	var _ SensorProvider = p.Sensors()
 }
 
-// TestRemotePlatformNotImplemented tests that remote platform returns appropriate error.
-func TestRemotePlatformNotImplemented(t *testing.T) {
-	config := RemoteConfig{
-		Host: "example.com",
-		Port: 22,
-		User: "test",
+// TestRemotePlatformConfiguration tests that remote platform validates configuration.
+func TestRemotePlatformConfiguration(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  RemoteConfig
+		wantErr bool
+	}{
+		{
+			name: "missing auth method",
+			config: RemoteConfig{
+				Host: "example.com",
+				Port: 22,
+				User: "test",
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid config",
+			config: RemoteConfig{
+				Host: "example.com",
+				Port: 22,
+				User: "test",
+				AuthMethod: PasswordAuth{
+					Password: "test",
+				},
+			},
+			wantErr: false,
+		},
 	}
 
-	p, err := NewRemotePlatform(config)
-	if err == nil {
-		t.Error("Expected error for unimplemented remote platform, got nil")
-	}
-	if p != nil {
-		t.Error("Expected nil platform for unimplemented remote platform")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := NewRemotePlatform(tt.config)
+			t.Logf("Platform: %v, Error: %v, wantErr: %v", p, err, tt.wantErr)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewRemotePlatform() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && p == nil {
+				t.Error("Expected non-nil platform for valid config")
+			}
+			if tt.wantErr && p != nil {
+				t.Errorf("Expected nil platform for invalid config, got %v", p)
+			}
+		})
 	}
 }
 

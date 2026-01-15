@@ -1,41 +1,18 @@
 package platform
 
 import (
-	"fmt"
-	"runtime"
 	"time"
 )
-
-// NewPlatform creates the appropriate Platform implementation for the current OS.
-// Returns an error if the current platform is not supported.
-func NewPlatform() (Platform, error) {
-	return NewPlatformForOS(runtime.GOOS)
-}
-
-// NewPlatformForOS creates a Platform implementation for the specified OS.
-// This is useful for testing or when working with remote systems.
-// Supported values for goos: "linux", "windows", "darwin", "android".
-func NewPlatformForOS(goos string) (Platform, error) {
-	switch goos {
-	case "linux":
-		return NewLinuxPlatform(), nil
-	case "windows":
-		return NewWindowsPlatform(), nil
-	case "darwin":
-		return NewDarwinPlatform(), nil
-	case "android":
-		return nil, fmt.Errorf("Android platform not yet implemented (planned for Phase 7)")
-	default:
-		return nil, fmt.Errorf("unsupported platform: %s", goos)
-	}
-}
 
 // NewRemotePlatform creates a Platform that collects data from a remote system via SSH.
 // The remote system does not need go-conky installed; data is collected using
 // standard shell commands and parsed locally.
-// This feature is planned for Phase 7 and is not yet implemented.
 func NewRemotePlatform(config RemoteConfig) (Platform, error) {
-	return nil, fmt.Errorf("remote platform not yet implemented (planned for Phase 7)")
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 // RemoteConfig specifies connection parameters for remote monitoring.

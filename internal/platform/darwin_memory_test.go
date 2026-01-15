@@ -11,6 +11,9 @@ func TestDarwinMemoryProvider_Stats(t *testing.T) {
 	provider := newDarwinMemoryProvider()
 
 	stats, err := provider.Stats()
+	if isDarwinCIError(err) {
+		t.Skipf("Skipping: sysctl unavailable in this environment: %v", err)
+	}
 	if err != nil {
 		t.Fatalf("Stats() failed: %v", err)
 	}

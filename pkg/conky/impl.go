@@ -12,6 +12,9 @@ import (
 	"github.com/opd-ai/go-conky/internal/monitor"
 )
 
+// defaultUpdateInterval is the default update interval for the monitor and render loop.
+const defaultUpdateInterval = time.Second
+
 // conkyImpl is the private implementation of the Conky interface.
 type conkyImpl struct {
 	// Configuration
@@ -85,15 +88,20 @@ func (c *conkyImpl) Start() error {
 		defer c.cleanup()
 		defer c.running.Store(false)
 
-		// Wait for context cancellation.
-		// When opts.Headless is false, this goroutine should integrate with
-		// render.Game.Run() to run the Ebiten rendering loop. The integration
-		// requires:
-		// 1. Create render.Game with config from c.cfg
-		// 2. Set c.monitor as the data provider
-		// 3. Call game.Run() which blocks until window close or context cancel
-		// See PLAN.md section 2.2.2 for render package changes needed.
-		<-c.ctx.Done()
+		if c.opts.Headless {
+			// Headless mode: just wait for context cancellation
+			<-c.ctx.Done()
+		} else {
+			// GUI mode: run the Ebiten rendering loop
+			c.runRenderLoop()
+
+			// Ensure context is cancelled when the render loop exits (e.g., when
+			// user closes the window). This prevents a goroutine leak in the
+			// monitor-stopping goroutine started in initComponents().
+			if c.cancel != nil {
+				c.cancel()
+			}
+		}
 
 		c.emitEvent(EventStopped, "Instance stopped")
 	}()

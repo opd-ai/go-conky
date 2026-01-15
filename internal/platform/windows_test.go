@@ -74,12 +74,15 @@ func TestWindowsPlatform_Providers(t *testing.T) {
 	}
 	defer platform.Close()
 
-	// Test CPU provider
+	// Test CPU provider - PDH counters may be unavailable in some environments
 	cpuUsage, err := platform.CPU().TotalUsage()
 	if err != nil {
-		t.Errorf("CPU().TotalUsage() error = %v", err)
-	}
-	if cpuUsage < 0 || cpuUsage > 100 {
+		if isWindowsCIError(err) {
+			t.Skipf("CPU().TotalUsage() skipped - PDH unavailable: %v", err)
+		} else {
+			t.Errorf("CPU().TotalUsage() error = %v", err)
+		}
+	} else if cpuUsage < 0 || cpuUsage > 100 {
 		t.Errorf("CPU usage = %v, want 0-100", cpuUsage)
 	}
 

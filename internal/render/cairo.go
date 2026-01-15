@@ -28,7 +28,76 @@ type CairoRenderer struct {
 	pathCurrentX float32
 	pathCurrentY float32
 	hasPath      bool
-	mu           sync.Mutex
+	// Text rendering fields
+	textRenderer *TextRenderer
+	fontFamily   string
+	fontSlant    FontSlant
+	fontWeight   FontWeight
+	fontSize     float64
+	// Transformation state
+	translateX float64
+	translateY float64
+	rotation   float64
+	scaleX     float64
+	scaleY     float64
+	// Clip state
+	clipPath *vector.Path
+	hasClip  bool
+	// State stack for save/restore
+	stateStack []cairoState
+	mu         sync.Mutex
+}
+
+// cairoState holds a snapshot of the drawing state for save/restore.
+type cairoState struct {
+	currentColor color.RGBA
+	lineWidth    float32
+	lineCap      LineCap
+	lineJoin     LineJoin
+	antialias    bool
+	fontFamily   string
+	fontSlant    FontSlant
+	fontWeight   FontWeight
+	fontSize     float64
+	translateX   float64
+	translateY   float64
+	rotation     float64
+	scaleX       float64
+	scaleY       float64
+	clipPath     *vector.Path
+	hasClip      bool
+}
+
+// FontSlant represents Cairo font slant styles.
+type FontSlant int
+
+const (
+	// FontSlantNormal is the normal (upright) font slant.
+	FontSlantNormal FontSlant = iota
+	// FontSlantItalic is the italic font slant.
+	FontSlantItalic
+	// FontSlantOblique is the oblique font slant.
+	FontSlantOblique
+)
+
+// FontWeight represents Cairo font weight styles.
+type FontWeight int
+
+const (
+	// FontWeightNormal is the normal font weight.
+	FontWeightNormal FontWeight = iota
+	// FontWeightBold is the bold font weight.
+	FontWeightBold
+)
+
+// TextExtents contains text measurement information.
+type TextExtents struct {
+	XBearing float64
+	YBearing float64
+	Width    float64
+	Height   float64
+	XAdvance float64
+	YAdvance float64
 }
 
 // LineCap represents the style of line end points.
@@ -66,6 +135,17 @@ func NewCairoRenderer() *CairoRenderer {
 		antialias:    true,
 		path:         &vector.Path{},
 		hasPath:      false,
+		textRenderer: NewTextRenderer(),
+		fontFamily:   "GoMono",
+		fontSlant:    FontSlantNormal,
+		fontWeight:   FontWeightNormal,
+		fontSize:     14.0,
+		translateX:   0,
+		translateY:   0,
+		rotation:     0,
+		scaleX:       1.0,
+		scaleY:       1.0,
+		stateStack:   make([]cairoState, 0),
 	}
 }
 
@@ -331,6 +411,65 @@ func (cr *CairoRenderer) Rectangle(x, y, width, height float64) {
 	cr.hasPath = true
 }
 
+// --- Relative Path Functions ---
+
+// RelMoveTo moves the current point by a relative offset.
+// This is equivalent to cairo_rel_move_to.
+// If there is no current point, this function does nothing.
+func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if !cr.hasPath {
+		// Cairo requires a current point for relative moves
+		return
+	}
+	newX := float64(cr.pathCurrentX) + dx
+	newY := float64(cr.pathCurrentY) + dy
+	cr.path.MoveTo(float32(newX), float32(newY))
+	cr.pathStartX = float32(newX)
+	cr.pathStartY = float32(newY)
+	cr.pathCurrentX = float32(newX)
+	cr.pathCurrentY = float32(newY)
+}
+
+// RelLineTo draws a line from the current point by a relative offset.
+// This is equivalent to cairo_rel_line_to.
+// If there is no current point, this function does nothing.
+func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if !cr.hasPath {
+		// Cairo requires a current point for relative line
+		return
+	}
+	newX := float64(cr.pathCurrentX) + dx
+	newY := float64(cr.pathCurrentY) + dy
+	cr.path.LineTo(float32(newX), float32(newY))
+	cr.pathCurrentX = float32(newX)
+	cr.pathCurrentY = float32(newY)
+}
+
+// RelCurveTo adds a cubic Bézier curve relative to the current point.
+// This is equivalent to cairo_rel_curve_to.
+// If there is no current point, this function does nothing.
+func (cr *CairoRenderer) RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if !cr.hasPath {
+		// Cairo requires a current point for relative curves
+		return
+	}
+	curX := float64(cr.pathCurrentX)
+	curY := float64(cr.pathCurrentY)
+	cr.path.CubicTo(
+		float32(curX+dx1), float32(curY+dy1),
+		float32(curX+dx2), float32(curY+dy2),
+		float32(curX+dx3), float32(curY+dy3),
+	)
+	cr.pathCurrentX = float32(curX + dx3)
+	cr.pathCurrentY = float32(curY + dy3)
+}
+
 // --- Drawing Operations ---
 
 // Stroke draws the current path as a stroked line.
@@ -560,4 +699,514 @@ func clampToByte(v float64) uint8 {
 		return 255
 	}
 	return uint8(v * 255)
+}
+
+// --- Text Functions ---
+
+// SelectFontFace sets the font family, slant, and weight for text rendering.
+// This is equivalent to cairo_select_font_face.
+func (cr *CairoRenderer) SelectFontFace(family string, slant FontSlant, weight FontWeight) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.fontFamily = family
+	cr.fontSlant = slant
+	cr.fontWeight = weight
+
+	// Map Cairo slant/weight to internal FontStyle
+	style := cr.mapToFontStyle(slant, weight)
+	cr.textRenderer.SetFont(family, style)
+}
+
+// mapToFontStyle converts Cairo slant/weight to internal FontStyle.
+// Must be called while holding the mutex.
+func (cr *CairoRenderer) mapToFontStyle(slant FontSlant, weight FontWeight) FontStyle {
+	if weight == FontWeightBold {
+		if slant == FontSlantItalic || slant == FontSlantOblique {
+			return FontStyleBoldItalic
+		}
+		return FontStyleBold
+	}
+	if slant == FontSlantItalic || slant == FontSlantOblique {
+		return FontStyleItalic
+	}
+	return FontStyleRegular
+}
+
+// SetFontSize sets the font size for text rendering.
+// This is equivalent to cairo_set_font_size.
+func (cr *CairoRenderer) SetFontSize(size float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if size <= 0 {
+		size = 14.0
+	}
+	cr.fontSize = size
+	cr.textRenderer.SetFontSize(size)
+}
+
+// GetFontSize returns the current font size.
+func (cr *CairoRenderer) GetFontSize() float64 {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.fontSize
+}
+
+// ShowText renders text at the current point.
+// This is equivalent to cairo_show_text.
+// If no path exists, text is rendered at (0, 0).
+func (cr *CairoRenderer) ShowText(text string) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	// Get current position (or 0,0 if no path)
+	x := float64(cr.pathCurrentX)
+	y := float64(cr.pathCurrentY)
+
+	// Only draw if we have a screen
+	if cr.screen != nil {
+		// Apply transformation
+		tx, ty := cr.transformPoint(x, y)
+
+		// Draw text using the text renderer
+		cr.textRenderer.DrawText(cr.screen, text, tx, ty, cr.currentColor)
+	}
+
+	// Update current point by advancing by text width
+	// (this happens regardless of whether we have a screen)
+	w, _ := cr.textRenderer.MeasureText(text)
+	cr.pathCurrentX = float32(x + w)
+	cr.hasPath = true
+}
+
+// TextExtentsResult returns the measurements of the given text.
+// This is equivalent to cairo_text_extents.
+func (cr *CairoRenderer) TextExtentsResult(text string) TextExtents {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	w, h := cr.textRenderer.MeasureText(text)
+
+	return TextExtents{
+		XBearing: 0,
+		YBearing: -h, // Negative because text extends upward from baseline
+		Width:    w,
+		Height:   h,
+		XAdvance: w,
+		YAdvance: 0,
+	}
+}
+
+// --- Transformation Functions ---
+
+// Translate moves the coordinate system origin.
+// This is equivalent to cairo_translate.
+func (cr *CairoRenderer) Translate(tx, ty float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.translateX += tx
+	cr.translateY += ty
+}
+
+// GetTranslate returns the current translation values.
+func (cr *CairoRenderer) GetTranslate() (x, y float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.translateX, cr.translateY
+}
+
+// Rotate rotates the coordinate system by an angle in radians.
+// This is equivalent to cairo_rotate.
+func (cr *CairoRenderer) Rotate(angle float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.rotation += angle
+}
+
+// GetRotation returns the current rotation in radians.
+func (cr *CairoRenderer) GetRotation() float64 {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.rotation
+}
+
+// Scale scales the coordinate system.
+// This is equivalent to cairo_scale.
+func (cr *CairoRenderer) Scale(sx, sy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.scaleX *= sx
+	cr.scaleY *= sy
+}
+
+// GetScale returns the current scale factors.
+func (cr *CairoRenderer) GetScale() (sx, sy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.scaleX, cr.scaleY
+}
+
+// Save saves the current drawing state to a stack.
+// This is equivalent to cairo_save.
+func (cr *CairoRenderer) Save() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	state := cairoState{
+		currentColor: cr.currentColor,
+		lineWidth:    cr.lineWidth,
+		lineCap:      cr.lineCap,
+		lineJoin:     cr.lineJoin,
+		antialias:    cr.antialias,
+		fontFamily:   cr.fontFamily,
+		fontSlant:    cr.fontSlant,
+		fontWeight:   cr.fontWeight,
+		fontSize:     cr.fontSize,
+		translateX:   cr.translateX,
+		translateY:   cr.translateY,
+		rotation:     cr.rotation,
+		scaleX:       cr.scaleX,
+		scaleY:       cr.scaleY,
+		clipPath:     cr.clipPath,
+		hasClip:      cr.hasClip,
+	}
+	cr.stateStack = append(cr.stateStack, state)
+}
+
+// Restore restores the drawing state from the stack.
+// This is equivalent to cairo_restore.
+// If the stack is empty, this function does nothing.
+func (cr *CairoRenderer) Restore() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if len(cr.stateStack) == 0 {
+		return
+	}
+
+	// Pop the last state
+	lastIdx := len(cr.stateStack) - 1
+	state := cr.stateStack[lastIdx]
+	cr.stateStack = cr.stateStack[:lastIdx]
+
+	// Restore all state
+	cr.currentColor = state.currentColor
+	cr.lineWidth = state.lineWidth
+	cr.lineCap = state.lineCap
+	cr.lineJoin = state.lineJoin
+	cr.antialias = state.antialias
+	cr.fontFamily = state.fontFamily
+	cr.fontSlant = state.fontSlant
+	cr.fontWeight = state.fontWeight
+	cr.fontSize = state.fontSize
+	cr.translateX = state.translateX
+	cr.translateY = state.translateY
+	cr.rotation = state.rotation
+	cr.scaleX = state.scaleX
+	cr.scaleY = state.scaleY
+	cr.clipPath = state.clipPath
+	cr.hasClip = state.hasClip
+
+	// Update text renderer to match restored state
+	cr.textRenderer.SetFontSize(state.fontSize)
+	style := cr.mapToFontStyle(state.fontSlant, state.fontWeight)
+	cr.textRenderer.SetFont(state.fontFamily, style)
+}
+
+// transformPoint applies the current transformation to a point.
+// Must be called while holding the mutex.
+func (cr *CairoRenderer) transformPoint(x, y float64) (tx, ty float64) {
+	// Early return if transformation is identity
+	if cr.scaleX == 1 && cr.scaleY == 1 && cr.rotation == 0 && cr.translateX == 0 && cr.translateY == 0 {
+		return x, y
+	}
+
+	// Apply scale
+	x *= cr.scaleX
+	y *= cr.scaleY
+
+	// Apply rotation
+	if cr.rotation != 0 {
+		cos := math.Cos(cr.rotation)
+		sin := math.Sin(cr.rotation)
+		x, y = x*cos-y*sin, x*sin+y*cos
+	}
+
+	// Apply translation
+	tx = x + cr.translateX
+	ty = y + cr.translateY
+
+	return tx, ty
+}
+
+// IdentityMatrix resets the transformation matrix to identity.
+func (cr *CairoRenderer) IdentityMatrix() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.translateX = 0
+	cr.translateY = 0
+	cr.rotation = 0
+	cr.scaleX = 1.0
+	cr.scaleY = 1.0
+}
+
+// --- Clipping Functions ---
+//
+// IMPORTANT: Clipping is currently a partial implementation.
+// The clip region is tracked (stored in clipPath/hasClip) but NOT enforced
+// during drawing operations. This means calling Clip() will record the clip
+// region for API compatibility, but subsequent drawing will NOT be restricted
+// to the clip area.
+//
+// Full clipping support would require either:
+// - Using Ebiten's SubImage for rectangular clips only
+// - Implementing stencil buffer or alpha mask clipping for arbitrary paths
+//
+// For now, scripts that use clipping will execute without errors, but the
+// visual clipping effect will not be applied.
+
+// Clip establishes a new clip region by intersecting the current clip region
+// with the current path and clears the path.
+// This is equivalent to cairo_clip.
+//
+// WARNING: Clipping is NOT currently enforced during drawing operations.
+// The clip region is recorded but drawing will not be restricted to the clip area.
+func (cr *CairoRenderer) Clip() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if !cr.hasPath {
+		return
+	}
+
+	// Store the current path as the clip path.
+	// We're swapping out the path pointer and creating a new one,
+	// so the clip path is safe from future modifications.
+	cr.clipPath = cr.path
+	cr.hasClip = true
+
+	// Clear the current path (as per Cairo behavior)
+	cr.path = &vector.Path{}
+	cr.hasPath = false
+}
+
+// ClipPreserve establishes a new clip region without clearing the current path.
+// This is equivalent to cairo_clip_preserve.
+//
+// WARNING: Clipping is NOT currently enforced during drawing operations.
+// The clip region is recorded but drawing will not be restricted to the clip area.
+//
+// Note: Since Ebiten's vector.Path cannot be copied, we store the current path
+// as the clip path and create a fresh path for continued drawing. The path state
+// (current point, etc.) is preserved but the path data is now isolated.
+func (cr *CairoRenderer) ClipPreserve() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if !cr.hasPath {
+		return
+	}
+
+	// Store the current path as the clip path.
+	// To avoid aliasing issues, we swap to a new path for drawing and
+	// restore the current point so subsequent path operations can continue.
+	cr.clipPath = cr.path
+	cr.hasClip = true
+
+	// Create a new path but preserve the current point for continued drawing.
+	// This avoids the aliasing issue where modifying the current path
+	// would also modify the clip path.
+	currentX := cr.pathCurrentX
+	currentY := cr.pathCurrentY
+	cr.path = &vector.Path{}
+	// Re-establish the current point on the new path
+	cr.path.MoveTo(currentX, currentY)
+	cr.pathStartX = currentX
+	cr.pathStartY = currentY
+	cr.hasPath = true // Explicitly set for consistency with MoveTo
+}
+
+// ResetClip resets the clip region to an infinitely large shape.
+// This is equivalent to cairo_reset_clip.
+//
+// Note: See the Clipping Functions section comment for limitations.
+func (cr *CairoRenderer) ResetClip() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	cr.clipPath = nil
+	cr.hasClip = false
+}
+
+// HasClip returns whether a clip region is currently set.
+func (cr *CairoRenderer) HasClip() bool {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.hasClip
+}
+
+// --- Surface Management Functions ---
+
+// CairoSurface represents a Cairo-compatible drawing surface.
+// In our Ebiten-based implementation, this wraps an Ebiten image.
+// This provides compatibility with Conky Lua scripts that use
+// cairo_xlib_surface_create and related functions.
+type CairoSurface struct {
+	image     *ebiten.Image
+	width     int
+	height    int
+	destroyed bool
+	mu        sync.Mutex
+}
+
+// NewCairoSurface creates a new Cairo surface with the specified dimensions.
+// This is the Ebiten equivalent of cairo_image_surface_create.
+func NewCairoSurface(width, height int) *CairoSurface {
+	if width <= 0 {
+		width = 1
+	}
+	if height <= 0 {
+		height = 1
+	}
+	return &CairoSurface{
+		image:  ebiten.NewImage(width, height),
+		width:  width,
+		height: height,
+	}
+}
+
+// NewCairoXlibSurface creates a surface compatible with X11 drawables.
+// In our Ebiten implementation, we don't have direct X11 access, so this
+// creates an Ebiten-backed surface with the specified dimensions.
+// The display, drawable, and visual parameters are accepted for API
+// compatibility but are not used in the Ebiten implementation.
+//
+// This is equivalent to cairo_xlib_surface_create(display, drawable, visual, width, height).
+func NewCairoXlibSurface(display, drawable, visual uintptr, width, height int) *CairoSurface {
+	// In Ebiten, we don't have direct X11 surface access.
+	// We create an Ebiten image that will be composited onto the main screen.
+	return NewCairoSurface(width, height)
+}
+
+// Image returns the underlying Ebiten image.
+// This allows integration with the rendering loop.
+func (s *CairoSurface) Image() *ebiten.Image {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.destroyed {
+		return nil
+	}
+	return s.image
+}
+
+// Width returns the surface width.
+func (s *CairoSurface) Width() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.width
+}
+
+// Height returns the surface height.
+func (s *CairoSurface) Height() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.height
+}
+
+// IsDestroyed returns whether the surface has been destroyed.
+func (s *CairoSurface) IsDestroyed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.destroyed
+}
+
+// Destroy releases the surface resources.
+// This is equivalent to cairo_surface_destroy.
+// After calling Destroy, the surface should not be used.
+func (s *CairoSurface) Destroy() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.destroyed {
+		return
+	}
+	s.destroyed = true
+	// Dispose of the Ebiten image to free GPU resources
+	if s.image != nil {
+		s.image.Deallocate()
+		s.image = nil
+	}
+}
+
+// CairoContext wraps a CairoRenderer with its associated surface.
+// This provides the cairo_create/cairo_destroy pattern expected by Lua scripts.
+type CairoContext struct {
+	renderer  *CairoRenderer
+	surface   *CairoSurface
+	destroyed bool
+	mu        sync.Mutex
+}
+
+// NewCairoContext creates a Cairo context for drawing on the given surface.
+// This is equivalent to cairo_create(surface).
+func NewCairoContext(surface *CairoSurface) *CairoContext {
+	if surface == nil {
+		return nil
+	}
+
+	// Get the image atomically - this will return nil if surface is destroyed
+	image := surface.Image()
+	if image == nil {
+		return nil
+	}
+
+	renderer := NewCairoRenderer()
+	renderer.SetScreen(image)
+
+	return &CairoContext{
+		renderer: renderer,
+		surface:  surface,
+	}
+}
+
+// Renderer returns the underlying CairoRenderer for drawing operations.
+// Returns nil if the context has been destroyed.
+func (ctx *CairoContext) Renderer() *CairoRenderer {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	if ctx.destroyed {
+		return nil
+	}
+	return ctx.renderer
+}
+
+// Surface returns the associated surface.
+// Returns nil if the context has been destroyed.
+func (ctx *CairoContext) Surface() *CairoSurface {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	if ctx.destroyed {
+		return nil
+	}
+	return ctx.surface
+}
+
+// IsDestroyed returns whether the context has been destroyed.
+func (ctx *CairoContext) IsDestroyed() bool {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	return ctx.destroyed
+}
+
+// Destroy releases the context resources.
+// This is equivalent to cairo_destroy.
+// Note: This does NOT destroy the associated surface.
+// The surface must be destroyed separately with surface.Destroy().
+func (ctx *CairoContext) Destroy() {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	if ctx.destroyed {
+		return
+	}
+	ctx.destroyed = true
+	ctx.renderer = nil
+	// Note: We don't destroy the surface here - that's the caller's responsibility
 }

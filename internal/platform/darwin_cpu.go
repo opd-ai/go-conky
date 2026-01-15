@@ -19,14 +19,6 @@ const (
 	vmLoadavg  = 2  // VM_LOADAVG
 )
 
-// cpuTimes stores raw CPU time values from sysctl.
-type cpuTimes struct {
-	user   uint64
-	nice   uint64
-	system uint64
-	idle   uint64
-}
-
 // darwinCPUProvider implements CPUProvider for macOS/Darwin systems using sysctl and mach APIs.
 type darwinCPUProvider struct {
 	mu        sync.Mutex
@@ -228,9 +220,18 @@ func (c *darwinCPUProvider) getHostCPULoadInfo() (cpuTimes, error) {
 
 // sysctlUint64 retrieves a uint64 value from sysctl by name.
 func sysctlUint64(name string) (uint64, error) {
-	value, err := syscall.SysctlUint64(name)
+	// Use syscall.Sysctl to get the value as a string, then parse it
+	// This is more compatible than syscall.SysctlUint64 which may not be available
+	valueStr, err := syscall.Sysctl(name)
 	if err != nil {
 		return 0, fmt.Errorf("sysctl %s: %w", name, err)
+	}
+
+	// Try to parse as uint64
+	var value uint64
+	_, err = fmt.Sscanf(valueStr, "%d", &value)
+	if err != nil {
+		return 0, fmt.Errorf("parsing sysctl %s value %q: %w", name, valueStr, err)
 	}
 	return value, nil
 }

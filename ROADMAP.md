@@ -273,13 +273,13 @@ Window Display (X11/Wayland)
 - [x] Implement Linux Platform adapter (refactor existing code) (16 hours)
 - [x] Implement Windows Platform adapter (24 hours)
 - [x] Implement macOS Platform adapter (20 hours)
-- [ ] Implement Android Platform adapter (28 hours)
-- [ ] Design SSH remote monitoring protocol (8 hours)
-- [ ] Implement SSH connection management (16 hours)
-- [ ] Implement remote data collection over SSH (20 hours)
-- [ ] Cross-platform build system and CI/CD updates (12 hours)
-- [ ] Platform-specific integration testing (24 hours)
-- [ ] Documentation for cross-platform deployment (8 hours)
+- [x] Implement Android Platform adapter (28 hours)
+- [x] Design SSH remote monitoring protocol (8 hours)
+- [x] Implement SSH connection management (16 hours)
+- [x] Implement remote data collection over SSH (20 hours)
+- [x] Cross-platform build system and CI/CD updates (12 hours)
+- [x] Platform-specific integration testing (24 hours)
+- [x] Documentation for cross-platform deployment (8 hours)
 
 ## 3. TECHNICAL IMPLEMENTATION DETAILS
 
@@ -1685,27 +1685,30 @@ fmt.Printf("Remote CPU: %.1f%%, Memory: %.1f%%\n", cpuUsage, memStats.UsedPercen
 | Network monitoring | Complete | P1 | Interface statistics in internal/monitor/network.go |
 | Temperature sensors | Complete | P2 | hwmon integration in internal/monitor/hwmon.go |
 | Audio integration | Complete | P2 | ALSA support in internal/monitor/audio.go |
-| Cross-platform support | Planned | P1 | Phase 7: Platform interface in internal/platform/ |
-| Windows monitoring | Planned | P1 | Phase 7: WMI/PDH integration |
-| macOS monitoring | Planned | P1 | Phase 7: sysctl/IOKit integration |
-| Android monitoring | Planned | P2 | Phase 7: Android APIs + /proc parsing |
-| Remote SSH monitoring | Planned | P2 | Phase 7: SSH-based data collection |
+| Cross-platform support | Complete | P1 | Phase 7: Platform interface in internal/platform/ |
+| Windows monitoring | Complete | P1 | Phase 7: WMI/PDH integration |
+| macOS monitoring | Complete | P1 | Phase 7: sysctl/IOKit integration |
+| Android monitoring | Complete | P2 | Phase 7: /proc + thermal zones + sysfs battery |
+| Remote SSH monitoring | Complete | P2 | Phase 7: SSH-based data collection |
 
 ### 4.3 Cross-Platform Compatibility Matrix
 
 | Feature | Linux | Windows | macOS | Android | Remote/SSH |
 |---------|-------|---------|-------|---------|------------|
-| CPU usage | ✓ | ✓ | ✓ | Planned | Planned |
-| Memory stats | ✓ | ✓ | ✓ | Planned | Planned |
-| Network I/O | ✓ | ✓ | ✓ | Planned | Planned |
-| Filesystem usage | ✓ | ✓ | ✓ | Planned | Planned |
-| Battery status | ✓ | ✓ | ✓ | Planned | N/A |
-| Temperature sensors | ✓ | ✓ | ✓* | Limited | Planned |
+| CPU usage | ✓ | ✓ | ✓ | ✓ | ✓*** |
+| Memory stats | ✓ | ✓ | ✓ | ✓ | ✓*** |
+| Network I/O | ✓ | ✓ | ✓ | ✓ | ✓*** |
+| Filesystem usage | ✓ | ✓ | ✓ | ✓ | ✓*** |
+| Battery status | ✓ | ✓ | ✓ | ✓ | N/A |
+| Temperature sensors | ✓ | ✓ | ✓* | ✓** | ✓**** |
 | Process list | ✓ | Planned | Planned | Limited | Planned |
 | GPU monitoring | Limited | Planned | Planned | N/A | N/A |
 | Window rendering | X11/Wayland | Planned | Planned | Planned | N/A |
 
 *macOS temperature sensors require root privileges (powermetrics)
+**Android temperature sensors read from thermal zones and battery temperature
+***Remote/SSH monitoring implemented for Linux and macOS targets; Windows remote targets not yet supported
+****Remote temperature sensors implemented for Linux targets only
 
 ## 5. DEVELOPMENT INFRASTRUCTURE
 
@@ -2058,12 +2061,12 @@ jobs:
 - Integration with desktop environments and window managers
 
 **Cross-Platform Documentation (Phase 7):**
-- Windows installation and configuration guide
-- macOS installation and configuration guide
-- Android APK installation and setup guide
-- Remote monitoring setup and SSH configuration
-- Platform-specific feature availability matrix
-- Troubleshooting guide for platform-specific issues
+- ✅ Windows installation and configuration guide (see [docs/cross-platform.md](docs/cross-platform.md))
+- ✅ macOS installation and configuration guide (see [docs/cross-platform.md](docs/cross-platform.md))
+- ⏳ Android APK installation and setup guide (planned)
+- ✅ Remote monitoring setup and SSH configuration (see [docs/ssh-remote-monitoring.md](docs/ssh-remote-monitoring.md))
+- ✅ Platform-specific feature availability matrix (see [docs/cross-platform.md](docs/cross-platform.md))
+- ✅ Troubleshooting guide for platform-specific issues (see [docs/cross-platform.md](docs/cross-platform.md))
 
 ## 9. PHASE 7 TIMELINE AND MILESTONES
 

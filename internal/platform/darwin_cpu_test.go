@@ -12,6 +12,9 @@ func TestDarwinCPUProvider_TotalUsage(t *testing.T) {
 
 	// First call should return 0 (no previous stats)
 	usage, err := provider.TotalUsage()
+	if isDarwinCIError(err) {
+		t.Skipf("Skipping: sysctl unavailable in this environment: %v", err)
+	}
 	if err != nil {
 		t.Fatalf("TotalUsage() failed: %v", err)
 	}
@@ -33,6 +36,9 @@ func TestDarwinCPUProvider_Usage(t *testing.T) {
 	provider := newDarwinCPUProvider()
 
 	usages, err := provider.Usage()
+	if isDarwinCIError(err) {
+		t.Skipf("Skipping: sysctl unavailable in this environment: %v", err)
+	}
 	if err != nil {
 		t.Fatalf("Usage() failed: %v", err)
 	}
@@ -52,6 +58,9 @@ func TestDarwinCPUProvider_Frequency(t *testing.T) {
 	provider := newDarwinCPUProvider()
 
 	frequencies, err := provider.Frequency()
+	if isDarwinCIError(err) {
+		t.Skipf("Skipping: sysctl unavailable in this environment: %v", err)
+	}
 	if err != nil {
 		t.Fatalf("Frequency() failed: %v", err)
 	}
@@ -71,6 +80,9 @@ func TestDarwinCPUProvider_Info(t *testing.T) {
 	provider := newDarwinCPUProvider()
 
 	info, err := provider.Info()
+	if isDarwinCIError(err) {
+		t.Skipf("Skipping: sysctl unavailable in this environment: %v", err)
+	}
 	if err != nil {
 		t.Fatalf("Info() failed: %v", err)
 	}

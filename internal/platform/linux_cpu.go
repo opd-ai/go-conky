@@ -1,3 +1,6 @@
+//go:build linux && !android
+// +build linux,!android
+
 package platform
 
 import (
@@ -18,18 +21,6 @@ type linuxCPUProvider struct {
 	procLoadavgPath string
 }
 
-// cpuTimes stores raw CPU time values from /proc/stat.
-type cpuTimes struct {
-	user    uint64
-	nice    uint64
-	system  uint64
-	idle    uint64
-	iowait  uint64
-	irq     uint64
-	softirq uint64
-	steal   uint64
-}
-
 func newLinuxCPUProvider() *linuxCPUProvider {
 	return &linuxCPUProvider{
 		prevStats:       make(map[int]cpuTimes),
@@ -48,7 +39,7 @@ func (c *linuxCPUProvider) Usage() ([]float64, error) {
 		return nil, err
 	}
 
-	var usages []float64
+	usages := make([]float64, 0, len(currentStats))
 	for cpuNum, current := range currentStats {
 		prev, exists := c.prevStats[cpuNum]
 		c.prevStats[cpuNum] = current

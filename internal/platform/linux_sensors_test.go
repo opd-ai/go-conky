@@ -1,3 +1,6 @@
+//go:build linux && !android
+// +build linux,!android
+
 package platform
 
 import (
@@ -59,20 +62,21 @@ func TestLinuxSensorProvider_Temperatures(t *testing.T) {
 	// Check first temperature sensor
 	found := false
 	for _, temp := range temps {
-		if temp.Label == "Core 0" {
-			found = true
-			if temp.Name != "coretemp" {
-				t.Errorf("Name = %s, want coretemp", temp.Name)
-			}
-			if temp.Value != 45.0 {
-				t.Errorf("Value = %v, want 45.0", temp.Value)
-			}
-			if temp.Unit != "°C" {
-				t.Errorf("Unit = %s, want °C", temp.Unit)
-			}
-			if temp.Critical != 100.0 {
-				t.Errorf("Critical = %v, want 100.0", temp.Critical)
-			}
+		if temp.Label != "Core 0" {
+			continue
+		}
+		found = true
+		if temp.Name != "coretemp" {
+			t.Errorf("Name = %s, want coretemp", temp.Name)
+		}
+		if temp.Value != 45.0 {
+			t.Errorf("Value = %v, want 45.0", temp.Value)
+		}
+		if temp.Unit != "°C" {
+			t.Errorf("Unit = %s, want °C", temp.Unit)
+		}
+		if temp.Critical != 100.0 {
+			t.Errorf("Critical = %v, want 100.0", temp.Critical)
 		}
 	}
 	if !found {

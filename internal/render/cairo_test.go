@@ -525,3 +525,899 @@ func TestCairoRenderer_ConcurrentPathBuilding(t *testing.T) {
 
 	wg.Wait()
 }
+
+// --- Text Function Tests ---
+
+func TestCairoRenderer_SelectFontFace(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Test setting font face
+	cr.SelectFontFace("GoMono", FontSlantNormal, FontWeightBold)
+
+	// Verify by checking that no panic occurs and renderer is still valid
+	if cr == nil {
+		t.Error("Renderer should not be nil after SelectFontFace")
+	}
+}
+
+func TestCairoRenderer_SetFontSize(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Test setting various font sizes
+	testCases := []struct {
+		name     string
+		size     float64
+		expected float64
+	}{
+		{"normal size", 16.0, 16.0},
+		{"large size", 48.0, 48.0},
+		{"small size", 8.0, 8.0},
+		{"zero size defaults to 14", 0, 14.0},
+		{"negative size defaults to 14", -5, 14.0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cr.SetFontSize(tc.size)
+			if cr.GetFontSize() != tc.expected {
+				t.Errorf("Expected font size %f, got %f", tc.expected, cr.GetFontSize())
+			}
+		})
+	}
+}
+
+func TestCairoRenderer_ShowText(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set up a position
+	cr.MoveTo(10, 20)
+
+	// ShowText should not panic even without a screen
+	cr.ShowText("Hello, World!")
+
+	// After showing text, current point should have advanced
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected current point after ShowText")
+	}
+	// X should be > 10 because text advances the cursor
+	if x <= 10 {
+		t.Errorf("Expected X > 10 after ShowText, got %f", x)
+	}
+	// Y should remain at 20
+	if y != 20 {
+		t.Errorf("Expected Y to remain 20, got %f", y)
+	}
+}
+
+func TestCairoRenderer_TextExtentsResult(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set a font size
+	cr.SetFontSize(16)
+
+	// Get text extents
+	extents := cr.TextExtentsResult("Hello")
+
+	// Width should be positive
+	if extents.Width <= 0 {
+		t.Errorf("Expected positive width, got %f", extents.Width)
+	}
+
+	// Height should be positive
+	if extents.Height <= 0 {
+		t.Errorf("Expected positive height, got %f", extents.Height)
+	}
+
+	// XAdvance should be equal to width for simple text
+	if extents.XAdvance != extents.Width {
+		t.Errorf("Expected XAdvance (%f) to equal Width (%f)", extents.XAdvance, extents.Width)
+	}
+}
+
+func TestCairoRenderer_TextExtentsEmptyString(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Get text extents for empty string
+	extents := cr.TextExtentsResult("")
+
+	// Width should be zero for empty string
+	if extents.Width != 0 {
+		t.Errorf("Expected zero width for empty string, got %f", extents.Width)
+	}
+}
+
+func TestCairoRenderer_FontSlantConstants(t *testing.T) {
+	// Verify font slant constants have correct values
+	if FontSlantNormal != 0 {
+		t.Errorf("Expected FontSlantNormal = 0, got %d", FontSlantNormal)
+	}
+	if FontSlantItalic != 1 {
+		t.Errorf("Expected FontSlantItalic = 1, got %d", FontSlantItalic)
+	}
+	if FontSlantOblique != 2 {
+		t.Errorf("Expected FontSlantOblique = 2, got %d", FontSlantOblique)
+	}
+}
+
+func TestCairoRenderer_FontWeightConstants(t *testing.T) {
+	// Verify font weight constants have correct values
+	if FontWeightNormal != 0 {
+		t.Errorf("Expected FontWeightNormal = 0, got %d", FontWeightNormal)
+	}
+	if FontWeightBold != 1 {
+		t.Errorf("Expected FontWeightBold = 1, got %d", FontWeightBold)
+	}
+}
+
+// --- Transformation Function Tests ---
+
+func TestCairoRenderer_Translate(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Initial translation should be (0, 0)
+	tx, ty := cr.GetTranslate()
+	if tx != 0 || ty != 0 {
+		t.Errorf("Expected initial translation (0, 0), got (%f, %f)", tx, ty)
+	}
+
+	// Apply translation
+	cr.Translate(100, 200)
+	tx, ty = cr.GetTranslate()
+	if tx != 100 || ty != 200 {
+		t.Errorf("Expected translation (100, 200), got (%f, %f)", tx, ty)
+	}
+
+	// Translations accumulate
+	cr.Translate(50, 25)
+	tx, ty = cr.GetTranslate()
+	if tx != 150 || ty != 225 {
+		t.Errorf("Expected accumulated translation (150, 225), got (%f, %f)", tx, ty)
+	}
+}
+
+func TestCairoRenderer_Rotate(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Initial rotation should be 0
+	if cr.GetRotation() != 0 {
+		t.Errorf("Expected initial rotation 0, got %f", cr.GetRotation())
+	}
+
+	// Apply rotation (pi/4 = 45 degrees)
+	cr.Rotate(math.Pi / 4)
+	if math.Abs(cr.GetRotation()-math.Pi/4) > 0.001 {
+		t.Errorf("Expected rotation pi/4, got %f", cr.GetRotation())
+	}
+
+	// Rotations accumulate
+	cr.Rotate(math.Pi / 4)
+	if math.Abs(cr.GetRotation()-math.Pi/2) > 0.001 {
+		t.Errorf("Expected accumulated rotation pi/2, got %f", cr.GetRotation())
+	}
+}
+
+func TestCairoRenderer_Scale(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Initial scale should be (1, 1)
+	sx, sy := cr.GetScale()
+	if sx != 1 || sy != 1 {
+		t.Errorf("Expected initial scale (1, 1), got (%f, %f)", sx, sy)
+	}
+
+	// Apply scale
+	cr.Scale(2, 3)
+	sx, sy = cr.GetScale()
+	if sx != 2 || sy != 3 {
+		t.Errorf("Expected scale (2, 3), got (%f, %f)", sx, sy)
+	}
+
+	// Scales multiply
+	cr.Scale(0.5, 2)
+	sx, sy = cr.GetScale()
+	if sx != 1 || sy != 6 {
+		t.Errorf("Expected accumulated scale (1, 6), got (%f, %f)", sx, sy)
+	}
+}
+
+func TestCairoRenderer_SaveRestore(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set initial state
+	cr.SetSourceRGB(1, 0, 0)
+	cr.SetLineWidth(5)
+	cr.Translate(100, 200)
+	cr.SetFontSize(24)
+
+	// Save state
+	cr.Save()
+
+	// Modify state
+	cr.SetSourceRGB(0, 1, 0)
+	cr.SetLineWidth(10)
+	cr.Translate(50, 50)
+	cr.SetFontSize(48)
+
+	// Verify modified state
+	if cr.GetLineWidth() != 10 {
+		t.Errorf("Expected modified line width 10, got %f", cr.GetLineWidth())
+	}
+
+	// Restore state
+	cr.Restore()
+
+	// Verify restored state
+	clr := cr.GetCurrentColor()
+	if clr.R != 255 || clr.G != 0 || clr.B != 0 {
+		t.Errorf("Expected restored color (255, 0, 0), got (%d, %d, %d)", clr.R, clr.G, clr.B)
+	}
+	if cr.GetLineWidth() != 5 {
+		t.Errorf("Expected restored line width 5, got %f", cr.GetLineWidth())
+	}
+	tx, ty := cr.GetTranslate()
+	if tx != 100 || ty != 200 {
+		t.Errorf("Expected restored translation (100, 200), got (%f, %f)", tx, ty)
+	}
+	if cr.GetFontSize() != 24 {
+		t.Errorf("Expected restored font size 24, got %f", cr.GetFontSize())
+	}
+}
+
+func TestCairoRenderer_SaveRestoreMultipleLevels(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set state and save multiple times
+	cr.SetLineWidth(1)
+	cr.Save()
+
+	cr.SetLineWidth(2)
+	cr.Save()
+
+	cr.SetLineWidth(3)
+	cr.Save()
+
+	cr.SetLineWidth(4)
+
+	// Verify current state
+	if cr.GetLineWidth() != 4 {
+		t.Errorf("Expected line width 4, got %f", cr.GetLineWidth())
+	}
+
+	// Restore and verify each level
+	cr.Restore()
+	if cr.GetLineWidth() != 3 {
+		t.Errorf("Expected line width 3 after first restore, got %f", cr.GetLineWidth())
+	}
+
+	cr.Restore()
+	if cr.GetLineWidth() != 2 {
+		t.Errorf("Expected line width 2 after second restore, got %f", cr.GetLineWidth())
+	}
+
+	cr.Restore()
+	if cr.GetLineWidth() != 1 {
+		t.Errorf("Expected line width 1 after third restore, got %f", cr.GetLineWidth())
+	}
+}
+
+func TestCairoRenderer_RestoreEmptyStack(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set some state
+	cr.SetLineWidth(5)
+	cr.Translate(100, 100)
+
+	// Restore on empty stack should do nothing (not panic)
+	cr.Restore()
+
+	// State should be unchanged
+	if cr.GetLineWidth() != 5 {
+		t.Errorf("Expected line width 5 unchanged, got %f", cr.GetLineWidth())
+	}
+	tx, ty := cr.GetTranslate()
+	if tx != 100 || ty != 100 {
+		t.Errorf("Expected translation (100, 100) unchanged, got (%f, %f)", tx, ty)
+	}
+}
+
+func TestCairoRenderer_IdentityMatrix(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Apply transformations
+	cr.Translate(100, 200)
+	cr.Rotate(math.Pi)
+	cr.Scale(2, 3)
+
+	// Reset with IdentityMatrix
+	cr.IdentityMatrix()
+
+	// Verify all transformations are reset
+	tx, ty := cr.GetTranslate()
+	if tx != 0 || ty != 0 {
+		t.Errorf("Expected translation (0, 0) after identity, got (%f, %f)", tx, ty)
+	}
+	if cr.GetRotation() != 0 {
+		t.Errorf("Expected rotation 0 after identity, got %f", cr.GetRotation())
+	}
+	sx, sy := cr.GetScale()
+	if sx != 1 || sy != 1 {
+		t.Errorf("Expected scale (1, 1) after identity, got (%f, %f)", sx, sy)
+	}
+}
+
+func TestCairoRenderer_TransformPointIntegration(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Apply transformations and verify they affect text placement
+	cr.Translate(50, 50)
+	cr.MoveTo(10, 10)
+	cr.ShowText("Test")
+
+	// The text should have been drawn at transformed coordinates
+	// (We can't directly verify the drawing, but we can check state)
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected current point after ShowText")
+	}
+	// Position should still be in local coordinates
+	// (transformation is applied during drawing)
+	if y != 10 {
+		t.Errorf("Expected Y to remain 10, got %f", y)
+	}
+	if x <= 10 {
+		t.Errorf("Expected X > 10 after text advance, got %f", x)
+	}
+}
+
+// TestCairoRenderer_ConcurrentTransformations tests concurrent transformation access.
+func TestCairoRenderer_ConcurrentTransformations(t *testing.T) {
+	cr := NewCairoRenderer()
+	const numGoroutines = 10
+	const numOperations = 50
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < numOperations; j++ {
+				cr.Save()
+				cr.Translate(float64(id*10), float64(j*10))
+				cr.Rotate(float64(id) / 10)
+				cr.Scale(1.0+float64(id)/100, 1.0+float64(j)/100)
+				cr.GetTranslate()
+				cr.GetRotation()
+				cr.GetScale()
+				cr.Restore()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// TestCairoRenderer_ConcurrentTextOperations tests concurrent text operations.
+func TestCairoRenderer_ConcurrentTextOperations(t *testing.T) {
+	cr := NewCairoRenderer()
+	const numGoroutines = 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				cr.SelectFontFace("GoMono", FontSlant(j%3), FontWeight(j%2))
+				cr.SetFontSize(float64(12 + id + j))
+				cr.GetFontSize()
+				cr.TextExtentsResult("Test string")
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// --- Surface Management Tests ---
+
+func TestNewCairoSurface(t *testing.T) {
+	surface := NewCairoSurface(100, 200)
+	if surface == nil {
+		t.Fatal("NewCairoSurface returned nil")
+	}
+
+	if surface.Width() != 100 {
+		t.Errorf("Expected width 100, got %d", surface.Width())
+	}
+	if surface.Height() != 200 {
+		t.Errorf("Expected height 200, got %d", surface.Height())
+	}
+	if surface.IsDestroyed() {
+		t.Error("Surface should not be destroyed initially")
+	}
+	if surface.Image() == nil {
+		t.Error("Surface image should not be nil")
+	}
+}
+
+func TestNewCairoSurface_ZeroDimensions(t *testing.T) {
+	// Zero dimensions should be clamped to 1
+	surface := NewCairoSurface(0, 0)
+	if surface == nil {
+		t.Fatal("NewCairoSurface returned nil for zero dimensions")
+	}
+	if surface.Width() != 1 || surface.Height() != 1 {
+		t.Errorf("Expected dimensions (1,1) for zero input, got (%d,%d)", surface.Width(), surface.Height())
+	}
+}
+
+func TestNewCairoSurface_NegativeDimensions(t *testing.T) {
+	// Negative dimensions should be clamped to 1
+	surface := NewCairoSurface(-10, -20)
+	if surface == nil {
+		t.Fatal("NewCairoSurface returned nil for negative dimensions")
+	}
+	if surface.Width() != 1 || surface.Height() != 1 {
+		t.Errorf("Expected dimensions (1,1) for negative input, got (%d,%d)", surface.Width(), surface.Height())
+	}
+}
+
+func TestNewCairoXlibSurface(t *testing.T) {
+	// Test that NewCairoXlibSurface creates a valid surface
+	// The display, drawable, visual parameters are for compatibility only
+	surface := NewCairoXlibSurface(0, 0, 0, 640, 480)
+	if surface == nil {
+		t.Fatal("NewCairoXlibSurface returned nil")
+	}
+
+	if surface.Width() != 640 {
+		t.Errorf("Expected width 640, got %d", surface.Width())
+	}
+	if surface.Height() != 480 {
+		t.Errorf("Expected height 480, got %d", surface.Height())
+	}
+}
+
+func TestCairoSurface_Destroy(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+
+	// Surface should not be destroyed initially
+	if surface.IsDestroyed() {
+		t.Error("Surface should not be destroyed initially")
+	}
+
+	// Destroy the surface
+	surface.Destroy()
+
+	// Surface should be marked as destroyed
+	if !surface.IsDestroyed() {
+		t.Error("Surface should be destroyed after Destroy()")
+	}
+
+	// Image should be nil after destruction
+	if surface.Image() != nil {
+		t.Error("Image should be nil after Destroy()")
+	}
+
+	// Calling Destroy again should not panic
+	surface.Destroy()
+}
+
+func TestNewCairoContext(t *testing.T) {
+	surface := NewCairoSurface(200, 150)
+	ctx := NewCairoContext(surface)
+
+	if ctx == nil {
+		t.Fatal("NewCairoContext returned nil")
+	}
+
+	if ctx.Renderer() == nil {
+		t.Error("Context renderer should not be nil")
+	}
+
+	if ctx.Surface() != surface {
+		t.Error("Context surface should match the input surface")
+	}
+
+	if ctx.IsDestroyed() {
+		t.Error("Context should not be destroyed initially")
+	}
+}
+
+func TestNewCairoContext_NilSurface(t *testing.T) {
+	ctx := NewCairoContext(nil)
+	if ctx != nil {
+		t.Error("NewCairoContext should return nil for nil surface")
+	}
+}
+
+func TestNewCairoContext_DestroyedSurface(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+	surface.Destroy()
+
+	ctx := NewCairoContext(surface)
+	if ctx != nil {
+		t.Error("NewCairoContext should return nil for destroyed surface")
+	}
+}
+
+func TestCairoContext_Destroy(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+	ctx := NewCairoContext(surface)
+
+	// Context should not be destroyed initially
+	if ctx.IsDestroyed() {
+		t.Error("Context should not be destroyed initially")
+	}
+
+	// Destroy the context
+	ctx.Destroy()
+
+	// Context should be marked as destroyed
+	if !ctx.IsDestroyed() {
+		t.Error("Context should be destroyed after Destroy()")
+	}
+
+	// Renderer should be nil after destruction
+	if ctx.Renderer() != nil {
+		t.Error("Renderer should be nil after Destroy()")
+	}
+
+	// Surface should NOT be destroyed (that's handled separately)
+	if surface.IsDestroyed() {
+		t.Error("Surface should not be destroyed when context is destroyed")
+	}
+
+	// Calling Destroy again should not panic
+	ctx.Destroy()
+}
+
+func TestCairoContext_DrawingOperations(t *testing.T) {
+	surface := NewCairoSurface(200, 200)
+	ctx := NewCairoContext(surface)
+
+	// Get the renderer and perform some drawing operations
+	renderer := ctx.Renderer()
+	if renderer == nil {
+		t.Fatal("Renderer should not be nil")
+	}
+
+	// These operations should not panic
+	renderer.SetSourceRGB(1, 0, 0)
+	renderer.SetLineWidth(2)
+	renderer.MoveTo(10, 10)
+	renderer.LineTo(50, 50)
+	renderer.Rectangle(60, 60, 30, 30)
+	renderer.Stroke()
+
+	renderer.SetSourceRGBA(0, 1, 0, 0.5)
+	renderer.Rectangle(100, 100, 50, 50)
+	renderer.Fill()
+
+	// Clean up
+	ctx.Destroy()
+	surface.Destroy()
+}
+
+// TestCairoSurface_ConcurrentAccess tests thread safety of surface operations.
+func TestCairoSurface_ConcurrentAccess(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+	const numGoroutines = 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				surface.Width()
+				surface.Height()
+				surface.IsDestroyed()
+				surface.Image()
+			}
+		}()
+	}
+
+	wg.Wait()
+	surface.Destroy()
+}
+
+// TestCairoContext_ConcurrentAccess tests thread safety of context operations.
+func TestCairoContext_ConcurrentAccess(t *testing.T) {
+	surface := NewCairoSurface(100, 100)
+	ctx := NewCairoContext(surface)
+	const numGoroutines = 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				ctx.IsDestroyed()
+				ctx.Renderer()
+				ctx.Surface()
+			}
+		}()
+	}
+
+	wg.Wait()
+	ctx.Destroy()
+	surface.Destroy()
+}
+
+// --- Relative Path Function Tests ---
+
+func TestCairoRenderer_RelMoveTo(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// First move to an absolute position
+	cr.MoveTo(100, 100)
+
+	// Verify initial position
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after MoveTo")
+	}
+	if x != 100 || y != 100 {
+		t.Errorf("Expected initial position (100, 100), got (%f, %f)", x, y)
+	}
+
+	// Now do a relative move
+	cr.RelMoveTo(50, 25)
+
+	// Verify relative move
+	x, y, hasPoint = cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after RelMoveTo")
+	}
+	if x != 150 || y != 125 {
+		t.Errorf("Expected position (150, 125) after RelMoveTo, got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoRenderer_RelMoveToNoPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Relative move without a current point should do nothing
+	cr.RelMoveTo(50, 25)
+
+	// Verify no current point
+	_, _, hasPoint := cr.GetCurrentPoint()
+	if hasPoint {
+		t.Error("Expected no current point after RelMoveTo without initial point")
+	}
+}
+
+func TestCairoRenderer_RelLineTo(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// First move to an absolute position
+	cr.MoveTo(100, 100)
+
+	// Now do a relative line
+	cr.RelLineTo(50, 25)
+
+	// Verify relative line end point
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after RelLineTo")
+	}
+	if x != 150 || y != 125 {
+		t.Errorf("Expected position (150, 125) after RelLineTo, got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoRenderer_RelLineToNoPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Relative line without a current point should do nothing
+	cr.RelLineTo(50, 25)
+
+	// Verify no current point
+	_, _, hasPoint := cr.GetCurrentPoint()
+	if hasPoint {
+		t.Error("Expected no current point after RelLineTo without initial point")
+	}
+}
+
+func TestCairoRenderer_RelCurveTo(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// First move to an absolute position
+	cr.MoveTo(100, 100)
+
+	// Now do a relative curve
+	cr.RelCurveTo(10, 20, 30, 40, 50, 60)
+
+	// Verify relative curve end point
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after RelCurveTo")
+	}
+	// End point should be (100+50, 100+60) = (150, 160)
+	if x != 150 || y != 160 {
+		t.Errorf("Expected position (150, 160) after RelCurveTo, got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoRenderer_RelCurveToNoPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Relative curve without a current point should do nothing
+	cr.RelCurveTo(10, 20, 30, 40, 50, 60)
+
+	// Verify no current point
+	_, _, hasPoint := cr.GetCurrentPoint()
+	if hasPoint {
+		t.Error("Expected no current point after RelCurveTo without initial point")
+	}
+}
+
+func TestCairoRenderer_RelativePathChain(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create a square using relative moves
+	cr.MoveTo(0, 0)
+	cr.RelLineTo(100, 0)   // right
+	cr.RelLineTo(0, 100)   // down
+	cr.RelLineTo(-100, 0)  // left
+	cr.RelLineTo(0, -100)  // up (back to start)
+
+	// Verify we're back at the origin
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after relative path chain")
+	}
+	if x != 0 || y != 0 {
+		t.Errorf("Expected position (0, 0) after relative square, got (%f, %f)", x, y)
+	}
+}
+
+// --- Clipping Function Tests ---
+
+func TestCairoRenderer_Clip(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create a clip path
+	cr.Rectangle(10, 10, 100, 100)
+
+	// Verify we have a path before clip
+	_, _, hasPointBefore := cr.GetCurrentPoint()
+	if !hasPointBefore {
+		t.Fatal("Expected current point before clip")
+	}
+
+	// Apply clip
+	cr.Clip()
+
+	// Verify clip is set and path is cleared
+	if !cr.HasClip() {
+		t.Error("Expected clip to be set after Clip()")
+	}
+
+	// Path should be cleared after clip
+	_, _, hasPointAfter := cr.GetCurrentPoint()
+	if hasPointAfter {
+		t.Error("Expected path to be cleared after Clip()")
+	}
+}
+
+func TestCairoRenderer_ClipNoPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Clip without a path should do nothing
+	cr.Clip()
+
+	// Verify clip is not set
+	if cr.HasClip() {
+		t.Error("Expected no clip after Clip() without path")
+	}
+}
+
+func TestCairoRenderer_ClipPreserve(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create a clip path
+	cr.Rectangle(10, 10, 100, 100)
+
+	// Apply clip preserve
+	cr.ClipPreserve()
+
+	// Verify clip is set and path is preserved
+	if !cr.HasClip() {
+		t.Error("Expected clip to be set after ClipPreserve()")
+	}
+
+	// Path should be preserved after clip preserve
+	_, _, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected path to be preserved after ClipPreserve()")
+	}
+}
+
+func TestCairoRenderer_ResetClip(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set clip
+	cr.Rectangle(10, 10, 100, 100)
+	cr.Clip()
+
+	// Verify clip is set
+	if !cr.HasClip() {
+		t.Fatal("Expected clip to be set before reset")
+	}
+
+	// Reset clip
+	cr.ResetClip()
+
+	// Verify clip is reset
+	if cr.HasClip() {
+		t.Error("Expected clip to be reset after ResetClip()")
+	}
+}
+
+func TestCairoRenderer_ClipSaveRestore(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Save initial state (no clip)
+	cr.Save()
+
+	// Set clip
+	cr.Rectangle(10, 10, 100, 100)
+	cr.Clip()
+
+	// Verify clip is set
+	if !cr.HasClip() {
+		t.Fatal("Expected clip to be set after Clip()")
+	}
+
+	// Restore state
+	cr.Restore()
+
+	// Verify clip is restored to no-clip state
+	if cr.HasClip() {
+		t.Error("Expected clip to be restored (no clip) after Restore()")
+	}
+}
+
+func TestCairoRenderer_ClipSaveRestoreWithClip(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set initial clip
+	cr.Rectangle(0, 0, 50, 50)
+	cr.Clip()
+
+	// Save state with clip
+	cr.Save()
+
+	// Reset clip
+	cr.ResetClip()
+
+	// Verify no clip
+	if cr.HasClip() {
+		t.Fatal("Expected no clip after ResetClip()")
+	}
+
+	// Restore state
+	cr.Restore()
+
+	// Verify clip is restored
+	if !cr.HasClip() {
+		t.Error("Expected clip to be restored after Restore()")
+	}
+}
+
+func TestCairoRenderer_HasClipInitialState(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Verify initial state has no clip
+	if cr.HasClip() {
+		t.Error("Expected no clip in initial state")
+	}
+}
