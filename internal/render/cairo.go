@@ -4,8 +4,12 @@
 package render
 
 import (
+	"fmt"
+	"image"
 	"image/color"
+	"image/png"
 	"math"
+	"os"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -1904,6 +1908,94 @@ func (s *CairoSurface) MarkDirty() {
 func (s *CairoSurface) MarkDirtyRectangle(x, y, width, height int) {
 	// Ebiten manages GPU texture updates automatically.
 	// This method exists for API compatibility with Cairo scripts.
+}
+
+// NewCairoSurfaceFromPNG loads a PNG image file and creates a surface from it.
+// This is equivalent to cairo_image_surface_create_from_png.
+// Returns the surface and any error encountered during loading.
+func NewCairoSurfaceFromPNG(filename string) (*CairoSurface, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_image_surface_create_from_png: %w", err)
+	}
+	defer file.Close()
+
+	img, err := png.Decode(file)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_image_surface_create_from_png: failed to decode PNG: %w", err)
+	}
+
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	if width <= 0 {
+		width = 1
+	}
+	if height <= 0 {
+		height = 1
+	}
+
+	ebitenImg := ebiten.NewImage(width, height)
+
+	// Convert the image to RGBA and write to Ebiten image
+	rgbaImg := imageToRGBA(img)
+	ebitenImg.WritePixels(rgbaImg.Pix)
+
+	return &CairoSurface{
+		image:  ebitenImg,
+		width:  width,
+		height: height,
+	}, nil
+}
+
+// imageToRGBA converts any image.Image to *image.RGBA.
+// This ensures consistent pixel format for Ebiten.
+func imageToRGBA(img image.Image) *image.RGBA {
+	if rgba, ok := img.(*image.RGBA); ok {
+		return rgba
+	}
+
+	bounds := img.Bounds()
+	rgba := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			rgba.Set(x, y, img.At(x, y))
+		}
+	}
+	return rgba
+}
+
+// WriteToPNG saves the surface to a PNG file.
+// This is equivalent to cairo_surface_write_to_png.
+// Returns any error encountered during saving.
+func (s *CairoSurface) WriteToPNG(filename string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.destroyed {
+		return fmt.Errorf("cairo_surface_write_to_png: surface has been destroyed")
+	}
+	if s.image == nil {
+		return fmt.Errorf("cairo_surface_write_to_png: surface image is nil")
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("cairo_surface_write_to_png: %w", err)
+	}
+	defer file.Close()
+
+	// Get pixels from Ebiten image
+	// Create an RGBA image with the surface dimensions
+	rgbaImg := image.NewRGBA(image.Rect(0, 0, s.width, s.height))
+	s.image.ReadPixels(rgbaImg.Pix)
+
+	if err := png.Encode(file, rgbaImg); err != nil {
+		return fmt.Errorf("cairo_surface_write_to_png: failed to encode PNG: %w", err)
+	}
+
+	return nil
 }
 
 // CairoContext wraps a CairoRenderer with its associated surface.

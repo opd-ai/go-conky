@@ -4,6 +4,7 @@ package render
 import (
 	"image/color"
 	"math"
+	"os"
 	"sync"
 	"testing"
 )
@@ -1149,6 +1150,198 @@ func TestCairoContext_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 	ctx.Destroy()
 	surface.Destroy()
+}
+
+// --- PNG Surface Loading/Saving Tests ---
+
+func TestNewCairoSurfaceFromPNG(t *testing.T) {
+	// Create a temporary PNG file for testing
+	tmpDir := t.TempDir()
+	pngPath := tmpDir + "/test.png"
+
+	// First, create a simple surface and save it as PNG
+	surface := NewCairoSurface(50, 30)
+	ctx := NewCairoContext(surface)
+	renderer := ctx.Renderer()
+
+	// Draw something on the surface
+	renderer.SetSourceRGB(1, 0, 0) // Red
+	renderer.Rectangle(0, 0, 50, 30)
+	renderer.Fill()
+
+	err := surface.WriteToPNG(pngPath)
+	if err != nil {
+		t.Fatalf("Failed to create test PNG: %v", err)
+	}
+	ctx.Destroy()
+	surface.Destroy()
+
+	// Now test loading the PNG
+	loadedSurface, err := NewCairoSurfaceFromPNG(pngPath)
+	if err != nil {
+		t.Fatalf("NewCairoSurfaceFromPNG failed: %v", err)
+	}
+	if loadedSurface == nil {
+		t.Fatal("NewCairoSurfaceFromPNG returned nil surface")
+	}
+
+	if loadedSurface.Width() != 50 {
+		t.Errorf("Expected width 50, got %d", loadedSurface.Width())
+	}
+	if loadedSurface.Height() != 30 {
+		t.Errorf("Expected height 30, got %d", loadedSurface.Height())
+	}
+	if loadedSurface.IsDestroyed() {
+		t.Error("Loaded surface should not be destroyed")
+	}
+	if loadedSurface.Image() == nil {
+		t.Error("Loaded surface image should not be nil")
+	}
+
+	loadedSurface.Destroy()
+}
+
+func TestNewCairoSurfaceFromPNG_NonexistentFile(t *testing.T) {
+	surface, err := NewCairoSurfaceFromPNG("/nonexistent/path/to/image.png")
+	if err == nil {
+		t.Error("Expected error for nonexistent file")
+		if surface != nil {
+			surface.Destroy()
+		}
+	}
+	if surface != nil {
+		t.Error("Expected nil surface for nonexistent file")
+	}
+}
+
+func TestNewCairoSurfaceFromPNG_InvalidPNG(t *testing.T) {
+	// Create a temporary file with invalid PNG data
+	tmpDir := t.TempDir()
+	invalidPath := tmpDir + "/invalid.png"
+
+	// Write non-PNG data
+	err := os.WriteFile(invalidPath, []byte("not a png file"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	surface, err := NewCairoSurfaceFromPNG(invalidPath)
+	if err == nil {
+		t.Error("Expected error for invalid PNG file")
+		if surface != nil {
+			surface.Destroy()
+		}
+	}
+	if surface != nil {
+		t.Error("Expected nil surface for invalid PNG")
+	}
+}
+
+func TestCairoSurface_WriteToPNG(t *testing.T) {
+	tmpDir := t.TempDir()
+	pngPath := tmpDir + "/output.png"
+
+	surface := NewCairoSurface(100, 80)
+	ctx := NewCairoContext(surface)
+	renderer := ctx.Renderer()
+
+	// Draw a simple pattern
+	renderer.SetSourceRGB(0, 0, 1) // Blue background
+	renderer.Rectangle(0, 0, 100, 80)
+	renderer.Fill()
+
+	renderer.SetSourceRGB(1, 1, 0) // Yellow circle
+	renderer.Arc(50, 40, 20, 0, 2*3.14159)
+	renderer.Fill()
+
+	err := surface.WriteToPNG(pngPath)
+	if err != nil {
+		t.Fatalf("WriteToPNG failed: %v", err)
+	}
+
+	// Verify the file exists and has content
+	info, err := os.Stat(pngPath)
+	if err != nil {
+		t.Fatalf("Failed to stat output file: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("Output PNG file is empty")
+	}
+
+	// Verify we can load the file back
+	loadedSurface, err := NewCairoSurfaceFromPNG(pngPath)
+	if err != nil {
+		t.Fatalf("Failed to reload saved PNG: %v", err)
+	}
+	if loadedSurface.Width() != 100 || loadedSurface.Height() != 80 {
+		t.Errorf("Loaded dimensions mismatch: expected (100,80), got (%d,%d)",
+			loadedSurface.Width(), loadedSurface.Height())
+	}
+
+	loadedSurface.Destroy()
+	ctx.Destroy()
+	surface.Destroy()
+}
+
+func TestCairoSurface_WriteToPNG_DestroyedSurface(t *testing.T) {
+	tmpDir := t.TempDir()
+	pngPath := tmpDir + "/destroyed.png"
+
+	surface := NewCairoSurface(50, 50)
+	surface.Destroy()
+
+	err := surface.WriteToPNG(pngPath)
+	if err == nil {
+		t.Error("Expected error when writing destroyed surface to PNG")
+	}
+}
+
+func TestCairoSurface_WriteToPNG_InvalidPath(t *testing.T) {
+	surface := NewCairoSurface(50, 50)
+	defer surface.Destroy()
+
+	err := surface.WriteToPNG("/nonexistent/directory/output.png")
+	if err == nil {
+		t.Error("Expected error for invalid output path")
+	}
+}
+
+func TestCairoSurfaceFromPNG_RoundTrip(t *testing.T) {
+	// Test that a surface can be saved and loaded without data loss
+	tmpDir := t.TempDir()
+	pngPath := tmpDir + "/roundtrip.png"
+
+	// Create original surface with specific dimensions
+	original := NewCairoSurface(123, 456)
+	ctx := NewCairoContext(original)
+	renderer := ctx.Renderer()
+
+	// Draw something identifiable
+	renderer.SetSourceRGBA(0.5, 0.25, 0.75, 1.0)
+	renderer.Rectangle(10, 20, 50, 60)
+	renderer.Fill()
+
+	// Save
+	err := original.WriteToPNG(pngPath)
+	if err != nil {
+		t.Fatalf("Failed to save: %v", err)
+	}
+
+	// Load
+	loaded, err := NewCairoSurfaceFromPNG(pngPath)
+	if err != nil {
+		t.Fatalf("Failed to load: %v", err)
+	}
+
+	// Verify dimensions match
+	if loaded.Width() != original.Width() || loaded.Height() != original.Height() {
+		t.Errorf("Dimension mismatch: original (%d,%d), loaded (%d,%d)",
+			original.Width(), original.Height(), loaded.Width(), loaded.Height())
+	}
+
+	loaded.Destroy()
+	ctx.Destroy()
+	original.Destroy()
 }
 
 // --- Relative Path Function Tests ---

@@ -247,6 +247,8 @@ func (cb *CairoBindings) registerConstants() {
 func (cb *CairoBindings) registerSurfaceFunctions() {
 	cb.runtime.SetGoFunction("cairo_xlib_surface_create", cb.xlibSurfaceCreate, 5, false)
 	cb.runtime.SetGoFunction("cairo_image_surface_create", cb.imageSurfaceCreate, 3, false)
+	cb.runtime.SetGoFunction("cairo_image_surface_create_from_png", cb.imageSurfaceCreateFromPNG, 1, false)
+	cb.runtime.SetGoFunction("cairo_surface_write_to_png", cb.surfaceWriteToPNG, 2, false)
 	cb.runtime.SetGoFunction("cairo_create", cb.cairoCreate, 1, false)
 	cb.runtime.SetGoFunction("cairo_destroy", cb.cairoDestroy, 1, false)
 	cb.runtime.SetGoFunction("cairo_surface_destroy", cb.surfaceDestroy, 1, false)
@@ -1717,6 +1719,57 @@ func (cb *CairoBindings) surfaceMarkDirtyRectangle(t *rt.Thread, c *rt.GoCont) (
 	height, _ := getIntArg(args, 4)
 	surface.MarkDirtyRectangle(int(x), int(y), int(width), int(height))
 	return c.Next(), nil
+}
+
+// imageSurfaceCreateFromPNG handles cairo_image_surface_create_from_png(filename)
+// Loads a PNG image file and creates a Cairo surface from it.
+func (cb *CairoBindings) imageSurfaceCreateFromPNG(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	filename, err := c.StringArg(0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_image_surface_create_from_png: filename: %w", err)
+	}
+
+	surface, err := render.NewCairoSurfaceFromPNG(filename)
+	if err != nil {
+		// Return nil and error message (or just nil for Cairo compatibility)
+		return c.PushingNext(t.Runtime, rt.NilValue, rt.StringValue(err.Error())), nil
+	}
+
+	ud := rt.NewUserData(surface, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// surfaceWriteToPNG handles cairo_surface_write_to_png(surface, filename)
+// Saves the surface to a PNG image file.
+func (cb *CairoBindings) surfaceWriteToPNG(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	if len(args) < 2 {
+		return nil, fmt.Errorf("cairo_surface_write_to_png: requires surface and filename arguments")
+	}
+
+	surfaceVal, ok := args[0].TryUserData()
+	if !ok {
+		return nil, fmt.Errorf("cairo_surface_write_to_png: first argument must be a surface")
+	}
+	surface, ok := surfaceVal.Value().(*render.CairoSurface)
+	if !ok {
+		return nil, fmt.Errorf("cairo_surface_write_to_png: first argument must be a surface")
+	}
+
+	filenameVal := args[1]
+	filename, ok := filenameVal.TryString()
+	if !ok {
+		return nil, fmt.Errorf("cairo_surface_write_to_png: filename must be a string")
+	}
+
+	err := surface.WriteToPNG(filename)
+	if err != nil {
+		// Return error status (non-zero means error in Cairo)
+		return c.PushingNext1(t.Runtime, rt.IntValue(1)), nil
+	}
+
+	// Return success status (0 in Cairo)
+	return c.PushingNext1(t.Runtime, rt.IntValue(0)), nil
 }
 
 // getMatrixArg extracts a CairoMatrix from the args slice
