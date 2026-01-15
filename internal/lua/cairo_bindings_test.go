@@ -1210,7 +1210,7 @@ func TestCairoBindings_FullSurfaceWorkflow(t *testing.T) {
 		t.Fatalf("Failed to create CairoBindings: %v", err)
 	}
 
-	// Test a complete workflow similar to what a Conky script would do
+	// Test a complete workflow with context-based drawing (cr as first argument)
 	luaCode := `
 		-- Create a surface (simulating conky_window setup)
 		local surface = cairo_xlib_surface_create(0, 0, 0, 640, 480)
@@ -1218,17 +1218,17 @@ func TestCairoBindings_FullSurfaceWorkflow(t *testing.T) {
 		-- Create a Cairo context
 		local cr = cairo_create(surface)
 		
-		-- Set up drawing state
-		cairo_set_source_rgba(1, 0, 0, 0.8)
-		cairo_set_line_width(2)
+		-- Set up drawing state with context (cr as first argument)
+		cairo_set_source_rgba(cr, 1, 0, 0, 0.8)
+		cairo_set_line_width(cr, 2)
 		
-		-- Draw something
-		cairo_rectangle(10, 10, 100, 50)
-		cairo_stroke()
+		-- Draw something with context
+		cairo_rectangle(cr, 10, 10, 100, 50)
+		cairo_stroke(cr)
 		
-		cairo_set_source_rgb(0, 1, 0)
-		cairo_rectangle(120, 10, 100, 50)
-		cairo_fill()
+		cairo_set_source_rgb(cr, 0, 1, 0)
+		cairo_rectangle(cr, 120, 10, 100, 50)
+		cairo_fill(cr)
 		
 		-- Clean up
 		cairo_destroy(cr)
@@ -1243,5 +1243,55 @@ func TestCairoBindings_FullSurfaceWorkflow(t *testing.T) {
 
 	if !result.AsBool() {
 		t.Error("Expected full surface workflow to succeed")
+	}
+}
+
+// TestCairoBindings_ContextBasedDrawingVerifiesRenderer verifies that drawing
+// operations use the context's renderer, not the global renderer.
+func TestCairoBindings_ContextBasedDrawingVerifiesRenderer(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test that context-based and non-context calls both work
+	luaCode := `
+		-- Create a surface and context
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 200, 200)
+		local cr = cairo_create(surface)
+		
+		-- Context-based drawing (standard Conky pattern)
+		cairo_set_source_rgba(cr, 1, 0, 0, 1)
+		cairo_move_to(cr, 10, 10)
+		cairo_line_to(cr, 50, 50)
+		cairo_stroke(cr)
+		
+		-- Backward compatible (no context) calls should still work
+		cairo_set_source_rgb(0, 1, 0)
+		cairo_rectangle(100, 100, 50, 50)
+		cairo_fill()
+		
+		-- Mixed usage
+		cairo_set_source_rgba(cr, 0, 0, 1, 0.5)
+		cairo_arc(cr, 100, 100, 30, 0, 6.28)
+		cairo_fill(cr)
+		
+		cairo_destroy(cr)
+		cairo_surface_destroy(surface)
+		return true
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute context-based drawing test: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected context-based drawing to succeed")
 	}
 }

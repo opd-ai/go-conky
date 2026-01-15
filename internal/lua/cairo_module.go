@@ -211,7 +211,8 @@ func (cm *CairoModule) registerModuleConstants(table *rt.Table) {
 
 // setTableGoFunction registers a Go function in a Lua table.
 func (cm *CairoModule) setTableGoFunction(table *rt.Table, name string, fn rt.GoFunctionFunc, nArgs int) {
-	goFunc := rt.NewGoFunction(fn, name, nArgs, false)
+	// All Cairo functions now support variable arguments for optional context
+	goFunc := rt.NewGoFunction(fn, name, nArgs, true)
 	rt.SolemnlyDeclareCompliance(rt.ComplyMemSafe|rt.ComplyCpuSafe, goFunc)
 	table.Set(rt.StringValue(name), rt.FunctionValue(goFunc))
 }
@@ -219,33 +220,33 @@ func (cm *CairoModule) setTableGoFunction(table *rt.Table, name string, fn rt.Go
 // registerFunctionsAsGlobals registers Cairo functions as globals.
 // This is the fallback when package library is not available.
 func (cm *CairoModule) registerFunctionsAsGlobals() {
-	// Color functions
-	cm.runtime.SetGoFunction("cairo_set_source_rgb", cm.setSourceRGB, 3, false)
-	cm.runtime.SetGoFunction("cairo_set_source_rgba", cm.setSourceRGBA, 4, false)
+	// Color functions - all accept optional cr as first argument
+	cm.runtime.SetGoFunction("cairo_set_source_rgb", cm.setSourceRGB, 3, true)
+	cm.runtime.SetGoFunction("cairo_set_source_rgba", cm.setSourceRGBA, 4, true)
 
 	// Line style functions
-	cm.runtime.SetGoFunction("cairo_set_line_width", cm.setLineWidth, 1, false)
-	cm.runtime.SetGoFunction("cairo_set_line_cap", cm.setLineCap, 1, false)
-	cm.runtime.SetGoFunction("cairo_set_line_join", cm.setLineJoin, 1, false)
-	cm.runtime.SetGoFunction("cairo_set_antialias", cm.setAntialias, 1, false)
+	cm.runtime.SetGoFunction("cairo_set_line_width", cm.setLineWidth, 1, true)
+	cm.runtime.SetGoFunction("cairo_set_line_cap", cm.setLineCap, 1, true)
+	cm.runtime.SetGoFunction("cairo_set_line_join", cm.setLineJoin, 1, true)
+	cm.runtime.SetGoFunction("cairo_set_antialias", cm.setAntialias, 1, true)
 
 	// Path building functions
-	cm.runtime.SetGoFunction("cairo_new_path", cm.newPath, 0, false)
-	cm.runtime.SetGoFunction("cairo_move_to", cm.moveTo, 2, false)
-	cm.runtime.SetGoFunction("cairo_line_to", cm.lineTo, 2, false)
-	cm.runtime.SetGoFunction("cairo_close_path", cm.closePath, 0, false)
-	cm.runtime.SetGoFunction("cairo_arc", cm.arc, 5, false)
-	cm.runtime.SetGoFunction("cairo_arc_negative", cm.arcNegative, 5, false)
-	cm.runtime.SetGoFunction("cairo_curve_to", cm.curveTo, 6, false)
-	cm.runtime.SetGoFunction("cairo_rectangle", cm.rectangle, 4, false)
+	cm.runtime.SetGoFunction("cairo_new_path", cm.newPath, 0, true)
+	cm.runtime.SetGoFunction("cairo_move_to", cm.moveTo, 2, true)
+	cm.runtime.SetGoFunction("cairo_line_to", cm.lineTo, 2, true)
+	cm.runtime.SetGoFunction("cairo_close_path", cm.closePath, 0, true)
+	cm.runtime.SetGoFunction("cairo_arc", cm.arc, 5, true)
+	cm.runtime.SetGoFunction("cairo_arc_negative", cm.arcNegative, 5, true)
+	cm.runtime.SetGoFunction("cairo_curve_to", cm.curveTo, 6, true)
+	cm.runtime.SetGoFunction("cairo_rectangle", cm.rectangle, 4, true)
 
 	// Drawing functions
-	cm.runtime.SetGoFunction("cairo_stroke", cm.stroke, 0, false)
-	cm.runtime.SetGoFunction("cairo_fill", cm.fill, 0, false)
-	cm.runtime.SetGoFunction("cairo_stroke_preserve", cm.strokePreserve, 0, false)
-	cm.runtime.SetGoFunction("cairo_fill_preserve", cm.fillPreserve, 0, false)
-	cm.runtime.SetGoFunction("cairo_paint", cm.paint, 0, false)
-	cm.runtime.SetGoFunction("cairo_paint_with_alpha", cm.paintWithAlpha, 1, false)
+	cm.runtime.SetGoFunction("cairo_stroke", cm.stroke, 0, true)
+	cm.runtime.SetGoFunction("cairo_fill", cm.fill, 0, true)
+	cm.runtime.SetGoFunction("cairo_stroke_preserve", cm.strokePreserve, 0, true)
+	cm.runtime.SetGoFunction("cairo_fill_preserve", cm.fillPreserve, 0, true)
+	cm.runtime.SetGoFunction("cairo_paint", cm.paint, 0, true)
+	cm.runtime.SetGoFunction("cairo_paint_with_alpha", cm.paintWithAlpha, 1, true)
 
 	// Surface management functions
 	cm.runtime.SetGoFunction("cairo_xlib_surface_create", cm.xlibSurfaceCreate, 5, false)
@@ -284,56 +285,65 @@ func (cm *CairoModule) setupConkyWindow() {
 
 // --- Cairo Drawing Functions (shared with CairoBindings) ---
 // These functions wrap the CairoRenderer methods for Lua access.
+// All functions accept an optional context (cr) as the first argument.
 
 func (cm *CairoModule) setSourceRGB(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	r, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	r, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	g, err := c.FloatArg(1)
+	g, err := getFloatArg(args, 1+offset)
 	if err != nil {
 		return nil, err
 	}
-	b, err := c.FloatArg(2)
+	b, err := getFloatArg(args, 2+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.SetSourceRGB(r, g, b)
+	renderer.SetSourceRGB(r, g, b)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) setSourceRGBA(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	r, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	r, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	g, err := c.FloatArg(1)
+	g, err := getFloatArg(args, 1+offset)
 	if err != nil {
 		return nil, err
 	}
-	b, err := c.FloatArg(2)
+	b, err := getFloatArg(args, 2+offset)
 	if err != nil {
 		return nil, err
 	}
-	a, err := c.FloatArg(3)
+	a, err := getFloatArg(args, 3+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.SetSourceRGBA(r, g, b, a)
+	renderer.SetSourceRGBA(r, g, b, a)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) setLineWidth(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	width, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	width, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.SetLineWidth(width)
+	renderer.SetLineWidth(width)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) setLineCap(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	capStyle, err := c.IntArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	capStyle, err := getIntArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
@@ -341,12 +351,14 @@ func (cm *CairoModule) setLineCap(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 	if capStyle < int64(render.LineCapButt) || capStyle > int64(render.LineCapSquare) {
 		return nil, ErrInvalidLineCap
 	}
-	cm.renderer.SetLineCap(render.LineCap(capStyle))
+	renderer.SetLineCap(render.LineCap(capStyle))
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) setLineJoin(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	join, err := c.IntArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	join, err := getIntArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
@@ -354,186 +366,209 @@ func (cm *CairoModule) setLineJoin(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) 
 	if join < int64(render.LineJoinMiter) || join > int64(render.LineJoinBevel) {
 		return nil, ErrInvalidLineJoin
 	}
-	cm.renderer.SetLineJoin(render.LineJoin(join))
+	renderer.SetLineJoin(render.LineJoin(join))
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) setAntialias(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	mode, err := c.IntArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	mode, err := getIntArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.SetAntialias(mode != 0)
+	renderer.SetAntialias(mode != 0)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) newPath(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	cm.renderer.NewPath()
+	renderer, _ := cm.getRendererFromContext(c)
+	renderer.NewPath()
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) moveTo(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	x, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	x, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	y, err := c.FloatArg(1)
+	y, err := getFloatArg(args, 1+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.MoveTo(x, y)
+	renderer.MoveTo(x, y)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) lineTo(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	x, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	x, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	y, err := c.FloatArg(1)
+	y, err := getFloatArg(args, 1+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.LineTo(x, y)
+	renderer.LineTo(x, y)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) closePath(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	cm.renderer.ClosePath()
+	renderer, _ := cm.getRendererFromContext(c)
+	renderer.ClosePath()
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) arc(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	xc, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	xc, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	yc, err := c.FloatArg(1)
+	yc, err := getFloatArg(args, 1+offset)
 	if err != nil {
 		return nil, err
 	}
-	radius, err := c.FloatArg(2)
+	radius, err := getFloatArg(args, 2+offset)
 	if err != nil {
 		return nil, err
 	}
-	angle1, err := c.FloatArg(3)
+	angle1, err := getFloatArg(args, 3+offset)
 	if err != nil {
 		return nil, err
 	}
-	angle2, err := c.FloatArg(4)
+	angle2, err := getFloatArg(args, 4+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.Arc(xc, yc, radius, angle1, angle2)
+	renderer.Arc(xc, yc, radius, angle1, angle2)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) arcNegative(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	xc, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	xc, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	yc, err := c.FloatArg(1)
+	yc, err := getFloatArg(args, 1+offset)
 	if err != nil {
 		return nil, err
 	}
-	radius, err := c.FloatArg(2)
+	radius, err := getFloatArg(args, 2+offset)
 	if err != nil {
 		return nil, err
 	}
-	angle1, err := c.FloatArg(3)
+	angle1, err := getFloatArg(args, 3+offset)
 	if err != nil {
 		return nil, err
 	}
-	angle2, err := c.FloatArg(4)
+	angle2, err := getFloatArg(args, 4+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.ArcNegative(xc, yc, radius, angle1, angle2)
+	renderer.ArcNegative(xc, yc, radius, angle1, angle2)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) curveTo(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	x1, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	x1, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	y1, err := c.FloatArg(1)
+	y1, err := getFloatArg(args, 1+offset)
 	if err != nil {
 		return nil, err
 	}
-	x2, err := c.FloatArg(2)
+	x2, err := getFloatArg(args, 2+offset)
 	if err != nil {
 		return nil, err
 	}
-	y2, err := c.FloatArg(3)
+	y2, err := getFloatArg(args, 3+offset)
 	if err != nil {
 		return nil, err
 	}
-	x3, err := c.FloatArg(4)
+	x3, err := getFloatArg(args, 4+offset)
 	if err != nil {
 		return nil, err
 	}
-	y3, err := c.FloatArg(5)
+	y3, err := getFloatArg(args, 5+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.CurveTo(x1, y1, x2, y2, x3, y3)
+	renderer.CurveTo(x1, y1, x2, y2, x3, y3)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) rectangle(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	x, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	x, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	y, err := c.FloatArg(1)
+	y, err := getFloatArg(args, 1+offset)
 	if err != nil {
 		return nil, err
 	}
-	width, err := c.FloatArg(2)
+	width, err := getFloatArg(args, 2+offset)
 	if err != nil {
 		return nil, err
 	}
-	height, err := c.FloatArg(3)
+	height, err := getFloatArg(args, 3+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.Rectangle(x, y, width, height)
+	renderer.Rectangle(x, y, width, height)
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) stroke(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	cm.renderer.Stroke()
+	renderer, _ := cm.getRendererFromContext(c)
+	renderer.Stroke()
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) fill(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	cm.renderer.Fill()
+	renderer, _ := cm.getRendererFromContext(c)
+	renderer.Fill()
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) strokePreserve(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	cm.renderer.StrokePreserve()
+	renderer, _ := cm.getRendererFromContext(c)
+	renderer.StrokePreserve()
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) fillPreserve(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	cm.renderer.FillPreserve()
+	renderer, _ := cm.getRendererFromContext(c)
+	renderer.FillPreserve()
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) paint(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	cm.renderer.Paint()
+	renderer, _ := cm.getRendererFromContext(c)
+	renderer.Paint()
 	return c.Next(), nil
 }
 
 func (cm *CairoModule) paintWithAlpha(_ *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	alpha, err := c.FloatArg(0)
+	renderer, offset := cm.getRendererFromContext(c)
+	args := moduleGetAllArgs(c)
+	alpha, err := getFloatArg(args, 0+offset)
 	if err != nil {
 		return nil, err
 	}
-	cm.renderer.PaintWithAlpha(alpha)
+	renderer.PaintWithAlpha(alpha)
 	return c.Next(), nil
 }
 
@@ -593,7 +628,7 @@ func (cm *CairoModule) cairoCreate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) 
 	surfaceVal, err := c.UserDataArg(0)
 	if err != nil {
 		// No surface argument - return context using the shared renderer
-		ctx := &moduleContext{renderer: cm.renderer}
+		ctx := &sharedContext{renderer: cm.renderer}
 		ud := rt.NewUserData(ctx, nil)
 		return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
 	}
@@ -626,7 +661,7 @@ func (cm *CairoModule) cairoDestroy(t *rt.Thread, c *rt.GoCont) (rt.Cont, error)
 	switch ctx := ctxVal.Value().(type) {
 	case *render.CairoContext:
 		ctx.Destroy()
-	case *moduleContext:
+	case *sharedContext:
 		// Don't destroy the shared context
 	}
 	return c.Next(), nil
@@ -652,8 +687,45 @@ func (cm *CairoModule) surfaceDestroy(t *rt.Thread, c *rt.GoCont) (rt.Cont, erro
 	return c.Next(), nil
 }
 
-// moduleContext is a wrapper for the global shared renderer.
-// This is used when cairo_create is called without a surface argument.
-type moduleContext struct {
-	renderer *render.CairoRenderer
+// getRendererFromContext extracts the CairoRenderer from a context userdata.
+// The context can be a *render.CairoContext or a *sharedContext.
+// Returns the renderer and the argument offset (1 if context was provided, 0 otherwise).
+// It uses Args() + Etc() to get all arguments including varargs.
+func (cm *CairoModule) getRendererFromContext(c *rt.GoCont) (*render.CairoRenderer, int) {
+	// Combine regular args and varargs to get total argument count
+	allArgs := append(c.Args(), c.Etc()...)
+
+	if len(allArgs) == 0 {
+		return cm.renderer, 0
+	}
+
+	// Try to get the first argument as userdata (context)
+	firstArg := allArgs[0]
+	if ud, ok := firstArg.TryUserData(); ok {
+		// Check what type of context we have
+		switch ctx := ud.Value().(type) {
+		case *render.CairoContext:
+			r := ctx.Renderer()
+			if r != nil {
+				return r, 1
+			}
+			return cm.renderer, 1
+		case *sharedContext:
+			if ctx.renderer != nil {
+				return ctx.renderer, 1
+			}
+			return cm.renderer, 1
+		default:
+			// Unknown userdata type (e.g., surface) - don't treat as context
+			return cm.renderer, 0
+		}
+	}
+
+	// First argument is not userdata, use global renderer
+	return cm.renderer, 0
+}
+
+// moduleGetAllArgs combines Args() and Etc() to get all arguments including varargs
+func moduleGetAllArgs(c *rt.GoCont) []rt.Value {
+	return append(c.Args(), c.Etc()...)
 }

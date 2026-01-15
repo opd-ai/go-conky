@@ -109,11 +109,11 @@ Total Gaps Found: 9
 - Pattern functions: `cairo_pattern_create_*`, `cairo_set_source`
 - Clip functions: `cairo_clip`, `cairo_reset_clip`
 
-**Production Impact:** Moderate - Text rendering, transformations, and surface management now work. Users can create surfaces, contexts, and properly manage Cairo resources. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly.
+**Production Impact:** Moderate - Text rendering, transformations, and surface management now work. Users can create surfaces, contexts, and properly manage Cairo resources. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly with context-based drawing.
 
 **Usage Example:**
 ```lua
--- Surface management now works:
+-- Surface management now works with proper context-based drawing:
 if conky_window == nil then return end
 local cs = cairo_xlib_surface_create(
     conky_window.display,
@@ -123,16 +123,16 @@ local cs = cairo_xlib_surface_create(
     conky_window.height)
 local cr = cairo_create(cs)
 
--- Draw with the context
-cairo_set_source_rgb(1, 0, 0)
-cairo_rectangle(10, 10, 100, 50)
-cairo_fill()
+-- Draw with the context - cr is passed as first argument
+cairo_set_source_rgb(cr, 1, 0, 0)
+cairo_rectangle(cr, 10, 10, 100, 50)
+cairo_fill(cr)
 
--- Text functions work:
-cairo_select_font_face("GoMono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD)
-cairo_set_font_size(16)
-cairo_move_to(10, 30)
-cairo_show_text("Hello, World!")
+-- Text functions work with context:
+cairo_select_font_face(cr, "GoMono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD)
+cairo_set_font_size(cr, 16)
+cairo_move_to(cr, 10, 30)
+cairo_show_text(cr, "Hello, World!")
 
 -- Clean up
 cairo_destroy(cr)
