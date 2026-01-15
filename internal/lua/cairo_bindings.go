@@ -104,6 +104,15 @@ func (cb *CairoBindings) registerFunctions() {
 	cb.runtime.SetGoFunction("cairo_has_current_point", cb.hasCurrentPoint, 0, true)
 	cb.runtime.SetGoFunction("cairo_path_extents", cb.pathExtents, 0, true)
 
+	// Pattern/gradient functions
+	cb.runtime.SetGoFunction("cairo_pattern_create_rgb", cb.patternCreateRGB, 3, false)
+	cb.runtime.SetGoFunction("cairo_pattern_create_rgba", cb.patternCreateRGBA, 4, false)
+	cb.runtime.SetGoFunction("cairo_pattern_create_linear", cb.patternCreateLinear, 4, false)
+	cb.runtime.SetGoFunction("cairo_pattern_create_radial", cb.patternCreateRadial, 6, false)
+	cb.runtime.SetGoFunction("cairo_pattern_add_color_stop_rgb", cb.patternAddColorStopRGB, 5, false)
+	cb.runtime.SetGoFunction("cairo_pattern_add_color_stop_rgba", cb.patternAddColorStopRGBA, 6, false)
+	cb.runtime.SetGoFunction("cairo_set_source", cb.setSource, 2, false)
+
 	// Register Cairo constants
 	cb.registerConstants()
 
@@ -1058,4 +1067,228 @@ func (cb *CairoBindings) pathExtents(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 		rt.FloatValue(x2),
 		rt.FloatValue(y2),
 	), nil
+}
+
+// --- Pattern/Gradient Functions ---
+
+// patternCreateRGB handles cairo_pattern_create_rgb(r, g, b)
+// Creates a solid pattern with the given RGB color values (0.0-1.0).
+func (cb *CairoBindings) patternCreateRGB(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+
+	r, err := getFloatArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_rgb: r: %w", err)
+	}
+	g, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_rgb: g: %w", err)
+	}
+	b, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_rgb: b: %w", err)
+	}
+
+	pattern := render.NewSolidPattern(r, g, b, 1.0)
+	ud := rt.NewUserData(pattern, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// patternCreateRGBA handles cairo_pattern_create_rgba(r, g, b, a)
+// Creates a solid pattern with the given RGBA color values (0.0-1.0).
+func (cb *CairoBindings) patternCreateRGBA(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+
+	r, err := getFloatArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_rgba: r: %w", err)
+	}
+	g, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_rgba: g: %w", err)
+	}
+	b, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_rgba: b: %w", err)
+	}
+	a, err := getFloatArg(args, 3)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_rgba: a: %w", err)
+	}
+
+	pattern := render.NewSolidPattern(r, g, b, a)
+	ud := rt.NewUserData(pattern, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// patternCreateLinear handles cairo_pattern_create_linear(x0, y0, x1, y1)
+// Creates a linear gradient pattern from (x0, y0) to (x1, y1).
+func (cb *CairoBindings) patternCreateLinear(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+
+	x0, err := getFloatArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_linear: x0: %w", err)
+	}
+	y0, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_linear: y0: %w", err)
+	}
+	x1, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_linear: x1: %w", err)
+	}
+	y1, err := getFloatArg(args, 3)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_linear: y1: %w", err)
+	}
+
+	pattern := render.NewLinearPattern(x0, y0, x1, y1)
+	ud := rt.NewUserData(pattern, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// patternCreateRadial handles cairo_pattern_create_radial(cx0, cy0, r0, cx1, cy1, r1)
+// Creates a radial gradient pattern between two circles.
+func (cb *CairoBindings) patternCreateRadial(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+
+	cx0, err := getFloatArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_radial: cx0: %w", err)
+	}
+	cy0, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_radial: cy0: %w", err)
+	}
+	r0, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_radial: r0: %w", err)
+	}
+	cx1, err := getFloatArg(args, 3)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_radial: cx1: %w", err)
+	}
+	cy1, err := getFloatArg(args, 4)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_radial: cy1: %w", err)
+	}
+	r1, err := getFloatArg(args, 5)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_create_radial: r1: %w", err)
+	}
+
+	pattern := render.NewRadialPattern(cx0, cy0, r0, cx1, cy1, r1)
+	ud := rt.NewUserData(pattern, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// getPatternArg extracts a CairoPattern from a userdata argument.
+func getPatternArg(args []rt.Value, idx int) (*render.CairoPattern, error) {
+	if idx >= len(args) {
+		return nil, fmt.Errorf("missing argument at index %d", idx)
+	}
+	ud, ok := args[idx].TryUserData()
+	if !ok {
+		return nil, fmt.Errorf("argument at index %d is not a pattern", idx)
+	}
+	pattern, ok := ud.Value().(*render.CairoPattern)
+	if !ok {
+		return nil, fmt.Errorf("argument at index %d is not a pattern", idx)
+	}
+	return pattern, nil
+}
+
+// patternAddColorStopRGB handles cairo_pattern_add_color_stop_rgb(pattern, offset, r, g, b)
+// Adds a color stop to a gradient pattern.
+func (cb *CairoBindings) patternAddColorStopRGB(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+
+	pattern, err := getPatternArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgb: pattern: %w", err)
+	}
+	offset, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgb: offset: %w", err)
+	}
+	r, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgb: r: %w", err)
+	}
+	g, err := getFloatArg(args, 3)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgb: g: %w", err)
+	}
+	b, err := getFloatArg(args, 4)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgb: b: %w", err)
+	}
+
+	pattern.AddColorStopRGB(offset, r, g, b)
+	return c.Next(), nil
+}
+
+// patternAddColorStopRGBA handles cairo_pattern_add_color_stop_rgba(pattern, offset, r, g, b, a)
+// Adds a color stop with alpha to a gradient pattern.
+func (cb *CairoBindings) patternAddColorStopRGBA(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+
+	pattern, err := getPatternArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgba: pattern: %w", err)
+	}
+	offset, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgba: offset: %w", err)
+	}
+	r, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgba: r: %w", err)
+	}
+	g, err := getFloatArg(args, 3)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgba: g: %w", err)
+	}
+	b, err := getFloatArg(args, 4)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgba: b: %w", err)
+	}
+	a, err := getFloatArg(args, 5)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_add_color_stop_rgba: a: %w", err)
+	}
+
+	pattern.AddColorStopRGBA(offset, r, g, b, a)
+	return c.Next(), nil
+}
+
+// setSource handles cairo_set_source(cr, pattern)
+// Sets the source pattern for subsequent drawing operations.
+func (cb *CairoBindings) setSource(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+
+	// Get renderer from first arg (cr)
+	renderer, offset := cb.getRendererFromArgs(args)
+
+	pattern, err := getPatternArg(args, offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_set_source: pattern: %w", err)
+	}
+
+	renderer.SetSource(pattern)
+	return c.Next(), nil
+}
+
+// getRendererFromArgs extracts a renderer from the args if present, otherwise returns default.
+// Returns the renderer and the offset to use for remaining arguments.
+func (cb *CairoBindings) getRendererFromArgs(args []rt.Value) (*render.CairoRenderer, int) {
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if r, ok := ud.Value().(*render.CairoRenderer); ok {
+				return r, 1
+			}
+		}
+	}
+	return cb.renderer, 0
 }

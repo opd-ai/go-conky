@@ -12,6 +12,214 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
+// PatternType represents the type of Cairo pattern.
+type PatternType int
+
+const (
+	// PatternTypeSolid is a solid color pattern.
+	PatternTypeSolid PatternType = iota
+	// PatternTypeLinear is a linear gradient pattern.
+	PatternTypeLinear
+	// PatternTypeRadial is a radial gradient pattern.
+	PatternTypeRadial
+)
+
+// ColorStop represents a color stop in a gradient.
+type ColorStop struct {
+	Offset float64
+	Color  color.RGBA
+}
+
+// CairoPattern represents a Cairo pattern (solid color or gradient).
+type CairoPattern struct {
+	patternType PatternType
+	// For solid patterns
+	solidColor color.RGBA
+	// For linear gradients: (x0, y0) to (x1, y1)
+	x0, y0, x1, y1 float64
+	// For radial gradients: (cx0, cy0, r0) to (cx1, cy1, r1)
+	cx0, cy0, r0, cx1, cy1, r1 float64
+	// Color stops for gradients
+	colorStops []ColorStop
+	mu         sync.Mutex
+}
+
+// NewSolidPattern creates a solid color pattern.
+func NewSolidPattern(r, g, b, a float64) *CairoPattern {
+	return &CairoPattern{
+		patternType: PatternTypeSolid,
+		solidColor: color.RGBA{
+			R: clampToByte(r),
+			G: clampToByte(g),
+			B: clampToByte(b),
+			A: clampToByte(a),
+		},
+	}
+}
+
+// NewLinearPattern creates a linear gradient pattern.
+func NewLinearPattern(x0, y0, x1, y1 float64) *CairoPattern {
+	return &CairoPattern{
+		patternType: PatternTypeLinear,
+		x0:          x0,
+		y0:          y0,
+		x1:          x1,
+		y1:          y1,
+		colorStops:  make([]ColorStop, 0),
+	}
+}
+
+// NewRadialPattern creates a radial gradient pattern.
+func NewRadialPattern(cx0, cy0, r0, cx1, cy1, r1 float64) *CairoPattern {
+	return &CairoPattern{
+		patternType: PatternTypeRadial,
+		cx0:         cx0,
+		cy0:         cy0,
+		r0:          r0,
+		cx1:         cx1,
+		cy1:         cy1,
+		r1:          r1,
+		colorStops:  make([]ColorStop, 0),
+	}
+}
+
+// AddColorStopRGB adds an RGB color stop to a gradient pattern.
+func (p *CairoPattern) AddColorStopRGB(offset, r, g, b float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.colorStops = append(p.colorStops, ColorStop{
+		Offset: offset,
+		Color: color.RGBA{
+			R: clampToByte(r),
+			G: clampToByte(g),
+			B: clampToByte(b),
+			A: 255,
+		},
+	})
+}
+
+// AddColorStopRGBA adds an RGBA color stop to a gradient pattern.
+func (p *CairoPattern) AddColorStopRGBA(offset, r, g, b, a float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.colorStops = append(p.colorStops, ColorStop{
+		Offset: offset,
+		Color: color.RGBA{
+			R: clampToByte(r),
+			G: clampToByte(g),
+			B: clampToByte(b),
+			A: clampToByte(a),
+		},
+	})
+}
+
+// Type returns the pattern type.
+func (p *CairoPattern) Type() PatternType {
+	return p.patternType
+}
+
+// ColorAt returns the color at a given position (0.0 to 1.0) along the gradient.
+// For solid patterns, returns the solid color.
+func (p *CairoPattern) ColorAt(t float64) color.RGBA {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.patternType == PatternTypeSolid {
+		return p.solidColor
+	}
+
+	if len(p.colorStops) == 0 {
+		return color.RGBA{A: 255}
+	}
+	if len(p.colorStops) == 1 {
+		return p.colorStops[0].Color
+	}
+
+	// Clamp t to [0, 1]
+	if t <= 0 {
+		return p.colorStops[0].Color
+	}
+	if t >= 1 {
+		return p.colorStops[len(p.colorStops)-1].Color
+	}
+
+	// Find the two color stops that bracket t
+	var before, after ColorStop
+	before = p.colorStops[0]
+	after = p.colorStops[len(p.colorStops)-1]
+
+	for i := 0; i < len(p.colorStops)-1; i++ {
+		if t >= p.colorStops[i].Offset && t <= p.colorStops[i+1].Offset {
+			before = p.colorStops[i]
+			after = p.colorStops[i+1]
+			break
+		}
+	}
+
+	// Interpolate between the two colors
+	if after.Offset == before.Offset {
+		return before.Color
+	}
+	ratio := (t - before.Offset) / (after.Offset - before.Offset)
+	return color.RGBA{
+		R: uint8(float64(before.Color.R) + ratio*(float64(after.Color.R)-float64(before.Color.R))),
+		G: uint8(float64(before.Color.G) + ratio*(float64(after.Color.G)-float64(before.Color.G))),
+		B: uint8(float64(before.Color.B) + ratio*(float64(after.Color.B)-float64(before.Color.B))),
+		A: uint8(float64(before.Color.A) + ratio*(float64(after.Color.A)-float64(before.Color.A))),
+	}
+}
+
+// ColorAtPoint returns the color at a given (x, y) point for gradient patterns.
+func (p *CairoPattern) ColorAtPoint(x, y float64) color.RGBA {
+	p.mu.Lock()
+	patternType := p.patternType
+	p.mu.Unlock()
+
+	switch patternType {
+	case PatternTypeSolid:
+		return p.solidColor
+	case PatternTypeLinear:
+		return p.linearColorAt(x, y)
+	case PatternTypeRadial:
+		return p.radialColorAt(x, y)
+	default:
+		return color.RGBA{A: 255}
+	}
+}
+
+// linearColorAt calculates the color at a point for a linear gradient.
+func (p *CairoPattern) linearColorAt(x, y float64) color.RGBA {
+	// Calculate the projection of (x,y) onto the gradient line
+	dx := p.x1 - p.x0
+	dy := p.y1 - p.y0
+	lengthSq := dx*dx + dy*dy
+	if lengthSq == 0 {
+		return p.ColorAt(0)
+	}
+	t := ((x-p.x0)*dx + (y-p.y0)*dy) / lengthSq
+	return p.ColorAt(t)
+}
+
+// radialColorAt calculates the color at a point for a radial gradient.
+func (p *CairoPattern) radialColorAt(x, y float64) color.RGBA {
+	// Distance from center of outer circle
+	dx := x - p.cx1
+	dy := y - p.cy1
+	dist := math.Sqrt(dx*dx + dy*dy)
+
+	// Map distance to gradient position
+	if p.r1 == p.r0 {
+		if dist <= p.r1 {
+			return p.ColorAt(1)
+		}
+		return p.ColorAt(0)
+	}
+	t := (dist - p.r0) / (p.r1 - p.r0)
+	return p.ColorAt(t)
+}
+
+// CairoRenderer implements a Cairo-compatible drawing API using Ebiten.
+
 // CairoRenderer implements a Cairo-compatible drawing API using Ebiten.
 // It maintains drawing state similar to Cairo's context and translates
 // Cairo drawing commands to Ebiten vector operations.
@@ -33,6 +241,8 @@ type CairoRenderer struct {
 	pathMinY float32
 	pathMaxX float32
 	pathMaxY float32
+	// Pattern/gradient source
+	sourcePattern *CairoPattern
 	// Text rendering fields
 	textRenderer *TextRenderer
 	fontFamily   string
@@ -60,22 +270,23 @@ type CairoRenderer struct {
 
 // cairoState holds a snapshot of the drawing state for save/restore.
 type cairoState struct {
-	currentColor color.RGBA
-	lineWidth    float32
-	lineCap      LineCap
-	lineJoin     LineJoin
-	antialias    bool
-	fontFamily   string
-	fontSlant    FontSlant
-	fontWeight   FontWeight
-	fontSize     float64
-	translateX   float64
-	translateY   float64
-	rotation     float64
-	scaleX       float64
-	scaleY       float64
-	clipPath     *vector.Path
-	hasClip      bool
+	currentColor  color.RGBA
+	sourcePattern *CairoPattern
+	lineWidth     float32
+	lineCap       LineCap
+	lineJoin      LineJoin
+	antialias     bool
+	fontFamily    string
+	fontSlant     FontSlant
+	fontWeight    FontWeight
+	fontSize      float64
+	translateX    float64
+	translateY    float64
+	rotation      float64
+	scaleX        float64
+	scaleY        float64
+	clipPath      *vector.Path
+	hasClip       bool
 	// Clip bounding box (tracked when clip is set)
 	clipMinX float32
 	clipMinY float32
@@ -210,6 +421,25 @@ func (cr *CairoRenderer) GetCurrentColor() color.RGBA {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	return cr.currentColor
+}
+
+// SetSource sets the current source pattern for drawing operations.
+// This is equivalent to cairo_set_source.
+func (cr *CairoRenderer) SetSource(pattern *CairoPattern) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.sourcePattern = pattern
+	// For solid patterns, also update the current color for compatibility
+	if pattern != nil && pattern.patternType == PatternTypeSolid {
+		cr.currentColor = pattern.solidColor
+	}
+}
+
+// GetSource returns the current source pattern.
+func (cr *CairoRenderer) GetSource() *CairoPattern {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.sourcePattern
 }
 
 // SetLineWidth sets the line width for stroke operations.
@@ -994,26 +1224,27 @@ func (cr *CairoRenderer) Save() {
 	defer cr.mu.Unlock()
 
 	state := cairoState{
-		currentColor: cr.currentColor,
-		lineWidth:    cr.lineWidth,
-		lineCap:      cr.lineCap,
-		lineJoin:     cr.lineJoin,
-		antialias:    cr.antialias,
-		fontFamily:   cr.fontFamily,
-		fontSlant:    cr.fontSlant,
-		fontWeight:   cr.fontWeight,
-		fontSize:     cr.fontSize,
-		translateX:   cr.translateX,
-		translateY:   cr.translateY,
-		rotation:     cr.rotation,
-		scaleX:       cr.scaleX,
-		scaleY:       cr.scaleY,
-		clipPath:     cr.clipPath,
-		hasClip:      cr.hasClip,
-		clipMinX:     cr.clipMinX,
-		clipMinY:     cr.clipMinY,
-		clipMaxX:     cr.clipMaxX,
-		clipMaxY:     cr.clipMaxY,
+		currentColor:  cr.currentColor,
+		sourcePattern: cr.sourcePattern,
+		lineWidth:     cr.lineWidth,
+		lineCap:       cr.lineCap,
+		lineJoin:      cr.lineJoin,
+		antialias:     cr.antialias,
+		fontFamily:    cr.fontFamily,
+		fontSlant:     cr.fontSlant,
+		fontWeight:    cr.fontWeight,
+		fontSize:      cr.fontSize,
+		translateX:    cr.translateX,
+		translateY:    cr.translateY,
+		rotation:      cr.rotation,
+		scaleX:        cr.scaleX,
+		scaleY:        cr.scaleY,
+		clipPath:      cr.clipPath,
+		hasClip:       cr.hasClip,
+		clipMinX:      cr.clipMinX,
+		clipMinY:      cr.clipMinY,
+		clipMaxX:      cr.clipMaxX,
+		clipMaxY:      cr.clipMaxY,
 	}
 	cr.stateStack = append(cr.stateStack, state)
 }
@@ -1036,6 +1267,7 @@ func (cr *CairoRenderer) Restore() {
 
 	// Restore all state
 	cr.currentColor = state.currentColor
+	cr.sourcePattern = state.sourcePattern
 	cr.lineWidth = state.lineWidth
 	cr.lineCap = state.lineCap
 	cr.lineJoin = state.lineJoin

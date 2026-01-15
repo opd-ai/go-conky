@@ -98,9 +98,9 @@ Total Gaps Found: 9
 
 **Implementation Location:** `internal/lua/cairo_bindings.go:46-95`
 
-**Status:** 🔄 **Partially Fixed** - Text, transform, surface management, and path/clip query functions added
+**Status:** 🔄 **Partially Fixed** - Text, transform, surface management, path/clip query, and pattern/gradient functions added
 
-**Fix Details:** Added the most commonly used Cairo text, transformation, surface management, and path/clip query functions:
+**Fix Details:** Added the most commonly used Cairo text, transformation, surface management, path/clip query, and pattern/gradient functions:
 
 1. **Text Functions (4 functions):**
    - `cairo_select_font_face(family, slant, weight)` - Set font family, slant, and weight
@@ -123,81 +123,96 @@ Total Gaps Found: 9
    - `cairo_destroy(cr)` - Destroy a Cairo context
    - `cairo_surface_destroy(surface)` - Destroy a Cairo surface
 
-4. **Path Query Functions (3 functions - NEW):**
+4. **Path Query Functions (3 functions):**
    - `cairo_get_current_point(cr)` - Returns the current point (x, y) in the path
    - `cairo_has_current_point(cr)` - Returns true if a current point is defined
    - `cairo_path_extents(cr)` - Returns the bounding box (x1, y1, x2, y2) of the current path
 
-5. **Clip Query Functions (2 functions - NEW):**
+5. **Clip Query Functions (2 functions):**
    - `cairo_clip_extents(cr)` - Returns the bounding box (x1, y1, x2, y2) of the current clip region
    - `cairo_in_clip(cr, x, y)` - Returns true if the given point is inside the clip region
 
-6. **New Constants:**
+6. **Pattern/Gradient Functions (7 functions - NEW):**
+   - `cairo_pattern_create_rgb(r, g, b)` - Create solid pattern with RGB color (0.0-1.0)
+   - `cairo_pattern_create_rgba(r, g, b, a)` - Create solid pattern with RGBA color
+   - `cairo_pattern_create_linear(x0, y0, x1, y1)` - Create linear gradient pattern
+   - `cairo_pattern_create_radial(cx0, cy0, r0, cx1, cy1, r1)` - Create radial gradient pattern
+   - `cairo_pattern_add_color_stop_rgb(pattern, offset, r, g, b)` - Add RGB color stop to gradient
+   - `cairo_pattern_add_color_stop_rgba(pattern, offset, r, g, b, a)` - Add RGBA color stop to gradient
+   - `cairo_set_source(cr, pattern)` - Set pattern as source for drawing operations
+
+7. **New Constants:**
    - `CAIRO_FONT_SLANT_NORMAL`, `CAIRO_FONT_SLANT_ITALIC`, `CAIRO_FONT_SLANT_OBLIQUE`
    - `CAIRO_FONT_WEIGHT_NORMAL`, `CAIRO_FONT_WEIGHT_BOLD`
    - `CAIRO_FORMAT_ARGB32`, `CAIRO_FORMAT_RGB24`, `CAIRO_FORMAT_A8`, `CAIRO_FORMAT_A1`, `CAIRO_FORMAT_RGB16_565`
 
-**Current Function Count:** ~46 implemented functions (up from 41)
+**Current Function Count:** ~53 implemented functions (up from 46)
 
 **Implementation Files:**
-- `internal/render/cairo.go` - Added path bounding box tracking, PathExtents, HasCurrentPoint, ClipExtents, InClip methods
-- `internal/render/cairo_test.go` - Comprehensive tests for path/clip query functions
-- `internal/lua/cairo_bindings.go` - Added Lua bindings for path/clip query functions
-- `internal/lua/cairo_bindings_test.go` - Tests for new Lua bindings
+- `internal/render/cairo.go` - Added CairoPattern type with solid/linear/radial support, color stops, gradient interpolation, SetSource method
+- `internal/render/cairo_test.go` - Comprehensive tests for path/clip query and pattern functions
+- `internal/lua/cairo_bindings.go` - Added Lua bindings for pattern/gradient functions
+- `internal/lua/cairo_bindings_test.go` - Tests for pattern/gradient Lua bindings
 - `internal/lua/cairo_module.go` - Added surface functions to cairo module
 - `internal/lua/errors.go` - Added new error types for surface operations
 
-**Newly Added Functions (January 15, 2026 - 5 functions):**
+**Newly Added Functions (January 15, 2026 - 7 pattern/gradient functions):**
+1. `cairo_pattern_create_rgb(r, g, b)` - Create solid color pattern
+2. `cairo_pattern_create_rgba(r, g, b, a)` - Create solid color pattern with alpha
+3. `cairo_pattern_create_linear(x0, y0, x1, y1)` - Create linear gradient
+4. `cairo_pattern_create_radial(cx0, cy0, r0, cx1, cy1, r1)` - Create radial gradient
+5. `cairo_pattern_add_color_stop_rgb(pattern, offset, r, g, b)` - Add color stop to gradient
+6. `cairo_pattern_add_color_stop_rgba(pattern, offset, r, g, b, a)` - Add color stop with alpha
+7. `cairo_set_source(cr, pattern)` - Set pattern as drawing source
+
+**Previously Added Functions (11 functions):**
 1. `cairo_get_current_point(cr)` - Get current point coordinates (x, y)
 2. `cairo_has_current_point(cr)` - Check if current point exists (boolean)
 3. `cairo_path_extents(cr)` - Get path bounding box (x1, y1, x2, y2)
 4. `cairo_clip_extents(cr)` - Get clip region bounding box (x1, y1, x2, y2)
 5. `cairo_in_clip(cr, x, y)` - Test if point is inside clip region (boolean)
-
-**Previously Added Functions (6 functions):**
-1. `cairo_rel_move_to(dx, dy)` - Move current point by relative offset
-2. `cairo_rel_line_to(dx, dy)` - Draw line by relative offset
-3. `cairo_rel_curve_to(dx1, dy1, dx2, dy2, dx3, dy3)` - Draw cubic Bézier curve with relative control points
-4. `cairo_clip()` - Establish clip region from current path (clears path)
-5. `cairo_clip_preserve()` - Establish clip region from current path (preserves path)
-6. `cairo_reset_clip()` - Reset clip region to infinite
+6. `cairo_rel_move_to(dx, dy)` - Move current point by relative offset
+7. `cairo_rel_line_to(dx, dy)` - Draw line by relative offset
+8. `cairo_rel_curve_to(dx1, dy1, dx2, dy2, dx3, dy3)` - Draw cubic Bézier curve with relative control points
+9. `cairo_clip()` - Establish clip region from current path (clears path)
+10. `cairo_clip_preserve()` - Establish clip region from current path (preserves path)
+11. `cairo_reset_clip()` - Reset clip region to infinite
 
 **Remaining Work:** Additional Cairo functions for full compatibility:
-- Pattern functions: `cairo_pattern_create_linear`, `cairo_pattern_create_radial`, `cairo_set_source`
-- Gradient functions: `cairo_pattern_add_color_stop_rgb`, `cairo_pattern_add_color_stop_rgba`
+- Matrix functions: `cairo_get_matrix`, `cairo_set_matrix`, `cairo_transform`
+- Path iteration: `cairo_copy_path`, `cairo_path_data_t` handling
+- Surface functions: `cairo_surface_flush`, `cairo_surface_mark_dirty`
+- Extended pattern functions: `cairo_pattern_set_extend`, `cairo_pattern_get_extend`
 
-**Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, clipping, and path/clip queries now work. Users can query path bounds and clip regions for layout calculations. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly with context-based drawing.
+**Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, clipping, path/clip queries, and gradients now work. Users can create linear and radial gradients for advanced visual effects. Scripts that use gradients for progress bars, gauges, and backgrounds now execute correctly.
 
 **Usage Example:**
 ```lua
--- Path query functions example:
-cairo_move_to(cr, 10, 20)
-cairo_line_to(cr, 100, 50)
-cairo_line_to(cr, 50, 100)
+-- Linear gradient example (horizontal red-to-blue gradient):
+local pattern = cairo_pattern_create_linear(0, 0, 200, 0)
+cairo_pattern_add_color_stop_rgb(pattern, 0, 1, 0, 0)  -- Red at start
+cairo_pattern_add_color_stop_rgb(pattern, 1, 0, 0, 1)  -- Blue at end
+cairo_set_source(cr, pattern)
+cairo_rectangle(cr, 0, 0, 200, 50)
+cairo_fill(cr)
 
--- Get current point
-local x, y = cairo_get_current_point(cr)
-print("Current point: " .. x .. ", " .. y)  -- 50, 100
+-- Radial gradient example (white center fading to black):
+local radial = cairo_pattern_create_radial(100, 100, 0, 100, 100, 100)
+cairo_pattern_add_color_stop_rgba(radial, 0, 1, 1, 1, 1)  -- White center
+cairo_pattern_add_color_stop_rgba(radial, 1, 0, 0, 0, 1)  -- Black edge
+cairo_set_source(cr, radial)
+cairo_arc(cr, 100, 100, 100, 0, 2 * math.pi)
+cairo_fill(cr)
 
--- Get path bounds for layout calculations
-local x1, y1, x2, y2 = cairo_path_extents(cr)
-print("Path bounds: " .. x1 .. "," .. y1 .. " to " .. x2 .. "," .. y2)
-
--- Clip query functions example:
-cairo_rectangle(cr, 0, 0, 200, 200)
-cairo_clip(cr)
-
--- Get clip bounds
-local cx1, cy1, cx2, cy2 = cairo_clip_extents(cr)
-print("Clip bounds: " .. cx1 .. "," .. cy1 .. " to " .. cx2 .. "," .. cy2)
-
--- Test if point is in clip
-if cairo_in_clip(cr, 100, 100) then
-    print("Point is inside clip region")
-end
+-- Multi-stop gradient for progress bar:
+local progress = cairo_pattern_create_linear(0, 0, 300, 0)
+cairo_pattern_add_color_stop_rgb(progress, 0, 0, 0.8, 0)     -- Green
+cairo_pattern_add_color_stop_rgb(progress, 0.5, 1, 1, 0)     -- Yellow
+cairo_pattern_add_color_stop_rgb(progress, 1, 1, 0, 0)       -- Red
+cairo_set_source(cr, progress)
+cairo_rectangle(cr, 10, 10, cpu_usage * 3, 20)  -- Width based on CPU usage
+cairo_fill(cr)
 ```
-
--- Surface management now works with proper context-based drawing:
 if conky_window == nil then return end
 local cs = cairo_xlib_surface_create(
     conky_window.display,

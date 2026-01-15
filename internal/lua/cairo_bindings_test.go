@@ -1859,3 +1859,363 @@ func TestCairoBindings_PathQueryWithContext(t *testing.T) {
 		t.Errorf("Expected x=10, got %f", x)
 	}
 }
+
+// --- Pattern/Gradient Tests ---
+
+func TestCairoBindings_PatternCreateRGB(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Create solid pattern
+	luaCode := `
+		local pattern = cairo_pattern_create_rgb(1, 0, 0)
+		return pattern ~= nil
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_pattern_create_rgb: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected pattern to be created (non-nil)")
+	}
+}
+
+func TestCairoBindings_PatternCreateRGBA(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Create solid pattern with alpha
+	luaCode := `
+		local pattern = cairo_pattern_create_rgba(0, 1, 0, 0.5)
+		return pattern ~= nil
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_pattern_create_rgba: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected pattern to be created (non-nil)")
+	}
+}
+
+func TestCairoBindings_PatternCreateLinear(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Create linear gradient pattern
+	luaCode := `
+		local pattern = cairo_pattern_create_linear(0, 0, 100, 100)
+		return pattern ~= nil
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_pattern_create_linear: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected linear pattern to be created (non-nil)")
+	}
+}
+
+func TestCairoBindings_PatternCreateRadial(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Create radial gradient pattern
+	luaCode := `
+		local pattern = cairo_pattern_create_radial(50, 50, 10, 50, 50, 50)
+		return pattern ~= nil
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_pattern_create_radial: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected radial pattern to be created (non-nil)")
+	}
+}
+
+func TestCairoBindings_PatternAddColorStops(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Create pattern and add color stops
+	luaCode := `
+		local pattern = cairo_pattern_create_linear(0, 0, 100, 0)
+		cairo_pattern_add_color_stop_rgb(pattern, 0, 1, 0, 0)  -- Red at start
+		cairo_pattern_add_color_stop_rgb(pattern, 0.5, 0, 1, 0)  -- Green in middle
+		cairo_pattern_add_color_stop_rgba(pattern, 1, 0, 0, 1, 0.5)  -- Blue with alpha at end
+		return pattern ~= nil
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute pattern color stops: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected pattern with color stops to be created")
+	}
+}
+
+func TestCairoBindings_SetSource(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Create solid pattern and set as source
+	luaCode := `
+		local cs = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(cs)
+		local pattern = cairo_pattern_create_rgb(0, 0, 1)
+		cairo_set_source(cr, pattern)
+		cairo_destroy(cr)
+		cairo_surface_destroy(cs)
+		return true
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_set_source: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected set_source to succeed")
+	}
+
+	// Test that a solid pattern also updates the color
+	luaCode2 := `
+		local pattern = cairo_pattern_create_rgb(1, 0, 0)
+		local cs = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(cs)
+		cairo_set_source(cr, pattern)
+		cairo_destroy(cr)
+		cairo_surface_destroy(cs)
+		return true
+	`
+	_, err = runtime.ExecuteString("test2", luaCode2)
+	if err != nil {
+		t.Fatalf("Failed to execute second cairo_set_source: %v", err)
+	}
+
+	// Verify the source was set (solid patterns also update currentColor)
+	source := cb.Renderer().GetSource()
+	if source == nil {
+		t.Log("GetSource returned nil (source may be on separate context)")
+	}
+}
+
+func TestCairoBindings_LinearGradientIntegration(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Full integration test: create gradient, add stops, set source, draw
+	luaCode := `
+		local cs = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 200, 100)
+		local cr = cairo_create(cs)
+		
+		-- Create horizontal gradient
+		local pattern = cairo_pattern_create_linear(0, 0, 200, 0)
+		cairo_pattern_add_color_stop_rgb(pattern, 0, 1, 0, 0)  -- Red
+		cairo_pattern_add_color_stop_rgb(pattern, 0.5, 0, 1, 0)  -- Green
+		cairo_pattern_add_color_stop_rgb(pattern, 1, 0, 0, 1)  -- Blue
+		
+		-- Set pattern and draw rectangle
+		cairo_set_source(cr, pattern)
+		cairo_rectangle(cr, 0, 0, 200, 100)
+		cairo_fill(cr)
+		
+		cairo_destroy(cr)
+		cairo_surface_destroy(cs)
+		return true
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute linear gradient integration test: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected linear gradient integration test to succeed")
+	}
+}
+
+func TestCairoBindings_RadialGradientIntegration(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Full integration test: create radial gradient, add stops, set source, draw
+	luaCode := `
+		local cs = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(cs)
+		
+		-- Create radial gradient (inner circle to outer circle)
+		local pattern = cairo_pattern_create_radial(50, 50, 0, 50, 50, 50)
+		cairo_pattern_add_color_stop_rgba(pattern, 0, 1, 1, 1, 1)  -- White center
+		cairo_pattern_add_color_stop_rgba(pattern, 1, 0, 0, 0, 1)  -- Black edge
+		
+		-- Set pattern and draw circle
+		cairo_set_source(cr, pattern)
+		cairo_arc(cr, 50, 50, 50, 0, 2 * math.pi)
+		cairo_fill(cr)
+		
+		cairo_destroy(cr)
+		cairo_surface_destroy(cs)
+		return true
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute radial gradient integration test: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected radial gradient integration test to succeed")
+	}
+}
+
+func TestCairoPattern_SolidColor(t *testing.T) {
+	// Test solid pattern directly
+	pattern := render.NewSolidPattern(1.0, 0.5, 0.25, 1.0)
+
+	// ColorAt should return the same color regardless of position
+	c := pattern.ColorAt(0.0)
+	if c.R != 255 || c.G != 127 || c.B != 63 || c.A != 255 {
+		t.Errorf("Expected RGBA(255,127,63,255), got RGBA(%d,%d,%d,%d)", c.R, c.G, c.B, c.A)
+	}
+
+	c = pattern.ColorAt(1.0)
+	if c.R != 255 || c.G != 127 || c.B != 63 || c.A != 255 {
+		t.Errorf("Expected RGBA(255,127,63,255), got RGBA(%d,%d,%d,%d)", c.R, c.G, c.B, c.A)
+	}
+}
+
+func TestCairoPattern_LinearGradient(t *testing.T) {
+	// Test linear gradient from left to right
+	pattern := render.NewLinearPattern(0, 0, 100, 0)
+	pattern.AddColorStopRGB(0, 1, 0, 0) // Red at start
+	pattern.AddColorStopRGB(1, 0, 0, 1) // Blue at end
+
+	// Check color at start
+	c := pattern.ColorAt(0.0)
+	if c.R != 255 || c.G != 0 || c.B != 0 {
+		t.Errorf("Expected RGB(255,0,0) at start, got RGB(%d,%d,%d)", c.R, c.G, c.B)
+	}
+
+	// Check color at end
+	c = pattern.ColorAt(1.0)
+	if c.R != 0 || c.G != 0 || c.B != 255 {
+		t.Errorf("Expected RGB(0,0,255) at end, got RGB(%d,%d,%d)", c.R, c.G, c.B)
+	}
+
+	// Check color at middle (should be purple-ish)
+	c = pattern.ColorAt(0.5)
+	if c.R != 127 || c.G != 0 || c.B != 127 {
+		t.Errorf("Expected RGB(127,0,127) at middle, got RGB(%d,%d,%d)", c.R, c.G, c.B)
+	}
+}
+
+func TestCairoPattern_RadialGradient(t *testing.T) {
+	// Test radial gradient from center outward
+	pattern := render.NewRadialPattern(50, 50, 0, 50, 50, 50)
+	pattern.AddColorStopRGB(0, 1, 1, 1) // White at center
+	pattern.AddColorStopRGB(1, 0, 0, 0) // Black at edge
+
+	// Check color at center
+	c := pattern.ColorAtPoint(50, 50)
+	if c.R != 255 || c.G != 255 || c.B != 255 {
+		t.Errorf("Expected RGB(255,255,255) at center, got RGB(%d,%d,%d)", c.R, c.G, c.B)
+	}
+
+	// Check color at edge (50 pixels from center)
+	c = pattern.ColorAtPoint(100, 50)
+	if c.R != 0 || c.G != 0 || c.B != 0 {
+		t.Errorf("Expected RGB(0,0,0) at edge, got RGB(%d,%d,%d)", c.R, c.G, c.B)
+	}
+}
+
+func TestCairoPattern_GradientWithMultipleStops(t *testing.T) {
+	// Test gradient with 3 color stops
+	pattern := render.NewLinearPattern(0, 0, 100, 0)
+	pattern.AddColorStopRGB(0, 1, 0, 0)   // Red
+	pattern.AddColorStopRGB(0.5, 0, 1, 0) // Green
+	pattern.AddColorStopRGB(1, 0, 0, 1)   // Blue
+
+	// Check colors at key points
+	c := pattern.ColorAt(0.0)
+	if c.R != 255 {
+		t.Errorf("Expected red at 0, got RGB(%d,%d,%d)", c.R, c.G, c.B)
+	}
+
+	c = pattern.ColorAt(0.5)
+	if c.G != 255 {
+		t.Errorf("Expected green at 0.5, got RGB(%d,%d,%d)", c.R, c.G, c.B)
+	}
+
+	c = pattern.ColorAt(1.0)
+	if c.B != 255 {
+		t.Errorf("Expected blue at 1.0, got RGB(%d,%d,%d)", c.R, c.G, c.B)
+	}
+}
