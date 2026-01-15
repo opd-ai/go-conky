@@ -765,10 +765,9 @@ func (cr *CairoRenderer) InClip(x, y float64) bool {
 		return true
 	}
 
-	// Get clip bounds and check if point is within
-	bounds := cr.clipPath.Bounds()
-	return float32(x) >= bounds.Min.X && float32(x) <= bounds.Max.X &&
-		float32(y) >= bounds.Min.Y && float32(y) <= bounds.Max.Y
+	// Check if point is within tracked clip bounds
+	return float32(x) >= cr.clipMinX && float32(x) <= cr.clipMaxX &&
+		float32(y) >= cr.clipMinY && float32(y) <= cr.clipMaxY
 }
 
 // clampToByte converts a float64 value (0.0-1.0) to a byte (0-255).
