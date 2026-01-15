@@ -93,6 +93,8 @@ func newMockProvider() *mockSystemDataProvider {
 			Mounts: map[string]monitor.MountStats{
 				"/": {
 					MountPoint:   "/",
+					Device:       "/dev/sda1",
+					FSType:       "ext4",
 					Total:        500 * 1024 * 1024 * 1024, // 500 GiB
 					Used:         200 * 1024 * 1024 * 1024, // 200 GiB
 					Free:         300 * 1024 * 1024 * 1024, // 300 GiB
@@ -101,6 +103,8 @@ func newMockProvider() *mockSystemDataProvider {
 				},
 				"/home": {
 					MountPoint:   "/home",
+					Device:       "/dev/sda2",
+					FSType:       "xfs",
 					Total:        1024 * 1024 * 1024 * 1024, // 1 TiB
 					Used:         512 * 1024 * 1024 * 1024,  // 512 GiB
 					Free:         512 * 1024 * 1024 * 1024,  // 512 GiB
@@ -137,6 +141,16 @@ func newMockProvider() *mockSystemDataProvider {
 			TotalProcesses:   150,
 			RunningProcesses: 5,
 			TotalThreads:     500,
+			TopCPU: []monitor.ProcessInfo{
+				{PID: 1234, Name: "firefox", CPUPercent: 25.5, MemPercent: 10.2, MemBytes: 512 * 1024 * 1024, Threads: 50},
+				{PID: 5678, Name: "chrome", CPUPercent: 15.3, MemPercent: 8.5, MemBytes: 400 * 1024 * 1024, Threads: 30},
+				{PID: 9012, Name: "vscode", CPUPercent: 10.1, MemPercent: 12.0, MemBytes: 600 * 1024 * 1024, Threads: 25},
+			},
+			TopMem: []monitor.ProcessInfo{
+				{PID: 9012, Name: "vscode", CPUPercent: 10.1, MemPercent: 12.0, MemBytes: 600 * 1024 * 1024, Threads: 25},
+				{PID: 1234, Name: "firefox", CPUPercent: 25.5, MemPercent: 10.2, MemBytes: 512 * 1024 * 1024, Threads: 50},
+				{PID: 5678, Name: "chrome", CPUPercent: 15.3, MemPercent: 8.5, MemBytes: 400 * 1024 * 1024, Threads: 30},
+			},
 		},
 		battery: monitor.BatteryStats{
 			Batteries: map[string]monitor.BatteryInfo{
@@ -715,6 +729,46 @@ func TestParseProcessVariables(t *testing.T) {
 			template: "${threads}",
 			expected: "500",
 		},
+		{
+			name:     "top cpu name 1",
+			template: "${top name 1}",
+			expected: "firefox",
+		},
+		{
+			name:     "top cpu name 2",
+			template: "${top name 2}",
+			expected: "chrome",
+		},
+		{
+			name:     "top cpu pid 1",
+			template: "${top pid 1}",
+			expected: "1234",
+		},
+		{
+			name:     "top cpu percent 1",
+			template: "${top cpu 1}",
+			expected: "25.5",
+		},
+		{
+			name:     "top mem percent 1",
+			template: "${top mem 1}",
+			expected: "10.2",
+		},
+		{
+			name:     "top_mem name 1",
+			template: "${top_mem name 1}",
+			expected: "vscode",
+		},
+		{
+			name:     "top_mem mem 1",
+			template: "${top_mem mem 1}",
+			expected: "12.0",
+		},
+		{
+			name:     "top out of range",
+			template: "${top name 100}",
+			expected: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -754,6 +808,26 @@ func TestParseBatteryVariables(t *testing.T) {
 			name:     "battery short",
 			template: "${battery_short}",
 			expected: "D 85%",
+		},
+		{
+			name:     "battery full",
+			template: "${battery}",
+			expected: "Discharging 85%",
+		},
+		{
+			name:     "battery BAT0",
+			template: "${battery BAT0}",
+			expected: "Discharging 85%",
+		},
+		{
+			name:     "battery bar",
+			template: "${battery_bar 10}",
+			expected: "########--",
+		},
+		{
+			name:     "battery time",
+			template: "${battery_time}",
+			expected: "Unknown",
 		},
 	}
 
@@ -1275,5 +1349,121 @@ func TestParseUptimeShortFormats(t *testing.T) {
 				t.Errorf("expected result to contain %q, got %q", tt.contains, result)
 			}
 		})
+	}
+}
+
+func TestParseMiscVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "cpu count",
+			template: "${cpu_count}",
+			expected: "4",
+		},
+		{
+			name:     "fs type root",
+			template: "${fs_type /}",
+			expected: "ext4",
+		},
+		{
+			name:     "fs type home",
+			template: "${fs_type /home}",
+			expected: "xfs",
+		},
+		{
+			name:     "fs bar",
+			template: "${fs_bar 10 /}",
+			expected: "####------",
+		},
+		{
+			name:     "hr",
+			template: "${hr 5}",
+			expected: "-----",
+		},
+		{
+			name:     "tab",
+			template: "${tab}",
+			expected: "\t",
+		},
+		{
+			name:     "color returns empty",
+			template: "${color red}",
+			expected: "",
+		},
+		{
+			name:     "font returns empty",
+			template: "${font Monospace}",
+			expected: "",
+		},
+		{
+			name:     "if_up existing",
+			template: "${if_up eth0}",
+			expected: "1",
+		},
+		{
+			name:     "if_up non-existing",
+			template: "${if_up nonexistent}",
+			expected: "0",
+		},
+		{
+			name:     "downspeedf",
+			template: "${downspeedf eth0}",
+			expected: "100.00",
+		},
+		{
+			name:     "upspeedf",
+			template: "${upspeedf eth0}",
+			expected: "50.00",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestExecVariable(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Test simple echo command
+	result := api.Parse("${exec echo hello}")
+	if result != "hello" {
+		t.Errorf("expected 'hello', got %q", result)
+	}
+
+	// Test command with arguments
+	result = api.Parse("${exec echo hello world}")
+	if result != "hello world" {
+		t.Errorf("expected 'hello world', got %q", result)
 	}
 }

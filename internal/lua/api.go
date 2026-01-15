@@ -5,6 +5,8 @@ package lua
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -270,6 +272,82 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	// Time variables
 	case "time":
 		return api.resolveTime(args)
+
+	// Top process variables
+	case "top":
+		return api.resolveTop(args, false)
+	case "top_mem":
+		return api.resolveTop(args, true)
+
+	// Exec variables - execute shell commands
+	case "exec":
+		return api.resolveExec(args)
+	case "execp":
+		return api.resolveExec(args) // Same as exec, parsing handled elsewhere
+
+	// Text formatting variables (return empty/spacing - actual formatting in renderer)
+	case "color", "color0", "color1", "color2", "color3", "color4",
+		"color5", "color6", "color7", "color8", "color9":
+		return "" // Colors handled by renderer
+	case "font":
+		return "" // Font changes handled by renderer
+	case "alignr":
+		return "" // Right alignment marker
+	case "alignc":
+		return "" // Center alignment marker
+	case "voffset":
+		return "" // Vertical offset handled by renderer
+	case "offset":
+		return "" // Horizontal offset handled by renderer
+	case "goto":
+		return "" // Goto position handled by renderer
+	case "tab":
+		return "\t"
+	case "hr":
+		return api.resolveHR(args)
+
+	// Additional filesystem variables
+	case "fs_bar":
+		return api.resolveFSBar(args)
+	case "fs_type":
+		return api.resolveFSType(args)
+
+	// Additional CPU variables
+	case "cpu_count", "cpu_cores":
+		return strconv.Itoa(api.sysProvider.CPU().CPUCount)
+
+	// Additional memory variables
+	case "memwithbuffers":
+		mem := api.sysProvider.Memory()
+		return formatBytes(mem.Used - mem.Buffers - mem.Cached)
+
+	// Additional battery variables
+	case "battery":
+		return api.resolveBattery(args)
+	case "battery_bar":
+		return api.resolveBatteryBar(args)
+	case "battery_time":
+		return api.resolveBatteryTime(args)
+
+	// Platform/environment variables
+	case "user_names", "user_name":
+		return os.Getenv("USER")
+	case "desktop_name":
+		return os.Getenv("XDG_CURRENT_DESKTOP")
+	case "uid":
+		return strconv.Itoa(os.Getuid())
+	case "gid":
+		return strconv.Itoa(os.Getgid())
+
+	// Additional network variables
+	case "downspeedf":
+		return api.resolveNetworkSpeedF(args, true)
+	case "upspeedf":
+		return api.resolveNetworkSpeedF(args, false)
+
+	// Conditional stubs (return content as-is, conditions evaluated elsewhere)
+	case "if_up":
+		return api.resolveIfUp(args)
 
 	default:
 		// Return original if unknown variable
@@ -824,4 +902,225 @@ func (api *ConkyAPI) resolveNameserver(args []string) string {
 	}
 
 	return netStats.Nameservers[index]
+}
+
+// resolveTop resolves ${top} and ${top_mem} variables.
+// Format: ${top field index} where field is name/pid/cpu/mem and index is 1-based.
+func (api *ConkyAPI) resolveTop(args []string, byMem bool) string {
+	if len(args) < 2 {
+		return ""
+	}
+
+	field := strings.ToLower(args[0])
+	index, err := strconv.Atoi(args[1])
+	if err != nil || index < 1 {
+		return ""
+	}
+	index-- // Convert to 0-based
+
+	procStats := api.sysProvider.Process()
+	var processes []monitor.ProcessInfo
+	if byMem {
+		processes = procStats.TopMem
+	} else {
+		processes = procStats.TopCPU
+	}
+
+	if index >= len(processes) {
+		return ""
+	}
+
+	proc := processes[index]
+	switch field {
+	case "name":
+		return proc.Name
+	case "pid":
+		return strconv.Itoa(proc.PID)
+	case "cpu":
+		return fmt.Sprintf("%.1f", proc.CPUPercent)
+	case "mem":
+		return fmt.Sprintf("%.1f", proc.MemPercent)
+	case "mem_res":
+		return formatBytes(proc.MemBytes)
+	case "mem_vsize":
+		return formatBytes(proc.VirtBytes)
+	case "threads", "time":
+		return strconv.Itoa(proc.Threads)
+	default:
+		return ""
+	}
+}
+
+// resolveExec executes a shell command and returns its output.
+// Usage: ${exec command}
+func (api *ConkyAPI) resolveExec(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	cmdStr := strings.Join(args, " ")
+	cmd := exec.Command("sh", "-c", cmdStr)
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	// Trim trailing newlines
+	return strings.TrimRight(string(output), "\n\r")
+}
+
+// resolveHR returns a horizontal rule of specified length.
+// Usage: ${hr height} - returns dashes (actual rendering in display layer).
+func (api *ConkyAPI) resolveHR(args []string) string {
+	width := 10
+	if len(args) > 0 {
+		if w, err := strconv.Atoi(args[0]); err == nil && w > 0 {
+			width = w
+		}
+	}
+	return strings.Repeat("-", width)
+}
+
+// resolveFSBar returns a text-based bar for filesystem usage.
+// Usage: ${fs_bar height,width mountpoint}
+func (api *ConkyAPI) resolveFSBar(args []string) string {
+	mountPoint := "/"
+	width := 10
+
+	if len(args) > 0 {
+		// Check for size,mountpoint format
+		parts := strings.Split(args[0], ",")
+		if len(parts) >= 2 {
+			if w, err := strconv.Atoi(parts[1]); err == nil {
+				width = w
+			}
+		}
+		// Last arg is mount point
+		mountPoint = args[len(args)-1]
+	}
+
+	fsStats := api.sysProvider.Filesystem()
+	mount, ok := fsStats.Mounts[mountPoint]
+	if !ok {
+		return strings.Repeat("-", width)
+	}
+
+	filled := int(mount.UsagePercent * float64(width) / 100)
+	if filled > width {
+		filled = width
+	}
+	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+}
+
+// resolveFSType returns the filesystem type for a mount point.
+func (api *ConkyAPI) resolveFSType(args []string) string {
+	mountPoint := "/"
+	if len(args) > 0 {
+		mountPoint = args[0]
+	}
+
+	fsStats := api.sysProvider.Filesystem()
+	if mount, ok := fsStats.Mounts[mountPoint]; ok {
+		return mount.FSType
+	}
+	return ""
+}
+
+// resolveBattery returns battery status string.
+func (api *ConkyAPI) resolveBattery(args []string) string {
+	batStats := api.sysProvider.Battery()
+	if len(batStats.Batteries) == 0 {
+		return "No battery"
+	}
+
+	batName := "BAT0"
+	if len(args) > 0 {
+		batName = args[0]
+	}
+
+	if bat, ok := batStats.Batteries[batName]; ok {
+		return fmt.Sprintf("%s %d%%", bat.Status, bat.Capacity)
+	}
+
+	// Return aggregate status
+	status := "Unknown"
+	if batStats.ACOnline {
+		if batStats.IsCharging {
+			status = "Charging"
+		} else {
+			status = "Full"
+		}
+	} else if batStats.IsDischarging {
+		status = "Discharging"
+	}
+	return fmt.Sprintf("%s %.0f%%", status, batStats.TotalCapacity)
+}
+
+// resolveBatteryBar returns a text-based bar for battery level.
+func (api *ConkyAPI) resolveBatteryBar(args []string) string {
+	width := 10
+	if len(args) > 0 {
+		if w, err := strconv.Atoi(args[0]); err == nil {
+			width = w
+		}
+	}
+
+	batStats := api.sysProvider.Battery()
+	percent := batStats.TotalCapacity
+
+	filled := int(percent * float64(width) / 100)
+	if filled > width {
+		filled = width
+	}
+	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+}
+
+// resolveBatteryTime returns estimated battery time remaining.
+func (api *ConkyAPI) resolveBatteryTime(_ []string) string {
+	batStats := api.sysProvider.Battery()
+	if !batStats.IsDischarging {
+		return "AC"
+	}
+	// Placeholder - actual time calculation requires power rate info
+	return "Unknown"
+}
+
+// resolveNetworkSpeedF returns network speed as a float value.
+func (api *ConkyAPI) resolveNetworkSpeedF(args []string, isDownload bool) string {
+	netStats := api.sysProvider.Network()
+
+	var speed float64
+	if len(args) == 0 {
+		if isDownload {
+			speed = netStats.TotalRxBytesPerSec
+		} else {
+			speed = netStats.TotalTxBytesPerSec
+		}
+	} else {
+		iface, ok := netStats.Interfaces[args[0]]
+		if !ok {
+			return "0.00"
+		}
+		if isDownload {
+			speed = iface.RxBytesPerSec
+		} else {
+			speed = iface.TxBytesPerSec
+		}
+	}
+
+	// Convert to KiB/s
+	return fmt.Sprintf("%.2f", speed/1024)
+}
+
+// resolveIfUp checks if a network interface is up.
+func (api *ConkyAPI) resolveIfUp(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	netStats := api.sysProvider.Network()
+	if _, ok := netStats.Interfaces[args[0]]; ok {
+		return "1" // Interface exists/is up
+	}
+	return "0"
 }
