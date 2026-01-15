@@ -28,6 +28,11 @@ type CairoRenderer struct {
 	pathCurrentX float32
 	pathCurrentY float32
 	hasPath      bool
+	// Path bounding box (tracked during path operations)
+	pathMinX float32
+	pathMinY float32
+	pathMaxX float32
+	pathMaxY float32
 	// Text rendering fields
 	textRenderer *TextRenderer
 	fontFamily   string
@@ -43,6 +48,11 @@ type CairoRenderer struct {
 	// Clip state
 	clipPath *vector.Path
 	hasClip  bool
+	// Clip bounding box (tracked when clip is set)
+	clipMinX float32
+	clipMinY float32
+	clipMaxX float32
+	clipMaxY float32
 	// State stack for save/restore
 	stateStack []cairoState
 	mu         sync.Mutex
@@ -66,6 +76,11 @@ type cairoState struct {
 	scaleY       float64
 	clipPath     *vector.Path
 	hasClip      bool
+	// Clip bounding box (tracked when clip is set)
+	clipMinX float32
+	clipMinY float32
+	clipMaxX float32
+	clipMaxY float32
 }
 
 // FontSlant represents Cairo font slant styles.
@@ -688,6 +703,72 @@ func (cr *CairoRenderer) GetCurrentPoint() (x, y float64, hasPoint bool) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	return float64(cr.pathCurrentX), float64(cr.pathCurrentY), cr.hasPath
+}
+
+// HasCurrentPoint returns whether there is a current point defined.
+// This is equivalent to cairo_has_current_point.
+func (cr *CairoRenderer) HasCurrentPoint() bool {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.hasPath
+}
+
+// PathExtents returns the bounding box of the current path in user-space coordinates.
+// This is equivalent to cairo_path_extents.
+// Returns (x1, y1, x2, y2) where (x1, y1) is the top-left and (x2, y2) is the bottom-right.
+// If there is no current path, returns (0, 0, 0, 0).
+func (cr *CairoRenderer) PathExtents() (x1, y1, x2, y2 float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if !cr.hasPath {
+		return 0, 0, 0, 0
+	}
+
+	// Return tracked path bounding box
+	return float64(cr.pathMinX), float64(cr.pathMinY),
+		float64(cr.pathMaxX), float64(cr.pathMaxY)
+}
+
+// ClipExtents returns the bounding box of the current clip region.
+// This is equivalent to cairo_clip_extents.
+// Returns (x1, y1, x2, y2) where (x1, y1) is the top-left and (x2, y2) is the bottom-right.
+// If there is no clip region, returns (0, 0, screenWidth, screenHeight) or (0, 0, 0, 0) if no screen.
+func (cr *CairoRenderer) ClipExtents() (x1, y1, x2, y2 float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if !cr.hasClip {
+		// No clip - return the entire surface bounds
+		if cr.screen != nil {
+			bounds := cr.screen.Bounds()
+			return float64(bounds.Min.X), float64(bounds.Min.Y),
+				float64(bounds.Max.X), float64(bounds.Max.Y)
+		}
+		return 0, 0, 0, 0
+	}
+
+	// Return tracked clip bounding box
+	return float64(cr.clipMinX), float64(cr.clipMinY),
+		float64(cr.clipMaxX), float64(cr.clipMaxY)
+}
+
+// InClip returns whether the given point is inside the current clip region.
+// This is equivalent to cairo_in_clip.
+// If there is no clip region, returns true (entire surface is available).
+func (cr *CairoRenderer) InClip(x, y float64) bool {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if !cr.hasClip {
+		// No clip region means the entire surface is available
+		return true
+	}
+
+	// Get clip bounds and check if point is within
+	bounds := cr.clipPath.Bounds()
+	return float32(x) >= bounds.Min.X && float32(x) <= bounds.Max.X &&
+		float32(y) >= bounds.Min.Y && float32(y) <= bounds.Max.Y
 }
 
 // clampToByte converts a float64 value (0.0-1.0) to a byte (0-255).

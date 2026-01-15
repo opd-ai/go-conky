@@ -96,6 +96,13 @@ func (cb *CairoBindings) registerFunctions() {
 	cb.runtime.SetGoFunction("cairo_clip", cb.clip, 0, true)
 	cb.runtime.SetGoFunction("cairo_clip_preserve", cb.clipPreserve, 0, true)
 	cb.runtime.SetGoFunction("cairo_reset_clip", cb.resetClip, 0, true)
+	cb.runtime.SetGoFunction("cairo_clip_extents", cb.clipExtents, 0, true)
+	cb.runtime.SetGoFunction("cairo_in_clip", cb.inClip, 2, true)
+
+	// Path query functions
+	cb.runtime.SetGoFunction("cairo_get_current_point", cb.getCurrentPoint, 0, true)
+	cb.runtime.SetGoFunction("cairo_has_current_point", cb.hasCurrentPoint, 0, true)
+	cb.runtime.SetGoFunction("cairo_path_extents", cb.pathExtents, 0, true)
 
 	// Register Cairo constants
 	cb.registerConstants()
@@ -275,7 +282,7 @@ type sharedContext struct {
 func (cb *CairoBindings) getRendererFromContext(c *rt.GoCont) (*render.CairoRenderer, int) {
 	// Combine regular args and varargs to get total argument count
 	allArgs := append(c.Args(), c.Etc()...)
-	
+
 	if len(allArgs) == 0 {
 		return cb.renderer, 0
 	}
@@ -301,7 +308,7 @@ func (cb *CairoBindings) getRendererFromContext(c *rt.GoCont) (*render.CairoRend
 			return cb.renderer, 0
 		}
 	}
-	
+
 	// First argument is not userdata, use global renderer
 	return cb.renderer, 0
 }
@@ -980,4 +987,75 @@ func (cb *CairoBindings) resetClip(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) 
 	renderer, _ := cb.getRendererFromContext(c)
 	renderer.ResetClip()
 	return c.Next(), nil
+}
+
+// clipExtents handles cairo_clip_extents(cr)
+// Returns x1, y1, x2, y2 - the bounding box of the current clip region.
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) clipExtents(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, _ := cb.getRendererFromContext(c)
+	x1, y1, x2, y2 := renderer.ClipExtents()
+	return c.PushingNext(t.Runtime,
+		rt.FloatValue(x1),
+		rt.FloatValue(y1),
+		rt.FloatValue(x2),
+		rt.FloatValue(y2),
+	), nil
+}
+
+// inClip handles cairo_in_clip(cr, x, y)
+// Returns true if the given point is inside the current clip region.
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) inClip(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
+	args := getAllArgs(c)
+
+	x, err := getFloatArg(args, 0+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_in_clip: x: %w", err)
+	}
+	y, err := getFloatArg(args, 1+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_in_clip: y: %w", err)
+	}
+
+	result := renderer.InClip(x, y)
+	return c.PushingNext1(t.Runtime, rt.BoolValue(result)), nil
+}
+
+// --- Path Query Functions ---
+
+// getCurrentPoint handles cairo_get_current_point(cr)
+// Returns x, y - the current point in the path.
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) getCurrentPoint(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, _ := cb.getRendererFromContext(c)
+	x, y, _ := renderer.GetCurrentPoint()
+	return c.PushingNext(t.Runtime,
+		rt.FloatValue(x),
+		rt.FloatValue(y),
+	), nil
+}
+
+// hasCurrentPoint handles cairo_has_current_point(cr)
+// Returns true if there is a current point defined.
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) hasCurrentPoint(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, _ := cb.getRendererFromContext(c)
+	hasPoint := renderer.HasCurrentPoint()
+	return c.PushingNext1(t.Runtime, rt.BoolValue(hasPoint)), nil
+}
+
+// pathExtents handles cairo_path_extents(cr)
+// Returns x1, y1, x2, y2 - the bounding box of the current path.
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) pathExtents(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, _ := cb.getRendererFromContext(c)
+	x1, y1, x2, y2 := renderer.PathExtents()
+	return c.PushingNext(t.Runtime,
+		rt.FloatValue(x1),
+		rt.FloatValue(y1),
+		rt.FloatValue(x2),
+		rt.FloatValue(y2),
+	), nil
 }
