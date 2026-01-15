@@ -43,16 +43,29 @@ Total Gaps Found: 9
 - `internal/lua/api_test.go` - Tests for new variables including comprehensive disk I/O tests
 - `docs/migration.md` - Updated with disk I/O variable documentation
 
-**Current Variable Count:** ~45 implemented variables (up from ~42)
+**Current Variable Count:** ~50 implemented variables (up from ~45)
 
 **Recently Added (January 15, 2026):**
 11. `${diskio}` - Returns total disk I/O speed (read + write) for specified device or all devices
 12. `${diskio_read}` - Returns disk read speed for specified device or all devices
 13. `${diskio_write}` - Returns disk write speed for specified device or all devices
+14. `${addr interface}` - Returns the IPv4 address of a network interface
+15. `${addrs interface}` - Returns all IP addresses (IPv4 and IPv6) of a network interface
+16. `${gw_ip}` - Returns the default gateway IP address
+17. `${gw_iface}` - Returns the default gateway interface name
+18. `${nameserver index}` - Returns the DNS nameserver at the specified index (0-based)
+
+**Implementation Files (Network Address Variables):**
+- `internal/monitor/network_addr.go` - New network address reader for IP addresses, gateway, and nameservers
+- `internal/monitor/network_addr_test.go` - Comprehensive tests for network address reader
+- `internal/monitor/types.go` - Added IPv4Addrs, IPv6Addrs to InterfaceStats; GatewayIP, GatewayInterface, Nameservers to NetworkStats
+- `internal/monitor/monitor.go` - Added networkAddressReader integration and augmentNetworkStats method
+- `internal/lua/api.go` - Added resolveAddr, resolveAddrs, resolveNameserver functions
+- `internal/lua/api_test.go` - Tests for new network address variables
 
 **Remaining Work:** Many variables still need implementation:
 - `cpubar`, `cpugraph`, `membar`, `memgraph` (graphical widgets)
-- `addr`, `wireless_essid` (network address info)
+- `wireless_essid`, `wireless_link_qual`, `wireless_link_bar` (wireless info)
 - `top`, `top_mem`, `top_time` (process listing)
 - `exec`, `execi`, `execp` (command execution)
 - `if_existing`, `if_match`, `if_running` (conditionals)

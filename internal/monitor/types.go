@@ -82,6 +82,10 @@ type InterfaceStats struct {
 	RxBytesPerSec float64
 	// TxBytesPerSec is the transmit rate in bytes per second.
 	TxBytesPerSec float64
+	// IPv4Addrs contains the IPv4 addresses assigned to this interface.
+	IPv4Addrs []string
+	// IPv6Addrs contains the IPv6 addresses assigned to this interface.
+	IPv6Addrs []string
 }
 
 // NetworkStats contains network interface statistics.
@@ -96,6 +100,12 @@ type NetworkStats struct {
 	TotalRxBytesPerSec float64
 	// TotalTxBytesPerSec is the sum of TxBytesPerSec across all interfaces.
 	TotalTxBytesPerSec float64
+	// GatewayIP is the default gateway IP address.
+	GatewayIP string
+	// GatewayInterface is the interface name for the default gateway.
+	GatewayInterface string
+	// Nameservers contains the DNS nameserver addresses from /etc/resolv.conf.
+	Nameservers []string
 }
 
 // MountStats contains statistics for a single mounted filesystem.

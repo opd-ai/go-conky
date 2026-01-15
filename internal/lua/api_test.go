@@ -72,12 +72,22 @@ func newMockProvider() *mockSystemDataProvider {
 					TxBytes:       1024 * 1024 * 50,  // 50 MiB
 					RxBytesPerSec: 1024 * 100,        // 100 KiB/s
 					TxBytesPerSec: 1024 * 50,         // 50 KiB/s
+					IPv4Addrs:     []string{"192.168.1.100"},
+					IPv6Addrs:     []string{"fe80::1"},
+				},
+				"lo": {
+					Name:      "lo",
+					IPv4Addrs: []string{"127.0.0.1"},
+					IPv6Addrs: []string{"::1"},
 				},
 			},
 			TotalRxBytes:       1024 * 1024 * 100,
 			TotalTxBytes:       1024 * 1024 * 50,
 			TotalRxBytesPerSec: 1024 * 100,
 			TotalTxBytesPerSec: 1024 * 50,
+			GatewayIP:          "192.168.1.1",
+			GatewayInterface:   "eth0",
+			Nameservers:        []string{"8.8.8.8", "8.8.4.4"},
 		},
 		filesystem: monitor.FilesystemStats{
 			Mounts: map[string]monitor.MountStats{
@@ -459,6 +469,56 @@ func TestParseNetworkVariables(t *testing.T) {
 			name:     "total uploaded",
 			template: "${totalup}",
 			expected: "50.0MiB",
+		},
+		{
+			name:     "interface address",
+			template: "${addr eth0}",
+			expected: "192.168.1.100",
+		},
+		{
+			name:     "interface address loopback",
+			template: "${addr lo}",
+			expected: "127.0.0.1",
+		},
+		{
+			name:     "interface address unknown",
+			template: "${addr unknown}",
+			expected: "",
+		},
+		{
+			name:     "interface address no arg",
+			template: "${addr}",
+			expected: "",
+		},
+		{
+			name:     "all addresses eth0",
+			template: "${addrs eth0}",
+			expected: "192.168.1.100 fe80::1",
+		},
+		{
+			name:     "gateway ip",
+			template: "${gw_ip}",
+			expected: "192.168.1.1",
+		},
+		{
+			name:     "gateway interface",
+			template: "${gw_iface}",
+			expected: "eth0",
+		},
+		{
+			name:     "nameserver first",
+			template: "${nameserver}",
+			expected: "8.8.8.8",
+		},
+		{
+			name:     "nameserver second",
+			template: "${nameserver 1}",
+			expected: "8.8.4.4",
+		},
+		{
+			name:     "nameserver out of range",
+			template: "${nameserver 10}",
+			expected: "",
 		},
 	}
 

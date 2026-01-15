@@ -171,12 +171,18 @@ Conky-Go supports the most commonly used Conky variables:
 
 ### Network
 
-| Variable | Description |
-|----------|-------------|
-| `${downspeed eth0}` | Download speed |
-| `${upspeed eth0}` | Upload speed |
-| `${totaldown eth0}` | Total downloaded |
-| `${totalup eth0}` | Total uploaded |
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `${downspeed eth0}` | Download speed | `100.0KiB/s` |
+| `${upspeed eth0}` | Upload speed | `50.0KiB/s` |
+| `${totaldown eth0}` | Total downloaded | `1.5GiB` |
+| `${totalup eth0}` | Total uploaded | `500.0MiB` |
+| `${addr eth0}` | IPv4 address of interface | `192.168.1.100` |
+| `${addrs eth0}` | All IP addresses of interface | `192.168.1.100 fe80::1` |
+| `${gw_ip}` | Default gateway IP address | `192.168.1.1` |
+| `${gw_iface}` | Default gateway interface | `eth0` |
+| `${nameserver}` | First DNS nameserver | `8.8.8.8` |
+| `${nameserver 1}` | DNS nameserver at index | `8.8.4.4` |
 
 ### Hardware
 

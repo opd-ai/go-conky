@@ -196,6 +196,16 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		return api.resolveNetworkTotal(args, true)
 	case "totalup":
 		return api.resolveNetworkTotal(args, false)
+	case "addr":
+		return api.resolveAddr(args)
+	case "addrs":
+		return api.resolveAddrs(args)
+	case "gw_ip":
+		return api.sysProvider.Network().GatewayIP
+	case "gw_iface":
+		return api.sysProvider.Network().GatewayInterface
+	case "nameserver":
+		return api.resolveNameserver(args)
 
 	// Filesystem variables
 	case "fs_used":
@@ -749,4 +759,69 @@ func formatTime(t time.Time, format string) string {
 	result = strings.ReplaceAll(result, "\x00PERCENT\x00", "%")
 
 	return result
+}
+
+// resolveAddr resolves the ${addr interface} variable.
+// Returns the first IPv4 address for the specified interface.
+func (api *ConkyAPI) resolveAddr(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	netStats := api.sysProvider.Network()
+	iface, ok := netStats.Interfaces[args[0]]
+	if !ok {
+		return ""
+	}
+
+	if len(iface.IPv4Addrs) > 0 {
+		return iface.IPv4Addrs[0]
+	}
+	return ""
+}
+
+// resolveAddrs resolves the ${addrs interface} variable.
+// Returns all IP addresses (IPv4 and IPv6) for the specified interface, space-separated.
+func (api *ConkyAPI) resolveAddrs(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	netStats := api.sysProvider.Network()
+	iface, ok := netStats.Interfaces[args[0]]
+	if !ok {
+		return ""
+	}
+
+	var addrs []string
+	addrs = append(addrs, iface.IPv4Addrs...)
+	addrs = append(addrs, iface.IPv6Addrs...)
+
+	return strings.Join(addrs, " ")
+}
+
+// resolveNameserver resolves the ${nameserver index} variable.
+// Returns the DNS nameserver at the specified index (0-based).
+// With no arguments, returns the first nameserver.
+func (api *ConkyAPI) resolveNameserver(args []string) string {
+	netStats := api.sysProvider.Network()
+
+	if len(netStats.Nameservers) == 0 {
+		return ""
+	}
+
+	index := 0
+	if len(args) > 0 {
+		var err error
+		index, err = strconv.Atoi(args[0])
+		if err != nil || index < 0 {
+			return ""
+		}
+	}
+
+	if index >= len(netStats.Nameservers) {
+		return ""
+	}
+
+	return netStats.Nameservers[index]
 }

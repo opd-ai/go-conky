@@ -11,24 +11,25 @@ import (
 // SystemMonitor provides centralized system monitoring capabilities.
 // It periodically updates system statistics from /proc filesystem.
 type SystemMonitor struct {
-	data             *SystemData
-	interval         time.Duration
-	cpuReader        *cpuReader
-	memReader        *memoryReader
-	uptimeReader     *uptimeReader
-	networkReader    *networkReader
-	filesystemReader *filesystemReader
-	diskIOReader     *diskIOReader
-	hwmonReader      *hwmonReader
-	processReader    *processReader
-	batteryReader    *batteryReader
-	audioReader      *audioReader
-	sysInfoReader    *sysInfoReader
-	ctx              context.Context
-	cancel           context.CancelFunc
-	wg               sync.WaitGroup
-	mu               sync.RWMutex
-	running          bool
+	data              *SystemData
+	interval          time.Duration
+	cpuReader         *cpuReader
+	memReader         *memoryReader
+	uptimeReader      *uptimeReader
+	networkReader     *networkReader
+	networkAddrReader *networkAddressReader
+	filesystemReader  *filesystemReader
+	diskIOReader      *diskIOReader
+	hwmonReader       *hwmonReader
+	processReader     *processReader
+	batteryReader     *batteryReader
+	audioReader       *audioReader
+	sysInfoReader     *sysInfoReader
+	ctx               context.Context
+	cancel            context.CancelFunc
+	wg                sync.WaitGroup
+	mu                sync.RWMutex
+	running           bool
 }
 
 // NewSystemMonitor creates a new SystemMonitor with the specified update interval.
@@ -36,21 +37,22 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &SystemMonitor{
-		data:             NewSystemData(),
-		interval:         interval,
-		cpuReader:        newCPUReader(),
-		memReader:        newMemoryReader(),
-		uptimeReader:     newUptimeReader(),
-		networkReader:    newNetworkReader(),
-		filesystemReader: newFilesystemReader(),
-		diskIOReader:     newDiskIOReader(),
-		hwmonReader:      newHwmonReader(),
-		processReader:    newProcessReader(),
-		batteryReader:    newBatteryReader(),
-		audioReader:      newAudioReader(),
-		sysInfoReader:    newSysInfoReader(),
-		ctx:              ctx,
-		cancel:           cancel,
+		data:              NewSystemData(),
+		interval:          interval,
+		cpuReader:         newCPUReader(),
+		memReader:         newMemoryReader(),
+		uptimeReader:      newUptimeReader(),
+		networkReader:     newNetworkReader(),
+		networkAddrReader: newNetworkAddressReader(),
+		filesystemReader:  newFilesystemReader(),
+		diskIOReader:      newDiskIOReader(),
+		hwmonReader:       newHwmonReader(),
+		processReader:     newProcessReader(),
+		batteryReader:     newBatteryReader(),
+		audioReader:       newAudioReader(),
+		sysInfoReader:     newSysInfoReader(),
+		ctx:               ctx,
+		cancel:            cancel,
 	}
 }
 
@@ -147,6 +149,8 @@ func (sm *SystemMonitor) Update() error {
 	if err != nil {
 		errs = append(errs, fmt.Errorf("network: %w", err))
 	} else {
+		// Augment network stats with address information
+		sm.augmentNetworkStats(&networkStats)
 		sm.data.setNetwork(networkStats)
 	}
 
@@ -288,6 +292,34 @@ func (sm *SystemMonitor) Audio() AudioStats {
 // SysInfo returns the current system information.
 func (sm *SystemMonitor) SysInfo() SystemInfo {
 	return sm.data.GetSysInfo()
+}
+
+// augmentNetworkStats adds IP address, gateway, and nameserver information to network stats.
+func (sm *SystemMonitor) augmentNetworkStats(stats *NetworkStats) {
+	// Read interface addresses
+	ifAddrs, err := sm.networkAddrReader.ReadInterfaceAddresses()
+	if err == nil {
+		for name, addrs := range ifAddrs {
+			if ifStats, ok := stats.Interfaces[name]; ok {
+				ifStats.IPv4Addrs = addrs.IPv4
+				ifStats.IPv6Addrs = addrs.IPv6
+				stats.Interfaces[name] = ifStats
+			}
+		}
+	}
+
+	// Read default gateway
+	gateway, gwIface, err := sm.networkAddrReader.ReadDefaultGateway()
+	if err == nil {
+		stats.GatewayIP = gateway
+		stats.GatewayInterface = gwIface
+	}
+
+	// Read nameservers
+	nameservers, err := sm.networkAddrReader.ReadNameservers()
+	if err == nil {
+		stats.Nameservers = nameservers
+	}
 }
 
 // IsRunning returns whether the monitor is currently running.
