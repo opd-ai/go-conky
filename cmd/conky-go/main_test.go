@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,10 @@ Test line
 
 	// Capture stdout by redirecting it
 	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
 	os.Stdout = w
 
 	exitCode := runConvert(tmpFile)
@@ -42,10 +46,12 @@ Test line
 		t.Errorf("runConvert returned non-zero exit code: %d", exitCode)
 	}
 
-	// Read captured output
-	buf := make([]byte, 1024)
-	n, _ := r.Read(buf)
-	output := string(buf[:n])
+	// Read all captured output
+	outputBytes, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("Failed to read captured output: %v", err)
+	}
+	output := string(outputBytes)
 
 	// Verify the output contains expected Lua content
 	expectedContents := []string{
