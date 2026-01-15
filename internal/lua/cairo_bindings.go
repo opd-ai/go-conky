@@ -65,6 +65,11 @@ func (cb *CairoBindings) registerFunctions() {
 	cb.runtime.SetGoFunction("cairo_curve_to", cb.curveTo, 6, true)
 	cb.runtime.SetGoFunction("cairo_rectangle", cb.rectangle, 4, true)
 
+	// Relative path building functions
+	cb.runtime.SetGoFunction("cairo_rel_move_to", cb.relMoveTo, 2, true)
+	cb.runtime.SetGoFunction("cairo_rel_line_to", cb.relLineTo, 2, true)
+	cb.runtime.SetGoFunction("cairo_rel_curve_to", cb.relCurveTo, 6, true)
+
 	// Drawing functions
 	cb.runtime.SetGoFunction("cairo_stroke", cb.stroke, 0, true)
 	cb.runtime.SetGoFunction("cairo_fill", cb.fill, 0, true)
@@ -86,6 +91,11 @@ func (cb *CairoBindings) registerFunctions() {
 	cb.runtime.SetGoFunction("cairo_save", cb.save, 0, true)
 	cb.runtime.SetGoFunction("cairo_restore", cb.restore, 0, true)
 	cb.runtime.SetGoFunction("cairo_identity_matrix", cb.identityMatrix, 0, true)
+
+	// Clipping functions
+	cb.runtime.SetGoFunction("cairo_clip", cb.clip, 0, true)
+	cb.runtime.SetGoFunction("cairo_clip_preserve", cb.clipPreserve, 0, true)
+	cb.runtime.SetGoFunction("cairo_reset_clip", cb.resetClip, 0, true)
 
 	// Register Cairo constants
 	cb.registerConstants()
@@ -868,5 +878,106 @@ func (cb *CairoBindings) restore(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 func (cb *CairoBindings) identityMatrix(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 	renderer, _ := cb.getRendererFromContext(c)
 	renderer.IdentityMatrix()
+	return c.Next(), nil
+}
+
+// --- Relative Path Functions ---
+
+// relMoveTo handles cairo_rel_move_to(cr, dx, dy)
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) relMoveTo(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
+	args := getAllArgs(c)
+
+	dx, err := getFloatArg(args, 0+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_move_to: dx: %w", err)
+	}
+	dy, err := getFloatArg(args, 1+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_move_to: dy: %w", err)
+	}
+
+	renderer.RelMoveTo(dx, dy)
+	return c.Next(), nil
+}
+
+// relLineTo handles cairo_rel_line_to(cr, dx, dy)
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) relLineTo(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
+	args := getAllArgs(c)
+
+	dx, err := getFloatArg(args, 0+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_line_to: dx: %w", err)
+	}
+	dy, err := getFloatArg(args, 1+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_line_to: dy: %w", err)
+	}
+
+	renderer.RelLineTo(dx, dy)
+	return c.Next(), nil
+}
+
+// relCurveTo handles cairo_rel_curve_to(cr, dx1, dy1, dx2, dy2, dx3, dy3)
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) relCurveTo(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
+	args := getAllArgs(c)
+
+	dx1, err := getFloatArg(args, 0+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_curve_to: dx1: %w", err)
+	}
+	dy1, err := getFloatArg(args, 1+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_curve_to: dy1: %w", err)
+	}
+	dx2, err := getFloatArg(args, 2+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_curve_to: dx2: %w", err)
+	}
+	dy2, err := getFloatArg(args, 3+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_curve_to: dy2: %w", err)
+	}
+	dx3, err := getFloatArg(args, 4+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_curve_to: dx3: %w", err)
+	}
+	dy3, err := getFloatArg(args, 5+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_rel_curve_to: dy3: %w", err)
+	}
+
+	renderer.RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3)
+	return c.Next(), nil
+}
+
+// --- Clipping Functions ---
+
+// clip handles cairo_clip(cr)
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) clip(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, _ := cb.getRendererFromContext(c)
+	renderer.Clip()
+	return c.Next(), nil
+}
+
+// clipPreserve handles cairo_clip_preserve(cr)
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) clipPreserve(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, _ := cb.getRendererFromContext(c)
+	renderer.ClipPreserve()
+	return c.Next(), nil
+}
+
+// resetClip handles cairo_reset_clip(cr)
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) resetClip(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, _ := cb.getRendererFromContext(c)
+	renderer.ResetClip()
 	return c.Next(), nil
 }

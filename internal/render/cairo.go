@@ -40,6 +40,9 @@ type CairoRenderer struct {
 	rotation   float64
 	scaleX     float64
 	scaleY     float64
+	// Clip state
+	clipPath *vector.Path
+	hasClip  bool
 	// State stack for save/restore
 	stateStack []cairoState
 	mu         sync.Mutex
@@ -61,6 +64,8 @@ type cairoState struct {
 	rotation     float64
 	scaleX       float64
 	scaleY       float64
+	clipPath     *vector.Path
+	hasClip      bool
 }
 
 // FontSlant represents Cairo font slant styles.
@@ -404,6 +409,65 @@ func (cr *CairoRenderer) Rectangle(x, y, width, height float64) {
 	cr.pathCurrentX = float32(x)
 	cr.pathCurrentY = float32(y)
 	cr.hasPath = true
+}
+
+// --- Relative Path Functions ---
+
+// RelMoveTo moves the current point by a relative offset.
+// This is equivalent to cairo_rel_move_to.
+// If there is no current point, this function does nothing.
+func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if !cr.hasPath {
+		// Cairo requires a current point for relative moves
+		return
+	}
+	newX := float64(cr.pathCurrentX) + dx
+	newY := float64(cr.pathCurrentY) + dy
+	cr.path.MoveTo(float32(newX), float32(newY))
+	cr.pathStartX = float32(newX)
+	cr.pathStartY = float32(newY)
+	cr.pathCurrentX = float32(newX)
+	cr.pathCurrentY = float32(newY)
+}
+
+// RelLineTo draws a line from the current point by a relative offset.
+// This is equivalent to cairo_rel_line_to.
+// If there is no current point, this function does nothing.
+func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if !cr.hasPath {
+		// Cairo requires a current point for relative line
+		return
+	}
+	newX := float64(cr.pathCurrentX) + dx
+	newY := float64(cr.pathCurrentY) + dy
+	cr.path.LineTo(float32(newX), float32(newY))
+	cr.pathCurrentX = float32(newX)
+	cr.pathCurrentY = float32(newY)
+}
+
+// RelCurveTo adds a cubic Bézier curve relative to the current point.
+// This is equivalent to cairo_rel_curve_to.
+// If there is no current point, this function does nothing.
+func (cr *CairoRenderer) RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if !cr.hasPath {
+		// Cairo requires a current point for relative curves
+		return
+	}
+	curX := float64(cr.pathCurrentX)
+	curY := float64(cr.pathCurrentY)
+	cr.path.CubicTo(
+		float32(curX+dx1), float32(curY+dy1),
+		float32(curX+dx2), float32(curY+dy2),
+		float32(curX+dx3), float32(curY+dy3),
+	)
+	cr.pathCurrentX = float32(curX + dx3)
+	cr.pathCurrentY = float32(curY + dy3)
 }
 
 // --- Drawing Operations ---
@@ -802,6 +866,8 @@ func (cr *CairoRenderer) Save() {
 		rotation:     cr.rotation,
 		scaleX:       cr.scaleX,
 		scaleY:       cr.scaleY,
+		clipPath:     cr.clipPath,
+		hasClip:      cr.hasClip,
 	}
 	cr.stateStack = append(cr.stateStack, state)
 }
@@ -837,6 +903,8 @@ func (cr *CairoRenderer) Restore() {
 	cr.rotation = state.rotation
 	cr.scaleX = state.scaleX
 	cr.scaleY = state.scaleY
+	cr.clipPath = state.clipPath
+	cr.hasClip = state.hasClip
 
 	// Update text renderer to match restored state
 	cr.textRenderer.SetFontSize(state.fontSize)
@@ -879,6 +947,101 @@ func (cr *CairoRenderer) IdentityMatrix() {
 	cr.rotation = 0
 	cr.scaleX = 1.0
 	cr.scaleY = 1.0
+}
+
+// --- Clipping Functions ---
+//
+// IMPORTANT: Clipping is currently a partial implementation.
+// The clip region is tracked (stored in clipPath/hasClip) but NOT enforced
+// during drawing operations. This means calling Clip() will record the clip
+// region for API compatibility, but subsequent drawing will NOT be restricted
+// to the clip area.
+//
+// Full clipping support would require either:
+// - Using Ebiten's SubImage for rectangular clips only
+// - Implementing stencil buffer or alpha mask clipping for arbitrary paths
+//
+// For now, scripts that use clipping will execute without errors, but the
+// visual clipping effect will not be applied.
+
+// Clip establishes a new clip region by intersecting the current clip region
+// with the current path and clears the path.
+// This is equivalent to cairo_clip.
+//
+// WARNING: Clipping is NOT currently enforced during drawing operations.
+// The clip region is recorded but drawing will not be restricted to the clip area.
+func (cr *CairoRenderer) Clip() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if !cr.hasPath {
+		return
+	}
+
+	// Store the current path as the clip path.
+	// We're swapping out the path pointer and creating a new one,
+	// so the clip path is safe from future modifications.
+	cr.clipPath = cr.path
+	cr.hasClip = true
+
+	// Clear the current path (as per Cairo behavior)
+	cr.path = &vector.Path{}
+	cr.hasPath = false
+}
+
+// ClipPreserve establishes a new clip region without clearing the current path.
+// This is equivalent to cairo_clip_preserve.
+//
+// WARNING: Clipping is NOT currently enforced during drawing operations.
+// The clip region is recorded but drawing will not be restricted to the clip area.
+//
+// Note: Since Ebiten's vector.Path cannot be copied, we store the current path
+// as the clip path and create a fresh path for continued drawing. The path state
+// (current point, etc.) is preserved but the path data is now isolated.
+func (cr *CairoRenderer) ClipPreserve() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if !cr.hasPath {
+		return
+	}
+
+	// Store the current path as the clip path.
+	// To avoid aliasing issues, we swap to a new path for drawing and
+	// restore the current point so subsequent path operations can continue.
+	cr.clipPath = cr.path
+	cr.hasClip = true
+
+	// Create a new path but preserve the current point for continued drawing.
+	// This avoids the aliasing issue where modifying the current path
+	// would also modify the clip path.
+	currentX := cr.pathCurrentX
+	currentY := cr.pathCurrentY
+	cr.path = &vector.Path{}
+	// Re-establish the current point on the new path
+	cr.path.MoveTo(currentX, currentY)
+	cr.pathStartX = currentX
+	cr.pathStartY = currentY
+	cr.hasPath = true // Explicitly set for consistency with MoveTo
+}
+
+// ResetClip resets the clip region to an infinitely large shape.
+// This is equivalent to cairo_reset_clip.
+//
+// Note: See the Clipping Functions section comment for limitations.
+func (cr *CairoRenderer) ResetClip() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	cr.clipPath = nil
+	cr.hasClip = false
+}
+
+// HasClip returns whether a clip region is currently set.
+func (cr *CairoRenderer) HasClip() bool {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.hasClip
 }
 
 // --- Surface Management Functions ---
