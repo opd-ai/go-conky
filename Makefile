@@ -1,4 +1,4 @@
-.PHONY: build test clean install deps lint coverage bench integration fmt vet dist checksums build-linux build-windows build-darwin build-all dist-linux dist-windows dist-darwin dist-all
+.PHONY: build test clean install deps lint coverage bench integration fmt vet dist checksums build-linux build-windows build-darwin build-all dist-linux dist-windows dist-darwin dist-all test-platform test-remote
 
 BINARY_NAME=conky-go
 BUILD_DIR=build
@@ -101,6 +101,10 @@ help:
 	@echo "  dist          - Build distribution package for native platform"
 	@echo "  checksums     - Generate checksums for distribution files"
 	@echo ""
+	@echo "Platform-specific test targets:"
+	@echo "  test-platform - Run platform-specific tests"
+	@echo "  test-remote   - Run remote monitoring tests"
+	@echo ""
 	@echo "Cross-platform build targets:"
 	@echo "  build-linux   - Build for Linux (amd64, arm64)"
 	@echo "  build-windows - Build for Windows (amd64)"
@@ -161,6 +165,15 @@ build-android:
 
 build-all: build-linux build-windows build-darwin build-android
 	@echo "All platform builds complete."
+
+# Platform-specific tests (Phase 7)
+test-platform:
+	@echo "Running platform-specific tests..."
+	@go test -v ./internal/platform/...
+
+test-remote:
+	@echo "Running remote monitoring tests..."
+	@go test -v ./internal/platform/... -run Remote
 
 # Cross-platform distribution packages
 .PHONY: dist-all dist-linux dist-windows dist-darwin
