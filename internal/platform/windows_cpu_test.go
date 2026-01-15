@@ -4,22 +4,15 @@
 package platform
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
-
-// isPDHError checks if the error is related to PDH counter initialization
-// which can fail on CI environments without full Windows performance monitoring.
-func isPDHError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "Pdh")
-}
 
 func TestWindowsCPUProvider_TotalUsage(t *testing.T) {
 	provider := newWindowsCPUProvider()
 
 	usage, err := provider.TotalUsage()
-	if isPDHError(err) {
+	if isWindowsCIError(err) {
 		t.Skipf("Skipping: PDH counters unavailable in this environment: %v", err)
 	}
 	if err != nil {
@@ -35,7 +28,7 @@ func TestWindowsCPUProvider_Usage(t *testing.T) {
 	provider := newWindowsCPUProvider()
 
 	usage, err := provider.Usage()
-	if isPDHError(err) {
+	if isWindowsCIError(err) {
 		t.Skipf("Skipping: PDH counters unavailable in this environment: %v", err)
 	}
 	if err != nil {
@@ -84,7 +77,7 @@ func TestWindowsCPUProvider_MultipleCalls(t *testing.T) {
 
 	// First call
 	usage1, err := provider.TotalUsage()
-	if isPDHError(err) {
+	if isWindowsCIError(err) {
 		t.Skipf("Skipping: PDH counters unavailable in this environment: %v", err)
 	}
 	if err != nil {
@@ -114,7 +107,7 @@ func TestWindowsCPUProvider_Close(t *testing.T) {
 
 	// Initialize by calling TotalUsage
 	_, err := provider.TotalUsage()
-	if isPDHError(err) {
+	if isWindowsCIError(err) {
 		t.Skipf("Skipping: PDH counters unavailable in this environment: %v", err)
 	}
 	if err != nil {
@@ -126,7 +119,7 @@ func TestWindowsCPUProvider_Close(t *testing.T) {
 
 	// Verify provider can be reinitialized after close
 	usage, err := provider.TotalUsage()
-	if isPDHError(err) {
+	if isWindowsCIError(err) {
 		t.Skipf("Skipping: PDH counters unavailable after reinit: %v", err)
 	}
 	if err != nil {
@@ -143,7 +136,7 @@ func TestWindowsCPUProvider_CloseIdempotent(t *testing.T) {
 
 	// Initialize by calling TotalUsage
 	_, err := provider.TotalUsage()
-	if isPDHError(err) {
+	if isWindowsCIError(err) {
 		t.Skipf("Skipping: PDH counters unavailable in this environment: %v", err)
 	}
 	if err != nil {
@@ -157,7 +150,7 @@ func TestWindowsCPUProvider_CloseIdempotent(t *testing.T) {
 
 	// Should still work after multiple closes
 	usage, err := provider.TotalUsage()
-	if isPDHError(err) {
+	if isWindowsCIError(err) {
 		t.Skipf("Skipping: PDH counters unavailable after reinit: %v", err)
 	}
 	if err != nil {

@@ -5,7 +5,6 @@ package platform
 
 import (
 	"context"
-	"strings"
 	"testing"
 )
 
@@ -78,7 +77,7 @@ func TestWindowsPlatform_Providers(t *testing.T) {
 	// Test CPU provider - PDH counters may be unavailable on CI
 	cpuUsage, err := platform.CPU().TotalUsage()
 	if err != nil {
-		if strings.Contains(err.Error(), "Pdh") {
+		if isWindowsCIError(err) {
 			t.Logf("CPU().TotalUsage() skipped - PDH unavailable: %v", err)
 		} else {
 			t.Errorf("CPU().TotalUsage() error = %v", err)

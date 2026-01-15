@@ -5,7 +5,6 @@ package platform
 
 import (
 	"context"
-	"strings"
 	"testing"
 )
 
@@ -89,7 +88,7 @@ func TestDarwinPlatform_Providers(t *testing.T) {
 	// Test CPU provider - sysctl may fail on ARM64 CI runners
 	cpuUsage, err := platform.CPU().TotalUsage()
 	if err != nil {
-		if strings.Contains(err.Error(), "sysctl") || strings.Contains(err.Error(), "no such file") {
+		if isDarwinCIError(err) {
 			t.Logf("CPU().TotalUsage() skipped - sysctl unavailable: %v", err)
 		} else {
 			t.Errorf("CPU().TotalUsage() failed: %v", err)
@@ -101,7 +100,7 @@ func TestDarwinPlatform_Providers(t *testing.T) {
 	// Test Memory provider - sysctl parsing may fail on CI
 	memStats, err := platform.Memory().Stats()
 	if err != nil {
-		if strings.Contains(err.Error(), "sysctl") || strings.Contains(err.Error(), "parsing") {
+		if isDarwinCIError(err) {
 			t.Logf("Memory().Stats() skipped - sysctl unavailable: %v", err)
 		} else {
 			t.Errorf("Memory().Stats() failed: %v", err)

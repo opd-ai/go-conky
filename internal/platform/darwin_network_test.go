@@ -4,21 +4,8 @@
 package platform
 
 import (
-	"strings"
 	"testing"
 )
-
-// isSysctlNetworkError checks if the error is related to sysctl failures
-// which can occur on CI environments with different hardware configurations.
-func isSysctlNetworkError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	return strings.Contains(errStr, "sysctl") ||
-		strings.Contains(errStr, "cannot allocate memory") ||
-		strings.Contains(errStr, "no such file or directory")
-}
 
 func TestDarwinNetworkProvider_Interfaces(t *testing.T) {
 	provider := newDarwinNetworkProvider()
@@ -59,7 +46,7 @@ func TestDarwinNetworkProvider_Stats(t *testing.T) {
 	// Test getting stats for the first interface
 	ifaceName := interfaces[0]
 	stats, err := provider.Stats(ifaceName)
-	if isSysctlNetworkError(err) {
+	if isDarwinCIError(err) {
 		t.Skipf("Skipping: sysctl for interface %s unavailable: %v", ifaceName, err)
 	}
 	if err != nil {
