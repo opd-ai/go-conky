@@ -4,12 +4,12 @@ Codebase Version: ce8cc597133b12ea87a6f2ba26f35d1686887173
 Last Updated: 2026-01-15
 
 ## Executive Summary
-Total Gaps Found: 8
+Total Gaps Found: 9
 - Critical: 0
-- Moderate: 5
+- Moderate: 6
 - Minor: 3
 
-**Fixed Gaps: 6** (Gap #3, #4, #5, #6, #7, #8 - Cairo module support, documentation updates, CLI feature, and Ebiten rendering integration)
+**Fixed Gaps: 7** (Gap #3, #4, #5, #6, #7, #8, #9 - Cairo module support, documentation updates, CLI feature, Ebiten rendering integration, CI cross-compilation fix)
 
 **Partially Fixed: 2** (Gap #1 - Added 10 system info variables; Gap #2 - Added 10 Cairo text/transform functions)
 
@@ -359,6 +359,44 @@ c.Start() // No window, monitor runs in background
 | 6 | Go version requirement mismatch | Minor | Documentation Drift | ✅ Fixed - go.mod uses Go 1.24.11, docs are correct |
 | 7 | Cross-platform status inconsistency | Minor | Documentation Drift | ✅ Fixed - migration.md updated |
 | 8 | Rendering loop not integrated | Moderate | Integration Gap | ✅ Fixed - Ebiten rendering loop integrated with context cancellation |
+| 9 | CI cross-compilation failure | Moderate | Build/CI Gap | ✅ Fixed - Removed unsupported cross-compile targets |
+
+---
+
+### Gap #9: CI Cross-Compilation Failure for Linux arm64 and macOS
+**Documentation Reference:**
+> Makefile targets `build-linux`, `build-darwin`, `build-all` attempted cross-compilation
+
+**Status:** ✅ **FIXED**
+
+**Problem:** The CI was failing because:
+1. Ebiten uses CGO for GLFW bindings on Linux and macOS
+2. Cross-compiling CGO code requires platform-specific toolchains
+3. Linux arm64 and macOS builds were attempted from Linux amd64 runner
+
+**Fix Details:**
+1. **Updated Makefile:**
+   - `build-linux` now only builds for amd64 (native)
+   - `build-darwin` now displays instructions (requires native macOS)
+   - `build-android` displays instructions (requires native ARM64)
+   - `build-all` only builds Linux amd64 and Windows amd64 (cross-compilable)
+   - Added comments explaining CGO/GLFW limitations
+
+2. **Updated CI workflow (.github/workflows/ci.yml):**
+   - Renamed job from "Cross-compile all platforms" to "Cross-compile (Linux, Windows)"
+   - Updated artifact name to `conky-go-cross-compiled`
+   - macOS and Windows builds still run on native runners (existing jobs)
+
+**Cross-Compilation Support Matrix:**
+| Target | From Linux | From macOS | From Windows |
+|--------|------------|------------|--------------|
+| Linux amd64 | ✅ Native | ❌ | ❌ |
+| Linux arm64 | ❌ CGO | ❌ | ❌ |
+| Windows amd64 | ✅ Works | ✅ Works | ✅ Native |
+| macOS amd64 | ❌ CGO | ✅ Native | ❌ |
+| macOS arm64 | ❌ CGO | ✅ Native | ❌ |
+
+---
 
 ## Recommendations
 

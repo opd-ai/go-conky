@@ -110,15 +110,15 @@ help:
 	@echo "  test-platform - Run platform-specific tests"
 	@echo "  test-remote   - Run remote monitoring tests"
 	@echo ""
-	@echo "Cross-platform build targets:"
-	@echo "  build-linux   - Build for Linux (amd64, arm64)"
-	@echo "  build-windows - Build for Windows (amd64)"
-	@echo "  build-darwin  - Build for macOS (amd64, arm64)"
-	@echo "  build-android - Build for Android (arm64)"
-	@echo "  build-all     - Build for all platforms"
-	@echo "  dist-linux    - Create Linux distribution packages"
+	@echo "Cross-platform build targets (Ebiten requires CGO for GLFW):"
+	@echo "  build-linux   - Build for Linux (amd64, native only)"
+	@echo "  build-windows - Build for Windows (amd64, cross-compile works)"
+	@echo "  build-darwin  - Instructions for macOS (native only)"
+	@echo "  build-android - Instructions for Android (native only)"
+	@echo "  build-all     - Build for Linux and Windows (cross-compilable)"
+	@echo "  dist-linux    - Create Linux distribution package (amd64)"
 	@echo "  dist-windows  - Create Windows distribution package"
-	@echo "  dist-darwin   - Create macOS distribution packages"
+	@echo "  dist-darwin   - Create macOS distribution packages (native only)"
 	@echo "  dist-all      - Create distribution packages for all platforms"
 	@echo ""
 	@echo "  help          - Print this help message"
@@ -142,14 +142,17 @@ checksums:
 	@cd $(DIST_DIR) && if ls *.tar.gz >/dev/null 2>&1; then sha256sum *.tar.gz > checksums.txt && echo "Checksums written to $(DIST_DIR)/checksums.txt"; else echo "No .tar.gz files found in $(DIST_DIR); skipping checksum generation."; fi
 
 # Cross-platform build targets
+# Note: Ebiten uses CGO for GLFW bindings, which limits cross-compilation options.
+# - Linux: Only native builds work (CGO required for GLFW)
+# - Windows: Cross-compilation from Linux works (uses purego)
+# - macOS: Only native builds work (CGO required)
+# For full cross-platform builds, use native runners or Docker.
 .PHONY: build-linux build-windows build-darwin build-android build-all
 
 build-linux:
 	@echo "Building for Linux (amd64)..."
 	@mkdir -p $(BUILD_DIR)
 	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/conky-go
-	@echo "Building for Linux (arm64)..."
-	@GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/conky-go
 
 build-windows:
 	@echo "Building for Windows (amd64)..."
@@ -157,19 +160,16 @@ build-windows:
 	@GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/conky-go
 
 build-darwin:
-	@echo "Building for macOS (amd64)..."
-	@mkdir -p $(BUILD_DIR)
-	@GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/conky-go
-	@echo "Building for macOS (arm64)..."
-	@GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/conky-go
+	@echo "Building for macOS requires native macOS environment (CGO/GLFW)..."
+	@echo "Use 'make build' on macOS, or use the CI macOS runner."
 
 build-android:
-	@echo "Building for Android (arm64)..."
-	@mkdir -p $(BUILD_DIR)
-	@GOOS=android GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-android-arm64 ./cmd/conky-go
+	@echo "Skipping Android build (requires native ARM64 toolchain)..."
+	@echo "To build for Android, use a native ARM64 environment or Docker."
 
-build-all: build-linux build-windows build-darwin build-android
-	@echo "All platform builds complete."
+build-all: build-linux build-windows
+	@echo "Cross-platform builds complete (Linux amd64, Windows amd64)."
+	@echo "Note: macOS and Android builds require native environments."
 
 # Platform-specific tests (Phase 7)
 test-platform:
@@ -187,13 +187,11 @@ dist-linux:
 	@echo "Building Linux distribution packages..."
 	@mkdir -p $(DIST_DIR)
 	@$(MAKE) build-linux
-	@for arch in amd64 arm64; do \
-		echo "Packaging $(BINARY_NAME)-linux-$$arch..."; \
-		cp README.md LICENSE $(BUILD_DIR)/; \
-		tar -czvf "$(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-linux-$$arch.tar.gz" \
-			-C $(BUILD_DIR) "$(BINARY_NAME)-linux-$$arch" README.md LICENSE; \
-		rm -f "$(BUILD_DIR)/README.md" "$(BUILD_DIR)/LICENSE"; \
-	done
+	@echo "Packaging $(BINARY_NAME)-linux-amd64..."
+	@cp README.md LICENSE $(BUILD_DIR)/
+	@tar -czvf "$(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-linux-amd64.tar.gz" \
+		-C $(BUILD_DIR) "$(BINARY_NAME)-linux-amd64" README.md LICENSE
+	@rm -f "$(BUILD_DIR)/README.md" "$(BUILD_DIR)/LICENSE"
 
 dist-windows:
 	@echo "Building Windows distribution package..."
@@ -205,17 +203,10 @@ dist-windows:
 	@rm -f "$(BUILD_DIR)/README.md" "$(BUILD_DIR)/LICENSE"
 
 dist-darwin:
-	@echo "Building macOS distribution packages..."
-	@mkdir -p $(DIST_DIR)
-	@$(MAKE) build-darwin
-	@for arch in amd64 arm64; do \
-		echo "Packaging $(BINARY_NAME)-darwin-$$arch..."; \
-		cp README.md LICENSE $(BUILD_DIR)/; \
-		tar -czvf "$(DIST_DIR)/$(BINARY_NAME)-$(VERSION)-darwin-$$arch.tar.gz" \
-			-C $(BUILD_DIR) "$(BINARY_NAME)-darwin-$$arch" README.md LICENSE; \
-		rm -f "$(BUILD_DIR)/README.md" "$(BUILD_DIR)/LICENSE"; \
-	done
+	@echo "macOS distribution requires native macOS environment."
+	@echo "Run 'make dist' on macOS to create a native distribution package."
 
-dist-all: dist-linux dist-windows dist-darwin
-	@echo "All distribution packages complete."
+dist-all: dist-linux dist-windows
+	@echo "Cross-platform distribution packages complete (Linux, Windows)."
+	@echo "Note: macOS distribution requires native macOS environment."
 	@$(MAKE) checksums
