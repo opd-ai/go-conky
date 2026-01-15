@@ -176,6 +176,13 @@ func (cm *CairoModule) registerModuleFunctions(table *rt.Table) {
 	cm.setTableGoFunction(table, "fill_preserve", cm.fillPreserve, 0)
 	cm.setTableGoFunction(table, "paint", cm.paint, 0)
 	cm.setTableGoFunction(table, "paint_with_alpha", cm.paintWithAlpha, 1)
+
+	// Surface management functions
+	cm.setTableGoFunction(table, "xlib_surface_create", cm.xlibSurfaceCreate, 5)
+	cm.setTableGoFunction(table, "image_surface_create", cm.imageSurfaceCreate, 3)
+	cm.setTableGoFunction(table, "create", cm.cairoCreate, 1)
+	cm.setTableGoFunction(table, "destroy", cm.cairoDestroy, 1)
+	cm.setTableGoFunction(table, "surface_destroy", cm.surfaceDestroy, 1)
 }
 
 // registerModuleConstants registers Cairo constants in the module table.
@@ -193,6 +200,13 @@ func (cm *CairoModule) registerModuleConstants(table *rt.Table) {
 	// Antialias constants
 	table.Set(rt.StringValue("ANTIALIAS_NONE"), rt.IntValue(0))
 	table.Set(rt.StringValue("ANTIALIAS_DEFAULT"), rt.IntValue(1))
+
+	// Surface format constants
+	table.Set(rt.StringValue("FORMAT_ARGB32"), rt.IntValue(0))
+	table.Set(rt.StringValue("FORMAT_RGB24"), rt.IntValue(1))
+	table.Set(rt.StringValue("FORMAT_A8"), rt.IntValue(2))
+	table.Set(rt.StringValue("FORMAT_A1"), rt.IntValue(3))
+	table.Set(rt.StringValue("FORMAT_RGB16_565"), rt.IntValue(4))
 }
 
 // setTableGoFunction registers a Go function in a Lua table.
@@ -233,6 +247,13 @@ func (cm *CairoModule) registerFunctionsAsGlobals() {
 	cm.runtime.SetGoFunction("cairo_paint", cm.paint, 0, false)
 	cm.runtime.SetGoFunction("cairo_paint_with_alpha", cm.paintWithAlpha, 1, false)
 
+	// Surface management functions
+	cm.runtime.SetGoFunction("cairo_xlib_surface_create", cm.xlibSurfaceCreate, 5, false)
+	cm.runtime.SetGoFunction("cairo_image_surface_create", cm.imageSurfaceCreate, 3, false)
+	cm.runtime.SetGoFunction("cairo_create", cm.cairoCreate, 1, false)
+	cm.runtime.SetGoFunction("cairo_destroy", cm.cairoDestroy, 1, false)
+	cm.runtime.SetGoFunction("cairo_surface_destroy", cm.surfaceDestroy, 1, false)
+
 	// Register Cairo constants as globals
 	cm.runtime.SetGlobal("CAIRO_LINE_CAP_BUTT", rt.IntValue(int64(render.LineCapButt)))
 	cm.runtime.SetGlobal("CAIRO_LINE_CAP_ROUND", rt.IntValue(int64(render.LineCapRound)))
@@ -242,6 +263,13 @@ func (cm *CairoModule) registerFunctionsAsGlobals() {
 	cm.runtime.SetGlobal("CAIRO_LINE_JOIN_BEVEL", rt.IntValue(int64(render.LineJoinBevel)))
 	cm.runtime.SetGlobal("CAIRO_ANTIALIAS_NONE", rt.IntValue(0))
 	cm.runtime.SetGlobal("CAIRO_ANTIALIAS_DEFAULT", rt.IntValue(1))
+
+	// Surface format constants
+	cm.runtime.SetGlobal("CAIRO_FORMAT_ARGB32", rt.IntValue(0))
+	cm.runtime.SetGlobal("CAIRO_FORMAT_RGB24", rt.IntValue(1))
+	cm.runtime.SetGlobal("CAIRO_FORMAT_A8", rt.IntValue(2))
+	cm.runtime.SetGlobal("CAIRO_FORMAT_A1", rt.IntValue(3))
+	cm.runtime.SetGlobal("CAIRO_FORMAT_RGB16_565", rt.IntValue(4))
 }
 
 // setupConkyWindow initializes the conky_window global to nil.
@@ -507,4 +535,125 @@ func (cm *CairoModule) paintWithAlpha(_ *rt.Thread, c *rt.GoCont) (rt.Cont, erro
 	}
 	cm.renderer.PaintWithAlpha(alpha)
 	return c.Next(), nil
+}
+
+// --- Surface Management Functions ---
+
+// xlibSurfaceCreate handles cairo_xlib_surface_create(display, drawable, visual, width, height)
+func (cm *CairoModule) xlibSurfaceCreate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	// display, drawable, visual are for compatibility (not used in Ebiten)
+	_, err := c.IntArg(0)
+	if err != nil {
+		return nil, err
+	}
+	_, err = c.IntArg(1)
+	if err != nil {
+		return nil, err
+	}
+	_, err = c.IntArg(2)
+	if err != nil {
+		return nil, err
+	}
+	width, err := c.IntArg(3)
+	if err != nil {
+		return nil, err
+	}
+	height, err := c.IntArg(4)
+	if err != nil {
+		return nil, err
+	}
+
+	surface := render.NewCairoXlibSurface(0, 0, 0, int(width), int(height))
+	ud := rt.NewUserData(surface, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// imageSurfaceCreate handles cairo_image_surface_create(format, width, height)
+func (cm *CairoModule) imageSurfaceCreate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	_, err := c.IntArg(0) // format - we always use ARGB32
+	if err != nil {
+		return nil, err
+	}
+	width, err := c.IntArg(1)
+	if err != nil {
+		return nil, err
+	}
+	height, err := c.IntArg(2)
+	if err != nil {
+		return nil, err
+	}
+
+	surface := render.NewCairoSurface(int(width), int(height))
+	ud := rt.NewUserData(surface, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// cairoCreate handles cairo_create(surface)
+func (cm *CairoModule) cairoCreate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	surfaceVal, err := c.UserDataArg(0)
+	if err != nil {
+		// No surface argument - return context using the shared renderer
+		ctx := &moduleContext{renderer: cm.renderer}
+		ud := rt.NewUserData(ctx, nil)
+		return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+	}
+
+	surface, ok := surfaceVal.Value().(*render.CairoSurface)
+	if !ok {
+		return nil, ErrInvalidSurface
+	}
+
+	ctx := render.NewCairoContext(surface)
+	if ctx == nil {
+		return nil, ErrContextCreation
+	}
+
+	ud := rt.NewUserData(ctx, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// cairoDestroy handles cairo_destroy(cr)
+func (cm *CairoModule) cairoDestroy(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	if c.NArgs() == 0 {
+		return c.Next(), nil
+	}
+
+	ctxVal, err := c.UserDataArg(0)
+	if err != nil {
+		return c.Next(), nil // Ignore for compatibility
+	}
+
+	switch ctx := ctxVal.Value().(type) {
+	case *render.CairoContext:
+		ctx.Destroy()
+	case *moduleContext:
+		// Don't destroy the shared context
+	}
+	return c.Next(), nil
+}
+
+// surfaceDestroy handles cairo_surface_destroy(surface)
+func (cm *CairoModule) surfaceDestroy(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	if c.NArgs() == 0 {
+		return c.Next(), nil
+	}
+
+	surfaceVal, err := c.UserDataArg(0)
+	if err != nil {
+		return c.Next(), nil // Ignore for compatibility
+	}
+
+	surface, ok := surfaceVal.Value().(*render.CairoSurface)
+	if !ok {
+		return c.Next(), nil
+	}
+
+	surface.Destroy()
+	return c.Next(), nil
+}
+
+// moduleContext is a wrapper for the global shared renderer.
+// This is used when cairo_create is called without a surface argument.
+type moduleContext struct {
+	renderer *render.CairoRenderer
 }

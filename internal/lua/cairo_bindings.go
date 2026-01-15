@@ -89,6 +89,9 @@ func (cb *CairoBindings) registerFunctions() {
 
 	// Register Cairo constants
 	cb.registerConstants()
+
+	// Register surface management functions
+	cb.registerSurfaceFunctions()
 }
 
 // registerConstants registers Cairo constants in the Lua environment.
@@ -115,6 +118,144 @@ func (cb *CairoBindings) registerConstants() {
 	// Font weight constants
 	cb.runtime.SetGlobal("CAIRO_FONT_WEIGHT_NORMAL", rt.IntValue(int64(render.FontWeightNormal)))
 	cb.runtime.SetGlobal("CAIRO_FONT_WEIGHT_BOLD", rt.IntValue(int64(render.FontWeightBold)))
+
+	// Surface format constants (for cairo_image_surface_create)
+	cb.runtime.SetGlobal("CAIRO_FORMAT_ARGB32", rt.IntValue(0))
+	cb.runtime.SetGlobal("CAIRO_FORMAT_RGB24", rt.IntValue(1))
+	cb.runtime.SetGlobal("CAIRO_FORMAT_A8", rt.IntValue(2))
+	cb.runtime.SetGlobal("CAIRO_FORMAT_A1", rt.IntValue(3))
+	cb.runtime.SetGlobal("CAIRO_FORMAT_RGB16_565", rt.IntValue(4))
+}
+
+// registerSurfaceFunctions registers surface management functions.
+func (cb *CairoBindings) registerSurfaceFunctions() {
+	cb.runtime.SetGoFunction("cairo_xlib_surface_create", cb.xlibSurfaceCreate, 5, false)
+	cb.runtime.SetGoFunction("cairo_image_surface_create", cb.imageSurfaceCreate, 3, false)
+	cb.runtime.SetGoFunction("cairo_create", cb.cairoCreate, 1, false)
+	cb.runtime.SetGoFunction("cairo_destroy", cb.cairoDestroy, 1, false)
+	cb.runtime.SetGoFunction("cairo_surface_destroy", cb.surfaceDestroy, 1, false)
+}
+
+// --- Surface Management Functions (CairoBindings) ---
+
+// xlibSurfaceCreate handles cairo_xlib_surface_create(display, drawable, visual, width, height)
+func (cb *CairoBindings) xlibSurfaceCreate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	// display, drawable, visual are for compatibility (not used in Ebiten)
+	_, err := c.IntArg(0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_xlib_surface_create: display: %w", err)
+	}
+	_, err = c.IntArg(1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_xlib_surface_create: drawable: %w", err)
+	}
+	_, err = c.IntArg(2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_xlib_surface_create: visual: %w", err)
+	}
+	width, err := c.IntArg(3)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_xlib_surface_create: width: %w", err)
+	}
+	height, err := c.IntArg(4)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_xlib_surface_create: height: %w", err)
+	}
+
+	surface := render.NewCairoXlibSurface(0, 0, 0, int(width), int(height))
+	ud := rt.NewUserData(surface, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// imageSurfaceCreate handles cairo_image_surface_create(format, width, height)
+func (cb *CairoBindings) imageSurfaceCreate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	_, err := c.IntArg(0) // format - we always use ARGB32
+	if err != nil {
+		return nil, fmt.Errorf("cairo_image_surface_create: format: %w", err)
+	}
+	width, err := c.IntArg(1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_image_surface_create: width: %w", err)
+	}
+	height, err := c.IntArg(2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_image_surface_create: height: %w", err)
+	}
+
+	surface := render.NewCairoSurface(int(width), int(height))
+	ud := rt.NewUserData(surface, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// cairoCreate handles cairo_create(surface)
+func (cb *CairoBindings) cairoCreate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	surfaceVal, err := c.UserDataArg(0)
+	if err != nil {
+		// No surface argument - return context using the shared renderer
+		// This is common in Conky scripts that use the global context
+		ctx := &sharedContext{renderer: cb.renderer}
+		ud := rt.NewUserData(ctx, nil)
+		return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+	}
+
+	surface, ok := surfaceVal.Value().(*render.CairoSurface)
+	if !ok {
+		return nil, fmt.Errorf("cairo_create: expected surface userdata")
+	}
+
+	ctx := render.NewCairoContext(surface)
+	if ctx == nil {
+		return nil, fmt.Errorf("cairo_create: failed to create context")
+	}
+
+	ud := rt.NewUserData(ctx, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// cairoDestroy handles cairo_destroy(cr)
+func (cb *CairoBindings) cairoDestroy(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	if c.NArgs() == 0 {
+		return c.Next(), nil
+	}
+
+	ctxVal, err := c.UserDataArg(0)
+	if err != nil {
+		return c.Next(), nil // Ignore for compatibility
+	}
+
+	switch ctx := ctxVal.Value().(type) {
+	case *render.CairoContext:
+		ctx.Destroy()
+	case *sharedContext:
+		// Don't destroy the shared context
+	}
+	return c.Next(), nil
+}
+
+// surfaceDestroy handles cairo_surface_destroy(surface)
+func (cb *CairoBindings) surfaceDestroy(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	if c.NArgs() == 0 {
+		return c.Next(), nil
+	}
+
+	surfaceVal, err := c.UserDataArg(0)
+	if err != nil {
+		return c.Next(), nil // Ignore for compatibility
+	}
+
+	surface, ok := surfaceVal.Value().(*render.CairoSurface)
+	if !ok {
+		return c.Next(), nil
+	}
+
+	surface.Destroy()
+	return c.Next(), nil
+}
+
+// sharedContext is a wrapper for the global shared renderer.
+// This is used when cairo_create is called without a surface argument.
+type sharedContext struct {
+	renderer *render.CairoRenderer
 }
 
 // --- Color Functions ---

@@ -1011,3 +1011,237 @@ func TestCairoBindings_ComplexTextAndTransforms(t *testing.T) {
 		t.Error("Expected text extents width to be > 0")
 	}
 }
+
+// --- Surface Management Function Tests ---
+
+func TestCairoBindings_XlibSurfaceCreate(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test cairo_xlib_surface_create
+	luaCode := `
+		local surface = cairo_xlib_surface_create(0, 0, 0, 640, 480)
+		return surface ~= nil
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_xlib_surface_create: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected surface to be non-nil")
+	}
+}
+
+func TestCairoBindings_ImageSurfaceCreate(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test cairo_image_surface_create with ARGB32 format
+	luaCode := `
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 200, 100)
+		return surface ~= nil
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_image_surface_create: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected surface to be non-nil")
+	}
+}
+
+func TestCairoBindings_CreateAndDestroyContext(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test creating and destroying a context
+	luaCode := `
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(surface)
+		if cr == nil then return false end
+		cairo_destroy(cr)
+		cairo_surface_destroy(surface)
+		return true
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute create/destroy context: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected context creation and destruction to succeed")
+	}
+}
+
+func TestCairoBindings_SurfaceDestroy(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test surface destruction
+	luaCode := `
+		local surface = cairo_xlib_surface_create(0, 0, 0, 320, 240)
+		cairo_surface_destroy(surface)
+		return true
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute surface destroy: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected surface destruction to succeed")
+	}
+}
+
+func TestCairoBindings_DestroyWithNilArgs(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test destroy functions with nil/no arguments (should not error)
+	luaCode := `
+		cairo_destroy(nil)
+		cairo_surface_destroy(nil)
+		return true
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute destroy with nil: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected destroy with nil to succeed")
+	}
+}
+
+func TestCairoBindings_SurfaceFormatConstants(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Verify surface format constants are set
+	tests := []struct {
+		name  string
+		value int64
+	}{
+		{"CAIRO_FORMAT_ARGB32", 0},
+		{"CAIRO_FORMAT_RGB24", 1},
+		{"CAIRO_FORMAT_A8", 2},
+		{"CAIRO_FORMAT_A1", 3},
+		{"CAIRO_FORMAT_RGB16_565", 4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := runtime.GetGlobal(tt.name)
+			if result.IsNil() {
+				t.Errorf("Constant %s not found", tt.name)
+				return
+			}
+			intVal, ok := result.TryInt()
+			if !ok {
+				t.Errorf("Constant %s is not an integer", tt.name)
+				return
+			}
+			if intVal != tt.value {
+				t.Errorf("Constant %s = %d, want %d", tt.name, intVal, tt.value)
+			}
+		})
+	}
+}
+
+func TestCairoBindings_FullSurfaceWorkflow(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test a complete workflow similar to what a Conky script would do
+	luaCode := `
+		-- Create a surface (simulating conky_window setup)
+		local surface = cairo_xlib_surface_create(0, 0, 0, 640, 480)
+		
+		-- Create a Cairo context
+		local cr = cairo_create(surface)
+		
+		-- Set up drawing state
+		cairo_set_source_rgba(1, 0, 0, 0.8)
+		cairo_set_line_width(2)
+		
+		-- Draw something
+		cairo_rectangle(10, 10, 100, 50)
+		cairo_stroke()
+		
+		cairo_set_source_rgb(0, 1, 0)
+		cairo_rectangle(120, 10, 100, 50)
+		cairo_fill()
+		
+		-- Clean up
+		cairo_destroy(cr)
+		cairo_surface_destroy(surface)
+		
+		return true
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute full surface workflow: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected full surface workflow to succeed")
+	}
+}

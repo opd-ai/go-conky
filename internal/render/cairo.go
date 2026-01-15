@@ -880,3 +880,164 @@ func (cr *CairoRenderer) IdentityMatrix() {
 	cr.scaleX = 1.0
 	cr.scaleY = 1.0
 }
+
+// --- Surface Management Functions ---
+
+// CairoSurface represents a Cairo-compatible drawing surface.
+// In our Ebiten-based implementation, this wraps an Ebiten image.
+// This provides compatibility with Conky Lua scripts that use
+// cairo_xlib_surface_create and related functions.
+type CairoSurface struct {
+	image     *ebiten.Image
+	width     int
+	height    int
+	destroyed bool
+	mu        sync.Mutex
+}
+
+// NewCairoSurface creates a new Cairo surface with the specified dimensions.
+// This is the Ebiten equivalent of cairo_image_surface_create.
+func NewCairoSurface(width, height int) *CairoSurface {
+	if width <= 0 {
+		width = 1
+	}
+	if height <= 0 {
+		height = 1
+	}
+	return &CairoSurface{
+		image:  ebiten.NewImage(width, height),
+		width:  width,
+		height: height,
+	}
+}
+
+// NewCairoXlibSurface creates a surface compatible with X11 drawables.
+// In our Ebiten implementation, we don't have direct X11 access, so this
+// creates an Ebiten-backed surface with the specified dimensions.
+// The display, drawable, and visual parameters are accepted for API
+// compatibility but are not used in the Ebiten implementation.
+//
+// This is equivalent to cairo_xlib_surface_create(display, drawable, visual, width, height).
+func NewCairoXlibSurface(display, drawable, visual uintptr, width, height int) *CairoSurface {
+	// In Ebiten, we don't have direct X11 surface access.
+	// We create an Ebiten image that will be composited onto the main screen.
+	return NewCairoSurface(width, height)
+}
+
+// Image returns the underlying Ebiten image.
+// This allows integration with the rendering loop.
+func (s *CairoSurface) Image() *ebiten.Image {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.destroyed {
+		return nil
+	}
+	return s.image
+}
+
+// Width returns the surface width.
+func (s *CairoSurface) Width() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.width
+}
+
+// Height returns the surface height.
+func (s *CairoSurface) Height() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.height
+}
+
+// IsDestroyed returns whether the surface has been destroyed.
+func (s *CairoSurface) IsDestroyed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.destroyed
+}
+
+// Destroy releases the surface resources.
+// This is equivalent to cairo_surface_destroy.
+// After calling Destroy, the surface should not be used.
+func (s *CairoSurface) Destroy() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.destroyed {
+		return
+	}
+	s.destroyed = true
+	// Dispose of the Ebiten image to free GPU resources
+	if s.image != nil {
+		s.image.Deallocate()
+		s.image = nil
+	}
+}
+
+// CairoContext wraps a CairoRenderer with its associated surface.
+// This provides the cairo_create/cairo_destroy pattern expected by Lua scripts.
+type CairoContext struct {
+	renderer  *CairoRenderer
+	surface   *CairoSurface
+	destroyed bool
+	mu        sync.Mutex
+}
+
+// NewCairoContext creates a Cairo context for drawing on the given surface.
+// This is equivalent to cairo_create(surface).
+func NewCairoContext(surface *CairoSurface) *CairoContext {
+	if surface == nil || surface.IsDestroyed() {
+		return nil
+	}
+
+	renderer := NewCairoRenderer()
+	renderer.SetScreen(surface.Image())
+
+	return &CairoContext{
+		renderer: renderer,
+		surface:  surface,
+	}
+}
+
+// Renderer returns the underlying CairoRenderer for drawing operations.
+// Returns nil if the context has been destroyed.
+func (ctx *CairoContext) Renderer() *CairoRenderer {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	if ctx.destroyed {
+		return nil
+	}
+	return ctx.renderer
+}
+
+// Surface returns the associated surface.
+// Returns nil if the context has been destroyed.
+func (ctx *CairoContext) Surface() *CairoSurface {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	if ctx.destroyed {
+		return nil
+	}
+	return ctx.surface
+}
+
+// IsDestroyed returns whether the context has been destroyed.
+func (ctx *CairoContext) IsDestroyed() bool {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	return ctx.destroyed
+}
+
+// Destroy releases the context resources.
+// This is equivalent to cairo_destroy.
+// Note: This does NOT destroy the associated surface.
+// The surface must be destroyed separately with surface.Destroy().
+func (ctx *CairoContext) Destroy() {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	if ctx.destroyed {
+		return
+	}
+	ctx.destroyed = true
+	ctx.renderer = nil
+	// Note: We don't destroy the surface here - that's the caller's responsibility
+}
