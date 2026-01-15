@@ -23,6 +23,7 @@ type SystemMonitor struct {
 	processReader    *processReader
 	batteryReader    *batteryReader
 	audioReader      *audioReader
+	sysInfoReader    *sysInfoReader
 	ctx              context.Context
 	cancel           context.CancelFunc
 	wg               sync.WaitGroup
@@ -47,6 +48,7 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		processReader:    newProcessReader(),
 		batteryReader:    newBatteryReader(),
 		audioReader:      newAudioReader(),
+		sysInfoReader:    newSysInfoReader(),
 		ctx:              ctx,
 		cancel:           cancel,
 	}
@@ -196,6 +198,14 @@ func (sm *SystemMonitor) Update() error {
 		sm.data.setAudio(audioStats)
 	}
 
+	// Update system info (includes load averages which change frequently)
+	sysInfoStats, err := sm.sysInfoReader.ReadSystemInfo()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("sysinfo: %w", err))
+	} else {
+		sm.data.setSysInfo(sysInfoStats)
+	}
+
 	if len(errs) > 0 {
 		errMsgs := make([]string, len(errs))
 		for i, e := range errs {
@@ -221,6 +231,7 @@ func (sm *SystemMonitor) Data() SystemData {
 		Process:    sm.data.copyProcess(),
 		Battery:    sm.data.copyBattery(),
 		Audio:      sm.data.copyAudio(),
+		SysInfo:    sm.data.SysInfo,
 	}
 }
 
@@ -272,6 +283,11 @@ func (sm *SystemMonitor) Battery() BatteryStats {
 // Audio returns the current audio statistics.
 func (sm *SystemMonitor) Audio() AudioStats {
 	return sm.data.GetAudio()
+}
+
+// SysInfo returns the current system information.
+func (sm *SystemMonitor) SysInfo() SystemInfo {
+	return sm.data.GetSysInfo()
 }
 
 // IsRunning returns whether the monitor is currently running.

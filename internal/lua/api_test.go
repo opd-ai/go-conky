@@ -22,6 +22,7 @@ type mockSystemDataProvider struct {
 	process    monitor.ProcessStats
 	battery    monitor.BatteryStats
 	audio      monitor.AudioStats
+	sysInfo    monitor.SystemInfo
 }
 
 func (m *mockSystemDataProvider) CPU() monitor.CPUStats               { return m.cpu }
@@ -34,6 +35,7 @@ func (m *mockSystemDataProvider) Hwmon() monitor.HwmonStats           { return m
 func (m *mockSystemDataProvider) Process() monitor.ProcessStats       { return m.process }
 func (m *mockSystemDataProvider) Battery() monitor.BatteryStats       { return m.battery }
 func (m *mockSystemDataProvider) Audio() monitor.AudioStats           { return m.audio }
+func (m *mockSystemDataProvider) SysInfo() monitor.SystemInfo         { return m.sysInfo }
 
 func newMockProvider() *mockSystemDataProvider {
 	return &mockSystemDataProvider{
@@ -129,6 +131,16 @@ func newMockProvider() *mockSystemDataProvider {
 		audio: monitor.AudioStats{
 			HasAudio:     true,
 			MasterVolume: 75.0,
+		},
+		sysInfo: monitor.SystemInfo{
+			Kernel:        "5.15.0-generic",
+			Hostname:      "testhost.example.com",
+			HostnameShort: "testhost",
+			Sysname:       "Linux",
+			Machine:       "x86_64",
+			LoadAvg1:      1.50,
+			LoadAvg5:      1.25,
+			LoadAvg15:     1.00,
 		},
 	}
 }
@@ -657,6 +669,155 @@ func TestParseMixerVariable(t *testing.T) {
 	expected := "75"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
+	}
+}
+
+func TestParseSystemInfoVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "kernel",
+			template: "${kernel}",
+			expected: "5.15.0-generic",
+		},
+		{
+			name:     "nodename",
+			template: "${nodename}",
+			expected: "testhost.example.com",
+		},
+		{
+			name:     "nodename_short",
+			template: "${nodename_short}",
+			expected: "testhost",
+		},
+		{
+			name:     "sysname",
+			template: "${sysname}",
+			expected: "Linux",
+		},
+		{
+			name:     "machine",
+			template: "${machine}",
+			expected: "x86_64",
+		},
+		{
+			name:     "conky_version",
+			template: "${conky_version}",
+			expected: Version,
+		},
+		{
+			name:     "conky_build_arch",
+			template: "${conky_build_arch}",
+			expected: "x86_64",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseLoadAvgVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "loadavg default",
+			template: "${loadavg}",
+			expected: "1.50 1.25 1.00",
+		},
+		{
+			name:     "loadavg 1 minute",
+			template: "${loadavg 1}",
+			expected: "1.50",
+		},
+		{
+			name:     "loadavg 5 minute",
+			template: "${loadavg 5}",
+			expected: "1.25",
+		},
+		{
+			name:     "loadavg 15 minute",
+			template: "${loadavg 15}",
+			expected: "1.00",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseTimeVariable(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Test that time variable returns something reasonable
+	result := api.Parse("${time}")
+	if result == "" || result == "${time}" {
+		t.Errorf("expected time variable to return a value, got %q", result)
+	}
+
+	// Test with format specifier
+	result = api.Parse("${time %H:%M}")
+	// Should match pattern HH:MM
+	if len(result) != 5 || result[2] != ':' {
+		t.Errorf("expected time in HH:MM format, got %q", result)
+	}
+
+	// Test with date format
+	result = api.Parse("${time %Y-%m-%d}")
+	// Should match pattern YYYY-MM-DD
+	if len(result) != 10 || result[4] != '-' || result[7] != '-' {
+		t.Errorf("expected date in YYYY-MM-DD format, got %q", result)
 	}
 }
 

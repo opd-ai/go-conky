@@ -9,11 +9,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	rt "github.com/arnodel/golua/runtime"
 
 	"github.com/opd-ai/go-conky/internal/monitor"
 )
+
+// Version is the conky-go version string.
+const Version = "0.1.0"
 
 // SystemDataProvider is an interface for accessing system monitoring data.
 // This allows for easy mocking in tests.
@@ -28,6 +32,7 @@ type SystemDataProvider interface {
 	Process() monitor.ProcessStats
 	Battery() monitor.BatteryStats
 	Audio() monitor.AudioStats
+	SysInfo() monitor.SystemInfo
 }
 
 // ConkyAPI provides the Conky Lua API implementation.
@@ -223,6 +228,30 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	// Audio variables
 	case "mixer":
 		return api.resolveMixer(args)
+
+	// System info variables
+	case "kernel":
+		return api.sysProvider.SysInfo().Kernel
+	case "nodename":
+		return api.sysProvider.SysInfo().Hostname
+	case "nodename_short":
+		return api.sysProvider.SysInfo().HostnameShort
+	case "sysname":
+		return api.sysProvider.SysInfo().Sysname
+	case "machine":
+		return api.sysProvider.SysInfo().Machine
+	case "conky_version":
+		return Version
+	case "conky_build_arch":
+		return api.sysProvider.SysInfo().Machine
+
+	// Load average variables
+	case "loadavg":
+		return api.resolveLoadAvg(args)
+
+	// Time variables
+	case "time":
+		return api.resolveTime(args)
 
 	default:
 		// Return original if unknown variable
@@ -524,4 +553,109 @@ func formatSpeed(bytesPerSec float64) string {
 	default:
 		return fmt.Sprintf("%.0fB/s", bytesPerSec)
 	}
+}
+
+// resolveLoadAvg resolves the ${loadavg} variable.
+// Accepts an optional argument to select which load average to return:
+// - No argument or "1": 1-minute load average
+// - "5": 5-minute load average
+// - "15": 15-minute load average
+// - Otherwise returns all three: "load1 load5 load15"
+func (api *ConkyAPI) resolveLoadAvg(args []string) string {
+	sysInfo := api.sysProvider.SysInfo()
+
+	if len(args) == 0 {
+		// Default: return all three load averages
+		return fmt.Sprintf("%.2f %.2f %.2f", sysInfo.LoadAvg1, sysInfo.LoadAvg5, sysInfo.LoadAvg15)
+	}
+
+	switch args[0] {
+	case "1":
+		return fmt.Sprintf("%.2f", sysInfo.LoadAvg1)
+	case "5":
+		return fmt.Sprintf("%.2f", sysInfo.LoadAvg5)
+	case "15":
+		return fmt.Sprintf("%.2f", sysInfo.LoadAvg15)
+	default:
+		// Return all three for any other argument
+		return fmt.Sprintf("%.2f %.2f %.2f", sysInfo.LoadAvg1, sysInfo.LoadAvg5, sysInfo.LoadAvg15)
+	}
+}
+
+// resolveTime resolves the ${time} variable.
+// Accepts an optional format string argument.
+// If no format is provided, uses "%c" (locale-appropriate date and time).
+// Supports standard strftime format specifiers.
+func (api *ConkyAPI) resolveTime(args []string) string {
+	now := time.Now()
+
+	if len(args) == 0 {
+		// Default format: Mon Jan 2 15:04:05 2006
+		return now.Format("Mon Jan 2 15:04:05 2006")
+	}
+
+	// Join args in case the format string has spaces
+	format := strings.Join(args, " ")
+
+	// Convert strftime format to Go format
+	return formatTime(now, format)
+}
+
+// formatTime converts a strftime format string to Go time format.
+// This supports common strftime specifiers used in Conky configurations.
+func formatTime(t time.Time, format string) string {
+	// Map of strftime specifiers to Go time format
+	replacements := map[string]string{
+		"%a": "Mon",                     // Abbreviated weekday name
+		"%A": "Monday",                  // Full weekday name
+		"%b": "Jan",                     // Abbreviated month name
+		"%B": "January",                 // Full month name
+		"%c": "Mon Jan 2 15:04:05 2006", // Locale date and time
+		"%C": "",                        // Century (handled separately)
+		"%d": "02",                      // Day of month (01-31)
+		"%D": "01/02/06",                // Equivalent to %m/%d/%y
+		"%e": "_2",                      // Day of month, space padded
+		"%F": "2006-01-02",              // Equivalent to %Y-%m-%d
+		"%H": "15",                      // Hour (00-23)
+		"%I": "03",                      // Hour (01-12)
+		"%j": "",                        // Day of year (001-366), handled separately
+		"%k": "15",                      // Hour (0-23), space padded
+		"%l": "3",                       // Hour (1-12), space padded
+		"%m": "01",                      // Month (01-12)
+		"%M": "04",                      // Minute (00-59)
+		"%n": "\n",                      // Newline
+		"%p": "PM",                      // AM/PM
+		"%P": "pm",                      // am/pm
+		"%r": "03:04:05 PM",             // 12-hour time
+		"%R": "15:04",                   // 24-hour HH:MM
+		"%S": "05",                      // Second (00-59)
+		"%t": "\t",                      // Tab
+		"%T": "15:04:05",                // 24-hour HH:MM:SS
+		"%u": "",                        // Weekday (1-7), handled separately
+		"%w": "",                        // Weekday (0-6), handled separately
+		"%x": "01/02/06",                // Locale date
+		"%X": "15:04:05",                // Locale time
+		"%y": "06",                      // Year without century
+		"%Y": "2006",                    // Year with century
+		"%z": "-0700",                   // Timezone offset
+		"%Z": "MST",                     // Timezone name
+		"%%": "%",                       // Literal %
+	}
+
+	result := format
+
+	// Replace strftime specifiers with Go format
+	for spec, goFmt := range replacements {
+		if goFmt != "" {
+			result = strings.ReplaceAll(result, spec, t.Format(goFmt))
+		}
+	}
+
+	// Handle special cases that need calculation
+	result = strings.ReplaceAll(result, "%C", fmt.Sprintf("%02d", t.Year()/100))
+	result = strings.ReplaceAll(result, "%j", fmt.Sprintf("%03d", t.YearDay()))
+	result = strings.ReplaceAll(result, "%u", fmt.Sprintf("%d", (int(t.Weekday())+6)%7+1))
+	result = strings.ReplaceAll(result, "%w", fmt.Sprintf("%d", int(t.Weekday())))
+
+	return result
 }

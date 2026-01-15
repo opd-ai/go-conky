@@ -11,6 +11,8 @@ Total Gaps Found: 8
 
 **Fixed Gaps: 6** (Gap #3, #4, #5, #6, #7, #8 - Cairo module support, documentation updates, CLI feature, and Ebiten rendering integration)
 
+**Partially Fixed: 1** (Gap #1 - Added 10 system info variables including kernel, hostname, loadavg, time)
+
 ## Detailed Findings
 
 ### Gap #1: Variable Count Discrepancy - Documentation Claims 200+ Variables But Only ~32 Are Implemented in Lua API
@@ -18,30 +20,40 @@ Total Gaps Found: 8
 > "System variables | ✅ Supported | 200+ variables implemented" (docs/migration.md:345)
 > "Complete system monitoring backend supporting 200+ Conky variables" (ROADMAP.md:173)
 
-**Implementation Location:** `internal/lua/api.go:144-230`
+**Implementation Location:** `internal/lua/api.go:144-260`
 
-**Expected Behavior:** The Lua API's `conky_parse()` function should resolve 200+ system variables as documented.
+**Status:** 🔄 **Partially Fixed** - Core system info variables added
 
-**Actual Implementation:** The `resolveVariable()` function in `api.go` only implements 32 case statements for variable resolution. The remaining variables listed in `internal/config/validation.go:knownConkyVariables` (123 entries) are recognized for validation but not actually resolved in the Lua API.
+**Fix Details:** Added the following commonly-used system information variables:
+1. `${kernel}` - Returns kernel version (e.g., "5.15.0-generic")
+2. `${nodename}` - Returns full hostname (e.g., "myhost.example.com")
+3. `${nodename_short}` - Returns short hostname (e.g., "myhost")
+4. `${sysname}` - Returns OS name (e.g., "Linux")
+5. `${machine}` - Returns machine architecture (e.g., "x86_64")
+6. `${conky_version}` - Returns conky-go version string
+7. `${conky_build_arch}` - Returns build architecture
+8. `${loadavg}` - Returns load averages (e.g., "1.50 1.25 1.00")
+9. `${loadavg 1}`, `${loadavg 5}`, `${loadavg 15}` - Returns specific load average
+10. `${time}` - Returns current time with optional strftime format (e.g., `${time %H:%M}`)
 
-**Gap Details:** The validation module recognizes 123 variable names as "known" to suppress warnings, but only 32 of these variables are actually implemented in the `resolveVariable()` switch statement. Variables like `loadavg`, `cpubar`, `cpugraph`, `membar`, `memgraph`, `addr`, `wireless_essid`, `diskio`, `top`, `battery`, `battery_status`, `battery_time`, `time`, `kernel`, `exec`, and many others are listed as "known" but return the original `${variable}` template when requested because they fall through to the `default` case.
+**Implementation Files:**
+- `internal/monitor/sysinfo.go` - New SystemInfo struct and reader for kernel, hostname, load averages
+- `internal/monitor/sysinfo_test.go` - Comprehensive tests for sysinfo reader
+- `internal/lua/api.go` - Added new variable cases to resolveVariable()
+- `internal/lua/api_test.go` - Tests for new variables
 
-**Reproduction:**
-```go
-// Using conky_parse with an unimplemented but "known" variable:
-result := api.Parse("${loadavg}") 
-// Returns: "${loadavg}" instead of actual load average values
-```
+**Current Variable Count:** ~42 implemented variables (up from ~32)
 
-**Production Impact:** Moderate - Users migrating from Conky with configurations using unimplemented variables will see raw template strings in their output rather than actual system data. This breaks the "100% compatible" promise.
+**Remaining Work:** Many variables still need implementation:
+- `cpubar`, `cpugraph`, `membar`, `memgraph` (graphical widgets)
+- `addr`, `wireless_essid` (network address info)
+- `diskio`, `diskio_read`, `diskio_write` (disk I/O)
+- `top`, `top_mem`, `top_time` (process listing)
+- `exec`, `execi`, `execp` (command execution)
+- `if_existing`, `if_match`, `if_running` (conditionals)
+- And more...
 
-**Evidence:**
-```go
-// api.go:227-229 - default case returns original template
-default:
-    // Return original if unknown variable
-    return formatUnknownVariable(name, args)
-```
+**Production Impact:** Moderate - Core system info variables now work. Users can display kernel version, hostname, load averages, and formatted time. Some advanced variables still return template strings.
 
 ---
 
@@ -315,7 +327,7 @@ c.Start() // No window, monitor runs in background
 
 | Gap # | Description | Severity | Category | Status |
 |-------|-------------|----------|----------|--------|
-| 1 | Variable count (32 vs 200+) | Moderate | Feature Gap | Open |
+| 1 | Variable count (42 vs 200+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 10 system info variables |
 | 2 | Cairo functions (20 vs 180+) | Moderate | Feature Gap | Open |
 | 3 | `require 'cairo'` pattern not supported | Moderate | Feature Gap | ✅ Fixed - cairo module and conky_window implemented |
 | 4 | Uptime format mismatch | Minor | Behavioral Nuance | ✅ Fixed - docs updated to match implementation |
