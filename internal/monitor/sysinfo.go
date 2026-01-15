@@ -5,6 +5,7 @@ package monitor
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -123,9 +124,21 @@ func (r *sysInfoReader) readLoadAvg() (load1, load5, load15 float64, err error) 
 		return 0, 0, 0, nil
 	}
 
-	load1, _ = strconv.ParseFloat(fields[0], 64)
-	load5, _ = strconv.ParseFloat(fields[1], 64)
-	load15, _ = strconv.ParseFloat(fields[2], 64)
+	var err1, err2, err3 error
+	load1, err1 = strconv.ParseFloat(fields[0], 64)
+	load5, err2 = strconv.ParseFloat(fields[1], 64)
+	load15, err3 = strconv.ParseFloat(fields[2], 64)
+
+	// Return first error if any parsing failed (but return partial results)
+	if err1 != nil {
+		return 0, 0, 0, fmt.Errorf("parsing load1: %w", err1)
+	}
+	if err2 != nil {
+		return load1, 0, 0, fmt.Errorf("parsing load5: %w", err2)
+	}
+	if err3 != nil {
+		return load1, load5, 0, fmt.Errorf("parsing load15: %w", err3)
+	}
 
 	return load1, load5, load15, nil
 }
@@ -133,13 +146,16 @@ func (r *sysInfoReader) readLoadAvg() (load1, load5, load15 float64, err error) 
 // getMachine returns the machine hardware name.
 // This is typically "x86_64", "aarch64", etc.
 func (r *sysInfoReader) getMachine() string {
-	// Read from /proc/sys/kernel/arch or use a fallback
-	data, err := os.ReadFile("/proc/sys/kernel/arch")
+	// Try to read from /sys/class/dmi/id/arch_type first (most reliable)
+	data, err := os.ReadFile("/sys/kernel/arch")
 	if err == nil {
-		return strings.TrimSpace(string(data))
+		arch := strings.TrimSpace(string(data))
+		if arch != "" {
+			return arch
+		}
 	}
 
-	// Fallback: try to determine from /proc/cpuinfo
+	// Fallback: use uname -m equivalent via /proc/cpuinfo
 	file, err := os.Open("/proc/cpuinfo")
 	if err != nil {
 		return "unknown"
@@ -149,17 +165,26 @@ func (r *sysInfoReader) getMachine() string {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "model name") || strings.HasPrefix(line, "CPU architecture") {
-			// For x86_64, check flags for lm (long mode)
-			if strings.Contains(line, "64") {
+		// Look for "flags" line which contains CPU capabilities
+		if strings.HasPrefix(line, "flags") || strings.HasPrefix(line, "Features") {
+			// Check for lm (long mode) flag - indicates 64-bit x86
+			if strings.Contains(line, " lm ") || strings.HasSuffix(line, " lm") {
 				return "x86_64"
 			}
-		}
-		if strings.HasPrefix(line, "flags") {
-			if strings.Contains(line, " lm ") {
-				return "x86_64"
-			}
+			// If no lm flag, it's 32-bit x86
 			return "i686"
+		}
+		// ARM architecture detection
+		if strings.HasPrefix(line, "CPU architecture") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				archNum := strings.TrimSpace(parts[1])
+				// ARM architecture 8 or higher is 64-bit
+				if archNum == "8" || archNum == "9" {
+					return "aarch64"
+				}
+				return "armv" + archNum + "l"
+			}
 		}
 	}
 

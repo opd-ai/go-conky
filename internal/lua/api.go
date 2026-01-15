@@ -604,58 +604,63 @@ func (api *ConkyAPI) resolveTime(args []string) string {
 // formatTime converts a strftime format string to Go time format.
 // This supports common strftime specifiers used in Conky configurations.
 func formatTime(t time.Time, format string) string {
-	// Map of strftime specifiers to Go time format
-	replacements := map[string]string{
-		"%a": "Mon",                     // Abbreviated weekday name
-		"%A": "Monday",                  // Full weekday name
-		"%b": "Jan",                     // Abbreviated month name
-		"%B": "January",                 // Full month name
-		"%c": "Mon Jan 2 15:04:05 2006", // Locale date and time
-		"%C": "",                        // Century (handled separately)
-		"%d": "02",                      // Day of month (01-31)
-		"%D": "01/02/06",                // Equivalent to %m/%d/%y
-		"%e": "_2",                      // Day of month, space padded
-		"%F": "2006-01-02",              // Equivalent to %Y-%m-%d
-		"%H": "15",                      // Hour (00-23)
-		"%I": "03",                      // Hour (01-12)
-		"%j": "",                        // Day of year (001-366), handled separately
-		"%k": "15",                      // Hour (0-23), space padded
-		"%l": "3",                       // Hour (1-12), space padded
-		"%m": "01",                      // Month (01-12)
-		"%M": "04",                      // Minute (00-59)
-		"%n": "\n",                      // Newline
-		"%p": "PM",                      // AM/PM
-		"%P": "pm",                      // am/pm
-		"%r": "03:04:05 PM",             // 12-hour time
-		"%R": "15:04",                   // 24-hour HH:MM
-		"%S": "05",                      // Second (00-59)
-		"%t": "\t",                      // Tab
-		"%T": "15:04:05",                // 24-hour HH:MM:SS
-		"%u": "",                        // Weekday (1-7), handled separately
-		"%w": "",                        // Weekday (0-6), handled separately
-		"%x": "01/02/06",                // Locale date
-		"%X": "15:04:05",                // Locale time
-		"%y": "06",                      // Year without century
-		"%Y": "2006",                    // Year with century
-		"%z": "-0700",                   // Timezone offset
-		"%Z": "MST",                     // Timezone name
-		"%%": "%",                       // Literal %
-	}
-
 	result := format
 
-	// Replace strftime specifiers with Go format
-	for spec, goFmt := range replacements {
-		if goFmt != "" {
-			result = strings.ReplaceAll(result, spec, t.Format(goFmt))
-		}
-	}
+	// Handle %% first to avoid conflicts with other specifiers
+	result = strings.ReplaceAll(result, "%%", "\x00PERCENT\x00")
 
-	// Handle special cases that need calculation
+	// Handle special cases that need calculation (do these before static replacements)
 	result = strings.ReplaceAll(result, "%C", fmt.Sprintf("%02d", t.Year()/100))
 	result = strings.ReplaceAll(result, "%j", fmt.Sprintf("%03d", t.YearDay()))
 	result = strings.ReplaceAll(result, "%u", fmt.Sprintf("%d", (int(t.Weekday())+6)%7+1))
 	result = strings.ReplaceAll(result, "%w", fmt.Sprintf("%d", int(t.Weekday())))
+
+	// Map of strftime specifiers to Go time format values
+	// These are replaced with the formatted time value directly
+	staticReplacements := []struct {
+		strftime string
+		goFormat string
+	}{
+		{"%A", "Monday"},                  // Full weekday name
+		{"%a", "Mon"},                     // Abbreviated weekday name
+		{"%B", "January"},                 // Full month name
+		{"%b", "Jan"},                     // Abbreviated month name
+		{"%c", "Mon Jan 2 15:04:05 2006"}, // Locale date and time
+		{"%D", "01/02/06"},                // Equivalent to %m/%d/%y
+		{"%d", "02"},                      // Day of month (01-31)
+		{"%e", "_2"},                      // Day of month, space padded
+		{"%F", "2006-01-02"},              // Equivalent to %Y-%m-%d
+		{"%H", "15"},                      // Hour (00-23)
+		{"%I", "03"},                      // Hour (01-12)
+		{"%k", "15"},                      // Hour (0-23), space padded
+		{"%l", "3"},                       // Hour (1-12), space padded
+		{"%M", "04"},                      // Minute (00-59)
+		{"%m", "01"},                      // Month (01-12)
+		{"%n", "\n"},                      // Newline
+		{"%P", "pm"},                      // am/pm
+		{"%p", "PM"},                      // AM/PM
+		{"%R", "15:04"},                   // 24-hour HH:MM
+		{"%r", "03:04:05 PM"},             // 12-hour time
+		{"%S", "05"},                      // Second (00-59)
+		{"%T", "15:04:05"},                // 24-hour HH:MM:SS
+		{"%t", "\t"},                      // Tab
+		{"%X", "15:04:05"},                // Locale time
+		{"%x", "01/02/06"},                // Locale date
+		{"%Y", "2006"},                    // Year with century
+		{"%y", "06"},                      // Year without century
+		{"%Z", "MST"},                     // Timezone name
+		{"%z", "-0700"},                   // Timezone offset
+	}
+
+	// Replace each strftime specifier with formatted time value
+	for _, repl := range staticReplacements {
+		if strings.Contains(result, repl.strftime) {
+			result = strings.ReplaceAll(result, repl.strftime, t.Format(repl.goFormat))
+		}
+	}
+
+	// Restore literal percent signs
+	result = strings.ReplaceAll(result, "\x00PERCENT\x00", "%")
 
 	return result
 }
