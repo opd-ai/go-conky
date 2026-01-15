@@ -1,5 +1,3 @@
-//go:build !noebiten
-
 package conky
 
 import (
@@ -36,7 +34,6 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	height := c.cfg.Window.Height
 	title := c.opts.WindowTitle
 	interval := c.cfg.Display.UpdateInterval
-	bgColor := c.cfg.Colors.Default
 	textLines := c.cfg.Text.Template
 	textColor := c.cfg.Colors.Default
 	ctx := c.ctx
@@ -55,10 +52,9 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	if interval <= 0 {
 		interval = defaultUpdateInterval
 	}
-	// Default background is semi-transparent black
-	if bgColor == (color.RGBA{}) {
-		bgColor = color.RGBA{R: 0, G: 0, B: 0, A: defaultBackgroundAlpha}
-	}
+	// Default background is semi-transparent black (not from config to avoid
+	// confusion with text color which uses Colors.Default)
+	bgColor := color.RGBA{R: 0, G: 0, B: 0, A: defaultBackgroundAlpha}
 	// Default text color is white
 	if textColor == (color.RGBA{}) {
 		textColor = color.RGBA{R: 255, G: 255, B: 255, A: 255}

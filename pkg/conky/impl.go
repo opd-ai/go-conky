@@ -94,6 +94,13 @@ func (c *conkyImpl) Start() error {
 		} else {
 			// GUI mode: run the Ebiten rendering loop
 			c.runRenderLoop()
+
+			// Ensure context is cancelled when the render loop exits (e.g., when
+			// user closes the window). This prevents a goroutine leak in the
+			// monitor-stopping goroutine started in initComponents().
+			if c.cancel != nil {
+				c.cancel()
+			}
 		}
 
 		c.emitEvent(EventStopped, "Instance stopped")

@@ -284,8 +284,9 @@ From docs/migration.md:352-354:
    - Sets the `SystemMonitor` as the `DataProvider` interface
    - Sets up initial text lines from the configuration template
    - Runs the Ebiten game loop, which blocks until window close or context cancellation
+   - Cancels the context when the render loop exits to prevent goroutine leaks
 
-3. **Build tag support** - The rendering integration uses build tags (`!noebiten` / `noebiten`) to allow building and testing without Ebiten dependencies when needed (e.g., in CI environments without X11).
+3. **CI uses xvfb** - All tests and builds in CI use `xvfb-run` for virtual display support.
 
 **Usage:**
 ```go
@@ -300,15 +301,13 @@ c.Start() // No window, monitor runs in background
 ```
 
 **Implementation Files:**
-- `pkg/conky/render.go` - Ebiten integration (build tag: `!noebiten`)
-- `pkg/conky/render_stub.go` - Headless stub (build tag: `noebiten`)
+- `pkg/conky/render.go` - Ebiten rendering integration
 - `internal/render/game.go` - Added `SetContext()` and `ErrGameTerminated`
 - `internal/render/game_test.go` - Added tests for context cancellation
 
 **Testing:**
-- Tests pass with `xvfb-run` for Ebiten tests
-- Tests pass with `-tags=noebiten` for headless testing
-- Added `make test-xvfb` target for CI environments
+- All tests run with `xvfb-run` in CI for virtual display support
+- Added `make test-xvfb` target for local testing without display
 
 ---
 
