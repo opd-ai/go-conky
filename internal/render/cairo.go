@@ -277,6 +277,31 @@ func (cr *CairoRenderer) GetAntialias() bool {
 
 // --- Path Building Functions ---
 
+// expandPathBounds updates the path bounding box to include the given point.
+// Must be called while holding the mutex.
+func (cr *CairoRenderer) expandPathBounds(x, y float32) {
+	if !cr.hasPath {
+		// First point - initialize bounds
+		cr.pathMinX = x
+		cr.pathMinY = y
+		cr.pathMaxX = x
+		cr.pathMaxY = y
+		return
+	}
+	if x < cr.pathMinX {
+		cr.pathMinX = x
+	}
+	if x > cr.pathMaxX {
+		cr.pathMaxX = x
+	}
+	if y < cr.pathMinY {
+		cr.pathMinY = y
+	}
+	if y > cr.pathMaxY {
+		cr.pathMaxY = y
+	}
+}
+
 // NewPath clears the current path and starts a new one.
 // This is equivalent to cairo_new_path.
 func (cr *CairoRenderer) NewPath() {
@@ -284,6 +309,10 @@ func (cr *CairoRenderer) NewPath() {
 	defer cr.mu.Unlock()
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathMinX = 0
+	cr.pathMinY = 0
+	cr.pathMaxX = 0
+	cr.pathMaxY = 0
 }
 
 // MoveTo begins a new sub-path at the given point.
@@ -291,6 +320,7 @@ func (cr *CairoRenderer) NewPath() {
 func (cr *CairoRenderer) MoveTo(x, y float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
+	cr.expandPathBounds(float32(x), float32(y))
 	cr.path.MoveTo(float32(x), float32(y))
 	cr.pathStartX = float32(x)
 	cr.pathStartY = float32(y)
@@ -304,6 +334,7 @@ func (cr *CairoRenderer) MoveTo(x, y float64) {
 func (cr *CairoRenderer) LineTo(x, y float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
+	cr.expandPathBounds(float32(x), float32(y))
 	if !cr.hasPath {
 		cr.path.MoveTo(float32(x), float32(y))
 		cr.pathStartX = float32(x)
@@ -339,6 +370,10 @@ func (cr *CairoRenderer) Arc(xc, yc, radius, angle1, angle2 float64) {
 	startX := xc + radius*math.Cos(angle1)
 	startY := yc + radius*math.Sin(angle1)
 
+	// Expand bounds for arc - use bounding box of full circle (conservative)
+	cr.expandPathBounds(float32(xc-radius), float32(yc-radius))
+	cr.expandPathBounds(float32(xc+radius), float32(yc+radius))
+
 	// Move or line to start point
 	if !cr.hasPath {
 		cr.path.MoveTo(float32(startX), float32(startY))
@@ -369,6 +404,10 @@ func (cr *CairoRenderer) ArcNegative(xc, yc, radius, angle1, angle2 float64) {
 	startX := xc + radius*math.Cos(angle1)
 	startY := yc + radius*math.Sin(angle1)
 
+	// Expand bounds for arc - use bounding box of full circle (conservative)
+	cr.expandPathBounds(float32(xc-radius), float32(yc-radius))
+	cr.expandPathBounds(float32(xc+radius), float32(yc+radius))
+
 	// Move or line to start point
 	if !cr.hasPath {
 		cr.path.MoveTo(float32(startX), float32(startY))
@@ -397,11 +436,16 @@ func (cr *CairoRenderer) CurveTo(x1, y1, x2, y2, x3, y3 float64) {
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
 		// Cairo starts from (0,0) if no current point exists
+		cr.expandPathBounds(0, 0)
 		cr.path.MoveTo(0, 0)
 		cr.pathStartX = 0
 		cr.pathStartY = 0
 		cr.hasPath = true
 	}
+	// Expand bounds to include all control points and end point
+	cr.expandPathBounds(float32(x1), float32(y1))
+	cr.expandPathBounds(float32(x2), float32(y2))
+	cr.expandPathBounds(float32(x3), float32(y3))
 	cr.path.CubicTo(float32(x1), float32(y1), float32(x2), float32(y2), float32(x3), float32(y3))
 	cr.pathCurrentX = float32(x3)
 	cr.pathCurrentY = float32(y3)
@@ -412,6 +456,10 @@ func (cr *CairoRenderer) CurveTo(x1, y1, x2, y2, x3, y3 float64) {
 func (cr *CairoRenderer) Rectangle(x, y, width, height float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
+
+	// Expand bounds to include all corners
+	cr.expandPathBounds(float32(x), float32(y))
+	cr.expandPathBounds(float32(x+width), float32(y+height))
 
 	cr.path.MoveTo(float32(x), float32(y))
 	cr.path.LineTo(float32(x+width), float32(y))
@@ -440,6 +488,7 @@ func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
 	}
 	newX := float64(cr.pathCurrentX) + dx
 	newY := float64(cr.pathCurrentY) + dy
+	cr.expandPathBounds(float32(newX), float32(newY))
 	cr.path.MoveTo(float32(newX), float32(newY))
 	cr.pathStartX = float32(newX)
 	cr.pathStartY = float32(newY)
@@ -459,6 +508,7 @@ func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
 	}
 	newX := float64(cr.pathCurrentX) + dx
 	newY := float64(cr.pathCurrentY) + dy
+	cr.expandPathBounds(float32(newX), float32(newY))
 	cr.path.LineTo(float32(newX), float32(newY))
 	cr.pathCurrentX = float32(newX)
 	cr.pathCurrentY = float32(newY)
@@ -476,6 +526,10 @@ func (cr *CairoRenderer) RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
 	}
 	curX := float64(cr.pathCurrentX)
 	curY := float64(cr.pathCurrentY)
+	// Expand bounds to include all control points and end point
+	cr.expandPathBounds(float32(curX+dx1), float32(curY+dy1))
+	cr.expandPathBounds(float32(curX+dx2), float32(curY+dy2))
+	cr.expandPathBounds(float32(curX+dx3), float32(curY+dy3))
 	cr.path.CubicTo(
 		float32(curX+dx1), float32(curY+dy1),
 		float32(curX+dx2), float32(curY+dy2),
@@ -507,6 +561,10 @@ func (cr *CairoRenderer) Stroke() {
 	// Clear the path after stroking
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathMinX = 0
+	cr.pathMinY = 0
+	cr.pathMaxX = 0
+	cr.pathMaxY = 0
 }
 
 // Fill fills the current path with the current color.
@@ -528,6 +586,10 @@ func (cr *CairoRenderer) Fill() {
 	// Clear the path after filling
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathMinX = 0
+	cr.pathMinY = 0
+	cr.pathMaxX = 0
+	cr.pathMaxY = 0
 }
 
 // FillPreserve fills the current path without clearing it.
