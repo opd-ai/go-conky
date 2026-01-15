@@ -985,12 +985,18 @@ type CairoContext struct {
 // NewCairoContext creates a Cairo context for drawing on the given surface.
 // This is equivalent to cairo_create(surface).
 func NewCairoContext(surface *CairoSurface) *CairoContext {
-	if surface == nil || surface.IsDestroyed() {
+	if surface == nil {
+		return nil
+	}
+
+	// Get the image atomically - this will return nil if surface is destroyed
+	image := surface.Image()
+	if image == nil {
 		return nil
 	}
 
 	renderer := NewCairoRenderer()
-	renderer.SetScreen(surface.Image())
+	renderer.SetScreen(image)
 
 	return &CairoContext{
 		renderer: renderer,
