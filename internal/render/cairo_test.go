@@ -1969,3 +1969,210 @@ func TestCairoRenderer_Operator(t *testing.T) {
 		t.Errorf("Expected operator 2 (no-op), got %d", cr.GetOperator())
 	}
 }
+
+// --- Hit Testing Tests ---
+
+func TestCairoRenderer_InFill(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Empty path should return false
+	if cr.InFill(50, 50) {
+		t.Error("Expected InFill to return false for empty path")
+	}
+
+	// Create a rectangle path
+	cr.Rectangle(0, 0, 100, 100)
+
+	// Point inside should return true
+	if !cr.InFill(50, 50) {
+		t.Error("Expected InFill to return true for point inside rectangle")
+	}
+
+	// Point outside should return false
+	if cr.InFill(150, 150) {
+		t.Error("Expected InFill to return false for point outside rectangle")
+	}
+}
+
+func TestCairoRenderer_InStroke(t *testing.T) {
+	cr := NewCairoRenderer()
+	cr.SetLineWidth(10)
+
+	// Empty path should return false
+	if cr.InStroke(50, 50) {
+		t.Error("Expected InStroke to return false for empty path")
+	}
+
+	// Create a rectangle path
+	cr.Rectangle(0, 0, 100, 100)
+
+	// Point on edge (within line width) should return true
+	if !cr.InStroke(0, 50) {
+		t.Error("Expected InStroke to return true for point on edge")
+	}
+
+	// Point far outside should return false
+	if cr.InStroke(200, 200) {
+		t.Error("Expected InStroke to return false for point far outside")
+	}
+}
+
+// --- Path Extent Tests ---
+
+func TestCairoRenderer_StrokeExtents(t *testing.T) {
+	cr := NewCairoRenderer()
+	cr.SetLineWidth(10)
+
+	cr.Rectangle(10, 10, 80, 80)
+
+	x1, y1, x2, y2 := cr.StrokeExtents()
+
+	// With line width of 10, extents should be expanded by 5 on each side
+	if x1 > 10 || y1 > 10 {
+		t.Errorf("StrokeExtents min should include line width: got (%f, %f)", x1, y1)
+	}
+	if x2 < 90 || y2 < 90 {
+		t.Errorf("StrokeExtents max should include line width: got (%f, %f)", x2, y2)
+	}
+}
+
+func TestCairoRenderer_FillExtents(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	cr.Rectangle(10, 20, 80, 60)
+
+	x1, y1, x2, y2 := cr.FillExtents()
+
+	if x1 != 10 || y1 != 20 {
+		t.Errorf("FillExtents min expected (10, 20), got (%f, %f)", x1, y1)
+	}
+	if x2 != 90 || y2 != 80 {
+		t.Errorf("FillExtents max expected (90, 80), got (%f, %f)", x2, y2)
+	}
+}
+
+// --- Font Extent Tests ---
+
+func TestCairoRenderer_FontExtents(t *testing.T) {
+	cr := NewCairoRenderer()
+	cr.SetFontSize(20)
+
+	extents := cr.FontExtents()
+
+	if extents.Ascent <= 0 {
+		t.Error("Expected positive font ascent")
+	}
+	if extents.Descent <= 0 {
+		t.Error("Expected positive font descent")
+	}
+	if extents.Height <= 0 {
+		t.Error("Expected positive font height")
+	}
+	if extents.Height < extents.Ascent+extents.Descent {
+		t.Error("Font height should be >= ascent + descent")
+	}
+}
+
+func TestCairoRenderer_GetFontInfo(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Test default font face
+	if cr.GetFontFace() != "GoMono" {
+		t.Errorf("Expected default font 'GoMono', got %q", cr.GetFontFace())
+	}
+
+	// Set and get font size
+	cr.SetFontSize(24)
+	if cr.GetFontSize() != 24 {
+		t.Errorf("Expected font size 24, got %f", cr.GetFontSize())
+	}
+
+	// Test font slant and weight
+	if cr.GetFontSlant() != FontSlantNormal {
+		t.Errorf("Expected FontSlantNormal, got %v", cr.GetFontSlant())
+	}
+	if cr.GetFontWeight() != FontWeightNormal {
+		t.Errorf("Expected FontWeightNormal, got %v", cr.GetFontWeight())
+	}
+}
+
+// --- Coordinate Transform Tests ---
+
+func TestCairoRenderer_UserToDevice(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Without any transforms, user = device
+	dx, dy := cr.UserToDevice(10, 20)
+	if dx != 10 || dy != 20 {
+		t.Errorf("Without transforms, expected (10, 20), got (%f, %f)", dx, dy)
+	}
+
+	// With translation
+	cr.Translate(100, 50)
+	dx, dy = cr.UserToDevice(10, 20)
+	if dx != 110 || dy != 70 {
+		t.Errorf("With translation, expected (110, 70), got (%f, %f)", dx, dy)
+	}
+}
+
+func TestCairoRenderer_DeviceToUser(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// With translation
+	cr.Translate(100, 50)
+	x, y := cr.DeviceToUser(110, 70)
+	if math.Abs(x-10) > 0.001 || math.Abs(y-20) > 0.001 {
+		t.Errorf("With translation, expected (10, 20), got (%f, %f)", x, y)
+	}
+}
+
+// --- Sub-path Tests ---
+
+func TestCairoRenderer_NewSubPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	cr.MoveTo(10, 10)
+	cr.LineTo(100, 100)
+
+	// NewSubPath should reset current point
+	cr.NewSubPath()
+
+	// This should not panic even without current point
+	cr.MoveTo(200, 200)
+}
+
+// --- Path Copy/Append Tests ---
+
+func TestCairoRenderer_CopyPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create a simple path
+	cr.MoveTo(0, 0)
+	cr.LineTo(100, 100)
+
+	// CopyPath returns empty for now (stub implementation)
+	segments := cr.CopyPath()
+	if segments == nil {
+		t.Error("CopyPath should return non-nil slice")
+	}
+}
+
+func TestCairoRenderer_AppendPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create some segments
+	segments := []PathSegment{
+		{Type: PathMoveTo, X: 10, Y: 10},
+		{Type: PathLineTo, X: 100, Y: 100},
+		{Type: PathClose},
+	}
+
+	// AppendPath should not panic
+	cr.AppendPath(segments)
+
+	// Check path was built
+	x1, y1, x2, y2 := cr.FillExtents()
+	if x1 == 0 && y1 == 0 && x2 == 0 && y2 == 0 {
+		t.Error("AppendPath should have built a path with extents")
+	}
+}
