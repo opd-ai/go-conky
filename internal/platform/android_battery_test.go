@@ -55,13 +55,13 @@ func TestAndroidBatteryProvider_Stats(t *testing.T) {
 
 	// Create required files
 	files := map[string]string{
-		"type":         "Battery\n",
-		"capacity":     "75\n",
-		"status":       "Discharging\n",
-		"voltage_now":  "4200000\n", // 4.2V in µV
-		"energy_now":   "50000000\n",
-		"energy_full":  "100000000\n",
-		"power_now":    "10000000\n",
+		"type":        "Battery\n",
+		"capacity":    "75\n",
+		"status":      "Discharging\n",
+		"voltage_now": "4200000\n", // 4.2V in µV
+		"energy_now":  "50000000\n",
+		"energy_full": "100000000\n",
+		"power_now":   "10000000\n",
 	}
 
 	for name, content := range files {

@@ -14,9 +14,9 @@ import (
 // Android uses hwmon interface similar to Linux, but sensor access may be
 // more restricted depending on the device and Android version.
 type androidSensorProvider struct {
-	hwmonPath     string
-	thermalPath   string
-	batteryPath   string
+	hwmonPath   string
+	thermalPath string
+	batteryPath string
 }
 
 func newAndroidSensorProvider() *androidSensorProvider {

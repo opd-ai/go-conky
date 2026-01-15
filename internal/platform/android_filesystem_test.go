@@ -101,7 +101,7 @@ func TestAndroidFilesystemProvider_IsVirtualFS(t *testing.T) {
 		{"tmpfs", true},
 		{"devpts", true},
 		{"cgroup", true},
-		{"selinuxfs", true}, // Android-specific
+		{"selinuxfs", true},  // Android-specific
 		{"functionfs", true}, // Android-specific
 	}
 

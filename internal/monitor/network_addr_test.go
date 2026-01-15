@@ -143,7 +143,7 @@ eth0	0000000A	00000000	0001	0	0	100	0000FFFF	0	0	0`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := os.WriteFile(routePath, []byte(tt.content), 0644)
+			err := os.WriteFile(routePath, []byte(tt.content), 0o644)
 			if err != nil {
 				t.Fatalf("failed to write test file: %v", err)
 			}
@@ -230,7 +230,7 @@ nameserver 8.8.8.8`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := os.WriteFile(resolvPath, []byte(tt.content), 0644)
+			err := os.WriteFile(resolvPath, []byte(tt.content), 0o644)
 			if err != nil {
 				t.Fatalf("failed to write test file: %v", err)
 			}
