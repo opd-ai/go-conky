@@ -158,6 +158,17 @@ Conky-Go supports the most commonly used Conky variables:
 | `${fs_size /}` | Total size of mount |
 | `${fs_used_perc /}` | Usage percent |
 
+### Disk I/O
+
+| Variable | Description | Example Output |
+|----------|-------------|----------------|
+| `${diskio}` | Total I/O speed (all devices) | `4.5MiB/s` |
+| `${diskio sda}` | Total I/O speed for device | `1.5MiB/s` |
+| `${diskio_read}` | Total read speed (all devices) | `3.0MiB/s` |
+| `${diskio_read sda}` | Read speed for device | `1.0MiB/s` |
+| `${diskio_write}` | Total write speed (all devices) | `1.5MiB/s` |
+| `${diskio_write sda}` | Write speed for device | `512.0KiB/s` |
+
 ### Network
 
 | Variable | Description |

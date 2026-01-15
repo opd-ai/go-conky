@@ -207,6 +207,14 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "fs_used_perc":
 		return api.resolveFSUsedPerc(args)
 
+	// Disk I/O variables
+	case "diskio":
+		return api.resolveDiskIO(args)
+	case "diskio_read":
+		return api.resolveDiskIORead(args)
+	case "diskio_write":
+		return api.resolveDiskIOWrite(args)
+
 	// Process variables
 	case "processes":
 		return strconv.Itoa(api.sysProvider.Process().TotalProcesses)
@@ -497,6 +505,84 @@ func (api *ConkyAPI) resolveHwmon(args []string) string {
 	}
 
 	return fmt.Sprintf("%.0f", hwmonStats.TempSensors[idx].InputCelsius)
+}
+
+// resolveDiskIO resolves ${diskio} variable.
+// Returns total disk I/O speed (read + write) for a device.
+// If no device is specified, returns total for all devices.
+// Format: "R+W speed" (e.g., "1.2MiB/s").
+func (api *ConkyAPI) resolveDiskIO(args []string) string {
+	diskStats := api.sysProvider.DiskIO()
+
+	if len(args) > 0 {
+		// Return I/O for specific device
+		device := args[0]
+		disk, ok := diskStats.Disks[device]
+		if !ok {
+			return "0B/s"
+		}
+		totalSpeed := disk.ReadBytesPerSec + disk.WriteBytesPerSec
+		return formatSpeed(totalSpeed)
+	}
+
+	// Return total I/O across all devices
+	var totalRead, totalWrite float64
+	for _, disk := range diskStats.Disks {
+		totalRead += disk.ReadBytesPerSec
+		totalWrite += disk.WriteBytesPerSec
+	}
+
+	return formatSpeed(totalRead + totalWrite)
+}
+
+// resolveDiskIORead resolves ${diskio_read} variable.
+// Returns disk read speed for a device.
+// If no device is specified, returns total for all devices.
+func (api *ConkyAPI) resolveDiskIORead(args []string) string {
+	diskStats := api.sysProvider.DiskIO()
+
+	if len(args) > 0 {
+		// Return read speed for specific device
+		device := args[0]
+		disk, ok := diskStats.Disks[device]
+		if !ok {
+			return "0B/s"
+		}
+		return formatSpeed(disk.ReadBytesPerSec)
+	}
+
+	// Return total read speed across all devices
+	var totalRead float64
+	for _, disk := range diskStats.Disks {
+		totalRead += disk.ReadBytesPerSec
+	}
+
+	return formatSpeed(totalRead)
+}
+
+// resolveDiskIOWrite resolves ${diskio_write} variable.
+// Returns disk write speed for a device.
+// If no device is specified, returns total for all devices.
+func (api *ConkyAPI) resolveDiskIOWrite(args []string) string {
+	diskStats := api.sysProvider.DiskIO()
+
+	if len(args) > 0 {
+		// Return write speed for specific device
+		device := args[0]
+		disk, ok := diskStats.Disks[device]
+		if !ok {
+			return "0B/s"
+		}
+		return formatSpeed(disk.WriteBytesPerSec)
+	}
+
+	// Return total write speed across all devices
+	var totalWrite float64
+	for _, disk := range diskStats.Disks {
+		totalWrite += disk.WriteBytesPerSec
+	}
+
+	return formatSpeed(totalWrite)
 }
 
 // resolveMixer resolves ${mixer} variable.

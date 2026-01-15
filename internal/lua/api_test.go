@@ -102,8 +102,18 @@ func newMockProvider() *mockSystemDataProvider {
 		diskIO: monitor.DiskIOStats{
 			Disks: map[string]monitor.DiskStats{
 				"sda": {
-					Name:            "sda",
-					ReadBytesPerSec: 1024 * 1024, // 1 MiB/s
+					Name:             "sda",
+					ReadBytesPerSec:  1024 * 1024, // 1.0 MiB/s read
+					WriteBytesPerSec: 512 * 1024,  // 512 KiB/s write
+					ReadsPerSec:      100.0,       // 100 reads/sec
+					WritesPerSec:     50.0,        // 50 writes/sec
+				},
+				"sdb": {
+					Name:             "sdb",
+					ReadBytesPerSec:  2 * 1024 * 1024, // 2.0 MiB/s read
+					WriteBytesPerSec: 1024 * 1024,     // 1.0 MiB/s write
+					ReadsPerSec:      200.0,           // 200 reads/sec
+					WritesPerSec:     100.0,           // 100 writes/sec
 				},
 			},
 		},
@@ -509,6 +519,96 @@ func TestParseFilesystemVariables(t *testing.T) {
 			name:     "fs size home",
 			template: "${fs_size /home}",
 			expected: "1.0TiB",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseDiskIOVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "total diskio all devices",
+			template: "${diskio}",
+			expected: "4.5MiB/s", // sda: 1.0 + 0.5 = 1.5, sdb: 2.0 + 1.0 = 3.0, total = 4.5
+		},
+		{
+			name:     "diskio specific device sda",
+			template: "${diskio sda}",
+			expected: "1.5MiB/s", // 1.0 MiB/s read + 512 KiB/s write = 1.5 MiB/s
+		},
+		{
+			name:     "diskio specific device sdb",
+			template: "${diskio sdb}",
+			expected: "3.0MiB/s", // 2.0 MiB/s read + 1.0 MiB/s write = 3.0 MiB/s
+		},
+		{
+			name:     "diskio nonexistent device",
+			template: "${diskio sdc}",
+			expected: "0B/s",
+		},
+		{
+			name:     "diskio read all devices",
+			template: "${diskio_read}",
+			expected: "3.0MiB/s", // sda: 1.0 + sdb: 2.0 = 3.0 MiB/s
+		},
+		{
+			name:     "diskio read specific device sda",
+			template: "${diskio_read sda}",
+			expected: "1.0MiB/s",
+		},
+		{
+			name:     "diskio read specific device sdb",
+			template: "${diskio_read sdb}",
+			expected: "2.0MiB/s",
+		},
+		{
+			name:     "diskio read nonexistent device",
+			template: "${diskio_read sdc}",
+			expected: "0B/s",
+		},
+		{
+			name:     "diskio write all devices",
+			template: "${diskio_write}",
+			expected: "1.5MiB/s", // sda: 512 KiB + sdb: 1024 KiB = 1536 KiB = 1.5 MiB/s
+		},
+		{
+			name:     "diskio write specific device sda",
+			template: "${diskio_write sda}",
+			expected: "512.0KiB/s",
+		},
+		{
+			name:     "diskio write specific device sdb",
+			template: "${diskio_write sdb}",
+			expected: "1.0MiB/s",
+		},
+		{
+			name:     "diskio write nonexistent device",
+			template: "${diskio_write sdc}",
+			expected: "0B/s",
 		},
 	}
 

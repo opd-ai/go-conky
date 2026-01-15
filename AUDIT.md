@@ -39,15 +39,20 @@ Total Gaps Found: 9
 **Implementation Files:**
 - `internal/monitor/sysinfo.go` - New SystemInfo struct and reader for kernel, hostname, load averages
 - `internal/monitor/sysinfo_test.go` - Comprehensive tests for sysinfo reader
-- `internal/lua/api.go` - Added new variable cases to resolveVariable()
-- `internal/lua/api_test.go` - Tests for new variables
+- `internal/lua/api.go` - Added new variable cases to resolveVariable() and disk I/O resolver functions
+- `internal/lua/api_test.go` - Tests for new variables including comprehensive disk I/O tests
+- `docs/migration.md` - Updated with disk I/O variable documentation
 
-**Current Variable Count:** ~42 implemented variables (up from ~32)
+**Current Variable Count:** ~45 implemented variables (up from ~42)
+
+**Recently Added (January 15, 2026):**
+11. `${diskio}` - Returns total disk I/O speed (read + write) for specified device or all devices
+12. `${diskio_read}` - Returns disk read speed for specified device or all devices
+13. `${diskio_write}` - Returns disk write speed for specified device or all devices
 
 **Remaining Work:** Many variables still need implementation:
 - `cpubar`, `cpugraph`, `membar`, `memgraph` (graphical widgets)
 - `addr`, `wireless_essid` (network address info)
-- `diskio`, `diskio_read`, `diskio_write` (disk I/O)
 - `top`, `top_mem`, `top_time` (process listing)
 - `exec`, `execi`, `execp` (command execution)
 - `if_existing`, `if_match`, `if_running` (conditionals)
