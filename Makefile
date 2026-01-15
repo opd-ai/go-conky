@@ -105,6 +105,7 @@ help:
 	@echo "  build-linux   - Build for Linux (amd64, arm64)"
 	@echo "  build-windows - Build for Windows (amd64)"
 	@echo "  build-darwin  - Build for macOS (amd64, arm64)"
+	@echo "  build-android - Build for Android (arm64)"
 	@echo "  build-all     - Build for all platforms"
 	@echo "  dist-linux    - Create Linux distribution packages"
 	@echo "  dist-windows  - Create Windows distribution package"
@@ -132,7 +133,7 @@ checksums:
 	@cd $(DIST_DIR) && if ls *.tar.gz >/dev/null 2>&1; then sha256sum *.tar.gz > checksums.txt && echo "Checksums written to $(DIST_DIR)/checksums.txt"; else echo "No .tar.gz files found in $(DIST_DIR); skipping checksum generation."; fi
 
 # Cross-platform build targets
-.PHONY: build-linux build-windows build-darwin build-all
+.PHONY: build-linux build-windows build-darwin build-android build-all
 
 build-linux:
 	@echo "Building for Linux (amd64)..."
@@ -153,7 +154,12 @@ build-darwin:
 	@echo "Building for macOS (arm64)..."
 	@GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/conky-go
 
-build-all: build-linux build-windows build-darwin
+build-android:
+	@echo "Building for Android (arm64)..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=android GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-android-arm64 ./cmd/conky-go
+
+build-all: build-linux build-windows build-darwin build-android
 	@echo "All platform builds complete."
 
 # Cross-platform distribution packages

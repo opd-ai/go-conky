@@ -13,7 +13,7 @@
 //
 //   - Platform-agnostic monitoring code
 //   - Easy testing with mock implementations
-//   - Future support for remote monitoring via SSH
+//   - Remote monitoring via SSH
 //   - Clean separation between interface and implementation
 //
 // # Usage
@@ -38,12 +38,10 @@
 // # Supported Platforms
 //
 // Currently supported:
-//   - Linux (fully implemented via /proc filesystem)
-//
-// Planned for future implementation:
-//   - Windows (WMI/PDH APIs)
-//   - macOS (sysctl/IOKit)
-//   - Android (Android APIs + /proc)
+//   - Linux (via /proc filesystem)
+//   - Windows (via WMI/PDH APIs)
+//   - macOS (via sysctl/IOKit)
+//   - Android (via /proc + thermal zones + sysfs)
 //   - Remote systems via SSH
 //
 // # Thread Safety

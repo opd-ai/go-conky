@@ -1,5 +1,5 @@
-//go:build linux && !android
-// +build linux,!android
+//go:build android
+// +build android
 
 package platform
 
@@ -11,20 +11,21 @@ import (
 	"strings"
 )
 
-// linuxMemoryProvider implements MemoryProvider for Linux systems by reading /proc/meminfo.
-type linuxMemoryProvider struct {
+// androidMemoryProvider implements MemoryProvider for Android systems.
+// Android uses /proc/meminfo similar to Linux.
+type androidMemoryProvider struct {
 	procMemInfoPath string
 }
 
-func newLinuxMemoryProvider() *linuxMemoryProvider {
-	return &linuxMemoryProvider{
+func newAndroidMemoryProvider() *androidMemoryProvider {
+	return &androidMemoryProvider{
 		procMemInfoPath: "/proc/meminfo",
 	}
 }
 
 // parseMemInfo parses /proc/meminfo and returns a map of key-value pairs.
 // Values are converted from kB to bytes.
-func (m *linuxMemoryProvider) parseMemInfo() (map[string]uint64, error) {
+func (m *androidMemoryProvider) parseMemInfo() (map[string]uint64, error) {
 	file, err := os.Open(m.procMemInfoPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", m.procMemInfoPath, err)
@@ -68,7 +69,7 @@ func (m *linuxMemoryProvider) parseMemInfo() (map[string]uint64, error) {
 	return values, nil
 }
 
-func (m *linuxMemoryProvider) Stats() (*MemoryStats, error) {
+func (m *androidMemoryProvider) Stats() (*MemoryStats, error) {
 	values, err := m.parseMemInfo()
 	if err != nil {
 		return nil, err
@@ -109,7 +110,7 @@ func (m *linuxMemoryProvider) Stats() (*MemoryStats, error) {
 	}, nil
 }
 
-func (m *linuxMemoryProvider) SwapStats() (*SwapStats, error) {
+func (m *androidMemoryProvider) SwapStats() (*SwapStats, error) {
 	values, err := m.parseMemInfo()
 	if err != nil {
 		return nil, err

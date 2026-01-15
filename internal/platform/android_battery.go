@@ -1,5 +1,5 @@
-//go:build linux && !android
-// +build linux,!android
+//go:build android
+// +build android
 
 package platform
 
@@ -11,18 +11,19 @@ import (
 	"time"
 )
 
-// linuxBatteryProvider implements BatteryProvider for Linux systems.
-type linuxBatteryProvider struct {
+// androidBatteryProvider implements BatteryProvider for Android systems.
+// Android uses sysfs power_supply interface similar to Linux.
+type androidBatteryProvider struct {
 	powerSupplyPath string
 }
 
-func newLinuxBatteryProvider() *linuxBatteryProvider {
-	return &linuxBatteryProvider{
+func newAndroidBatteryProvider() *androidBatteryProvider {
+	return &androidBatteryProvider{
 		powerSupplyPath: "/sys/class/power_supply",
 	}
 }
 
-func (b *linuxBatteryProvider) Count() int {
+func (b *androidBatteryProvider) Count() int {
 	batteries, err := b.findBatteries()
 	if err != nil {
 		return 0
@@ -30,7 +31,7 @@ func (b *linuxBatteryProvider) Count() int {
 	return len(batteries)
 }
 
-func (b *linuxBatteryProvider) Stats(index int) (*BatteryStats, error) {
+func (b *androidBatteryProvider) Stats(index int) (*BatteryStats, error) {
 	batteries, err := b.findBatteries()
 	if err != nil {
 		return nil, err
@@ -45,7 +46,7 @@ func (b *linuxBatteryProvider) Stats(index int) (*BatteryStats, error) {
 }
 
 // findBatteries returns a list of battery power supply names.
-func (b *linuxBatteryProvider) findBatteries() ([]string, error) {
+func (b *androidBatteryProvider) findBatteries() ([]string, error) {
 	entries, err := os.ReadDir(b.powerSupplyPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", b.powerSupplyPath, err)
@@ -72,7 +73,7 @@ func (b *linuxBatteryProvider) findBatteries() ([]string, error) {
 }
 
 // readBatteryStats reads battery statistics from sysfs.
-func (b *linuxBatteryProvider) readBatteryStats(batteryPath string) (*BatteryStats, error) {
+func (b *androidBatteryProvider) readBatteryStats(batteryPath string) (*BatteryStats, error) {
 	stats := &BatteryStats{}
 
 	// Read capacity (percentage)
@@ -88,15 +89,29 @@ func (b *linuxBatteryProvider) readBatteryStats(batteryPath string) (*BatterySta
 	energyFull, _ := readUint64File(filepath.Join(batteryPath, "energy_full"))
 
 	// If energy_* files not available, try charge_* files (in µAh)
+	// Android often uses charge_* instead of energy_*
 	if !hasEnergy {
 		chargeNow, _ := readUint64File(filepath.Join(batteryPath, "charge_now"))
 		chargeFull, _ := readUint64File(filepath.Join(batteryPath, "charge_full"))
 		voltage, _ := readUint64File(filepath.Join(batteryPath, "voltage_now"))
 
-		// Convert charge to energy: energy = charge * voltage
+		// Convert charge to energy: energy = charge * voltage / 1000000
+		// Use safe multiplication to prevent overflow
 		if voltage > 0 {
-			energyNow = chargeNow * voltage / 1000000 // Convert to µWh
-			energyFull = chargeFull * voltage / 1000000
+			energyNow = safeMultiplyDivide(chargeNow, voltage, 1000000)
+			energyFull = safeMultiplyDivide(chargeFull, voltage, 1000000)
+		}
+	}
+
+	// Android may also provide charge_counter (µAh)
+	if energyNow == 0 {
+		chargeCounter, _ := readUint64File(filepath.Join(batteryPath, "charge_counter"))
+		chargeFull, _ := readUint64File(filepath.Join(batteryPath, "charge_full_design"))
+		voltage, _ := readUint64File(filepath.Join(batteryPath, "voltage_now"))
+
+		if voltage > 0 && chargeCounter > 0 {
+			energyNow = safeMultiplyDivide(chargeCounter, voltage, 1000000)
+			energyFull = safeMultiplyDivide(chargeFull, voltage, 1000000)
 		}
 	}
 
@@ -108,11 +123,24 @@ func (b *linuxBatteryProvider) readBatteryStats(batteryPath string) (*BatterySta
 	stats.Voltage = float64(voltage) / 1000000.0 // Convert µV to V
 
 	// Calculate time remaining
-	powerNow, _ := readUint64File(filepath.Join(batteryPath, "power_now"))
+	// Android may provide current_now instead of power_now
+	powerNow, hasPower := readUint64File(filepath.Join(batteryPath, "power_now"))
+	if !hasPower {
+		currentNow, _ := readUint64File(filepath.Join(batteryPath, "current_now"))
+		if currentNow > 0 && voltage > 0 {
+			// Power = Current * Voltage (both in µA and µV)
+			// Use safe multiplication to prevent overflow
+			powerNow = safeMultiplyDivide(currentNow, voltage, 1000000)
+		}
+	}
+
 	if powerNow > 0 {
 		if stats.Charging {
 			// Time to full
-			remaining := energyFull - energyNow
+			var remaining uint64
+			if energyFull >= energyNow {
+				remaining = energyFull - energyNow
+			}
 			stats.TimeRemaining = time.Duration(remaining*3600/powerNow) * time.Second
 		} else {
 			// Time to empty

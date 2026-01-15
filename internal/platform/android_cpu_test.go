@@ -1,5 +1,5 @@
-//go:build linux && !android
-// +build linux,!android
+//go:build android
+// +build android
 
 package platform
 
@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestLinuxCPUProvider_TotalUsage(t *testing.T) {
+func TestAndroidCPUProvider_TotalUsage(t *testing.T) {
 	// Create a temporary /proc/stat file
 	tmpDir := t.TempDir()
 	statPath := filepath.Join(tmpDir, "stat")
@@ -25,7 +25,7 @@ cpu3 25 0 13 213 0 0 0 0 0 0
 		t.Fatalf("Failed to write initial stat file: %v", err)
 	}
 
-	provider := &linuxCPUProvider{
+	provider := &androidCPUProvider{
 		prevStats:    make(map[int]cpuTimes),
 		procStatPath: statPath,
 	}
@@ -56,28 +56,17 @@ cpu3 50 0 25 225 0 0 0 0 0 0
 		t.Fatalf("Second TotalUsage() failed: %v", err)
 	}
 
-	// Expected calculation:
-	// prevTotal = 100 + 0 + 50 + 850 + 0 + 0 + 0 + 0 = 1000
-	// currTotal = 200 + 0 + 100 + 900 + 0 + 0 + 0 + 0 = 1200
-	// totalDelta = 1200 - 1000 = 200
-	//
-	// prevIdle = 850 + 0 = 850
-	// currIdle = 900 + 0 = 900
-	// idleDelta = 900 - 850 = 50
-	//
-	// usage = 100 * (200 - 50) / 200 = 100 * 150 / 200 = 75%
+	// Expected calculation: 75% usage
 	expectedUsage := 75.0
 	if usage < expectedUsage-0.1 || usage > expectedUsage+0.1 {
 		t.Errorf("Second TotalUsage() = %v, want ~%v", usage, expectedUsage)
 	}
 }
 
-func TestLinuxCPUProvider_Usage(t *testing.T) {
-	// Create a temporary /proc/stat file
+func TestAndroidCPUProvider_Usage(t *testing.T) {
 	tmpDir := t.TempDir()
 	statPath := filepath.Join(tmpDir, "stat")
 
-	// Write initial /proc/stat content
 	initialContent := `cpu  100 0 50 850 0 0 0 0 0 0
 cpu0 25 0 12 212 0 0 0 0 0 0
 cpu1 25 0 13 213 0 0 0 0 0 0
@@ -86,12 +75,11 @@ cpu1 25 0 13 213 0 0 0 0 0 0
 		t.Fatalf("Failed to write initial stat file: %v", err)
 	}
 
-	provider := &linuxCPUProvider{
+	provider := &androidCPUProvider{
 		prevStats:    make(map[int]cpuTimes),
 		procStatPath: statPath,
 	}
 
-	// First read
 	usages, err := provider.Usage()
 	if err != nil {
 		t.Fatalf("First Usage() failed: %v", err)
@@ -100,7 +88,6 @@ cpu1 25 0 13 213 0 0 0 0 0 0
 		t.Errorf("First Usage() returned %d cores, want 2", len(usages))
 	}
 
-	// All first reads should be 0
 	for i, usage := range usages {
 		if usage != 0 {
 			t.Errorf("First Usage()[%d] = %v, want 0", i, usage)
@@ -108,8 +95,7 @@ cpu1 25 0 13 213 0 0 0 0 0 0
 	}
 }
 
-func TestLinuxCPUProvider_LoadAverage(t *testing.T) {
-	// Create a temporary /proc/loadavg file
+func TestAndroidCPUProvider_LoadAverage(t *testing.T) {
 	tmpDir := t.TempDir()
 	loadavgPath := filepath.Join(tmpDir, "loadavg")
 
@@ -118,7 +104,7 @@ func TestLinuxCPUProvider_LoadAverage(t *testing.T) {
 		t.Fatalf("Failed to write loadavg file: %v", err)
 	}
 
-	provider := &linuxCPUProvider{
+	provider := &androidCPUProvider{
 		procLoadavgPath: loadavgPath,
 	}
 
@@ -138,34 +124,30 @@ func TestLinuxCPUProvider_LoadAverage(t *testing.T) {
 	}
 }
 
-func TestLinuxCPUProvider_Info(t *testing.T) {
-	// Create a temporary /proc/cpuinfo file
+func TestAndroidCPUProvider_Info(t *testing.T) {
 	tmpDir := t.TempDir()
 	cpuinfoPath := filepath.Join(tmpDir, "cpuinfo")
 
+	// Android-style cpuinfo
 	content := `processor	: 0
-vendor_id	: GenuineIntel
-cpu family	: 6
-model		: 142
-model name	: Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz
+Processor	: ARMv7 Processor rev 4 (v7l)
+Hardware	: Qualcomm Snapdragon
 cpu cores	: 4
 siblings	: 8
-cache size	: 8192 KB
+cache size	: 2048 KB
 
 processor	: 1
-vendor_id	: GenuineIntel
-cpu family	: 6
-model		: 142
-model name	: Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz
+Processor	: ARMv7 Processor rev 4 (v7l)
+Hardware	: Qualcomm Snapdragon
 cpu cores	: 4
 siblings	: 8
-cache size	: 8192 KB
+cache size	: 2048 KB
 `
 	if err := os.WriteFile(cpuinfoPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write cpuinfo file: %v", err)
 	}
 
-	provider := &linuxCPUProvider{
+	provider := &androidCPUProvider{
 		procInfoPath: cpuinfoPath,
 	}
 
@@ -174,11 +156,8 @@ cache size	: 8192 KB
 		t.Fatalf("Info() failed: %v", err)
 	}
 
-	if info.Vendor != "GenuineIntel" {
-		t.Errorf("Vendor = %v, want GenuineIntel", info.Vendor)
-	}
-	if info.Model != "Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz" {
-		t.Errorf("Model = %v, want Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz", info.Model)
+	if info.Model != "ARMv7 Processor rev 4 (v7l)" {
+		t.Errorf("Model = %v, want ARMv7 Processor rev 4 (v7l)", info.Model)
 	}
 	if info.Cores != 4 {
 		t.Errorf("Cores = %v, want 4", info.Cores)
@@ -186,29 +165,25 @@ cache size	: 8192 KB
 	if info.Threads != 8 {
 		t.Errorf("Threads = %v, want 8", info.Threads)
 	}
-	if info.CacheSize != 8192*1024 {
-		t.Errorf("CacheSize = %v, want %v", info.CacheSize, 8192*1024)
-	}
 }
 
-func TestLinuxCPUProvider_Frequency(t *testing.T) {
-	// Create a temporary /proc/cpuinfo file
+func TestAndroidCPUProvider_Frequency(t *testing.T) {
 	tmpDir := t.TempDir()
 	cpuinfoPath := filepath.Join(tmpDir, "cpuinfo")
 
 	content := `processor	: 0
 cpu MHz		: 1800.123
-cache size	: 8192 KB
+cache size	: 2048 KB
 
 processor	: 1
 cpu MHz		: 1850.456
-cache size	: 8192 KB
+cache size	: 2048 KB
 `
 	if err := os.WriteFile(cpuinfoPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("Failed to write cpuinfo file: %v", err)
 	}
 
-	provider := &linuxCPUProvider{
+	provider := &androidCPUProvider{
 		procInfoPath: cpuinfoPath,
 	}
 

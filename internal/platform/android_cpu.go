@@ -1,5 +1,5 @@
-//go:build linux && !android
-// +build linux,!android
+//go:build android
+// +build android
 
 package platform
 
@@ -12,8 +12,9 @@ import (
 	"sync"
 )
 
-// linuxCPUProvider implements CPUProvider for Linux systems by reading /proc/stat and /proc/cpuinfo.
-type linuxCPUProvider struct {
+// androidCPUProvider implements CPUProvider for Android systems.
+// Android uses the Linux kernel and provides CPU stats via /proc/stat and /proc/cpuinfo.
+type androidCPUProvider struct {
 	mu              sync.Mutex
 	prevStats       map[int]cpuTimes
 	procStatPath    string
@@ -21,8 +22,8 @@ type linuxCPUProvider struct {
 	procLoadavgPath string
 }
 
-func newLinuxCPUProvider() *linuxCPUProvider {
-	return &linuxCPUProvider{
+func newAndroidCPUProvider() *androidCPUProvider {
+	return &androidCPUProvider{
 		prevStats:       make(map[int]cpuTimes),
 		procStatPath:    "/proc/stat",
 		procInfoPath:    "/proc/cpuinfo",
@@ -30,7 +31,7 @@ func newLinuxCPUProvider() *linuxCPUProvider {
 	}
 }
 
-func (c *linuxCPUProvider) Usage() ([]float64, error) {
+func (c *androidCPUProvider) Usage() ([]float64, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -56,7 +57,7 @@ func (c *linuxCPUProvider) Usage() ([]float64, error) {
 	return usages, nil
 }
 
-func (c *linuxCPUProvider) TotalUsage() (float64, error) {
+func (c *androidCPUProvider) TotalUsage() (float64, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -102,7 +103,7 @@ func (c *linuxCPUProvider) TotalUsage() (float64, error) {
 	return c.calculateUsage(prev, current), nil
 }
 
-func (c *linuxCPUProvider) Frequency() ([]float64, error) {
+func (c *androidCPUProvider) Frequency() ([]float64, error) {
 	// Read CPU frequencies from /proc/cpuinfo
 	file, err := os.Open(c.procInfoPath)
 	if err != nil {
@@ -115,6 +116,7 @@ func (c *linuxCPUProvider) Frequency() ([]float64, error) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		// Android may use "cpu MHz" or "BogoMIPS" for frequency info
 		if strings.HasPrefix(line, "cpu MHz") {
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) == 2 {
@@ -130,10 +132,38 @@ func (c *linuxCPUProvider) Frequency() ([]float64, error) {
 		return nil, fmt.Errorf("scanning %s: %w", c.procInfoPath, err)
 	}
 
+	// If no frequencies found from cpuinfo, try reading from scaling_cur_freq
+	if len(frequencies) == 0 {
+		frequencies = c.readScalingFrequencies()
+	}
+
 	return frequencies, nil
 }
 
-func (c *linuxCPUProvider) Info() (*CPUInfo, error) {
+// readScalingFrequencies reads CPU frequencies from sysfs scaling_cur_freq files.
+// This is more reliable on Android than /proc/cpuinfo.
+func (c *androidCPUProvider) readScalingFrequencies() []float64 {
+	var frequencies []float64
+	cpuPath := "/sys/devices/system/cpu"
+
+	for i := 0; ; i++ {
+		freqPath := fmt.Sprintf("%s/cpu%d/cpufreq/scaling_cur_freq", cpuPath, i)
+		data, err := os.ReadFile(freqPath)
+		if err != nil {
+			break // No more CPUs
+		}
+
+		freqStr := strings.TrimSpace(string(data))
+		if freqKHz, err := strconv.ParseUint(freqStr, 10, 64); err == nil {
+			// Convert kHz to MHz
+			frequencies = append(frequencies, float64(freqKHz)/1000.0)
+		}
+	}
+
+	return frequencies
+}
+
+func (c *androidCPUProvider) Info() (*CPUInfo, error) {
 	file, err := os.Open(c.procInfoPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", c.procInfoPath, err)
@@ -141,7 +171,7 @@ func (c *linuxCPUProvider) Info() (*CPUInfo, error) {
 	defer file.Close()
 
 	info := &CPUInfo{}
-	var coreCount int
+	var processorCount int
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
@@ -155,11 +185,11 @@ func (c *linuxCPUProvider) Info() (*CPUInfo, error) {
 		value := strings.TrimSpace(parts[1])
 
 		switch key {
-		case "model name":
+		case "model name", "Processor", "Hardware":
 			if info.Model == "" {
 				info.Model = value
 			}
-		case "vendor_id":
+		case "vendor_id", "CPU implementer":
 			if info.Vendor == "" {
 				info.Vendor = value
 			}
@@ -173,17 +203,16 @@ func (c *linuxCPUProvider) Info() (*CPUInfo, error) {
 			}
 		case "cache size":
 			if info.CacheSize == 0 {
-				// Parse cache size (e.g., "8192 KB")
 				cacheParts := strings.Fields(value)
-				if len(cacheParts) >= 2 {
+				if len(cacheParts) >= 1 {
 					if size, err := strconv.ParseInt(cacheParts[0], 10, 64); err == nil {
-						// Convert KB to bytes
+						// Assume KB if unit present
 						info.CacheSize = size * 1024
 					}
 				}
 			}
 		case "processor":
-			coreCount++
+			processorCount++
 		}
 	}
 
@@ -193,16 +222,16 @@ func (c *linuxCPUProvider) Info() (*CPUInfo, error) {
 
 	// If cores and threads were not found, use processor count
 	if info.Cores == 0 {
-		info.Cores = coreCount
+		info.Cores = processorCount
 	}
 	if info.Threads == 0 {
-		info.Threads = coreCount
+		info.Threads = processorCount
 	}
 
 	return info, nil
 }
 
-func (c *linuxCPUProvider) LoadAverage() (float64, float64, float64, error) {
+func (c *androidCPUProvider) LoadAverage() (float64, float64, float64, error) {
 	file, err := os.Open(c.procLoadavgPath)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("opening %s: %w", c.procLoadavgPath, err)
@@ -231,8 +260,7 @@ func (c *linuxCPUProvider) LoadAverage() (float64, float64, float64, error) {
 }
 
 // readProcStat reads and parses /proc/stat for per-CPU times.
-// Returns a map of CPU number to cpuTimes (excluding the aggregate "cpu" line).
-func (c *linuxCPUProvider) readProcStat() (map[int]cpuTimes, error) {
+func (c *androidCPUProvider) readProcStat() (map[int]cpuTimes, error) {
 	file, err := os.Open(c.procStatPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", c.procStatPath, err)
@@ -287,7 +315,7 @@ func (c *linuxCPUProvider) readProcStat() (map[int]cpuTimes, error) {
 }
 
 // calculateUsage calculates CPU usage percentage from two cpuTimes snapshots.
-func (c *linuxCPUProvider) calculateUsage(prev, current cpuTimes) float64 {
+func (c *androidCPUProvider) calculateUsage(prev, current cpuTimes) float64 {
 	prevTotal := prev.user + prev.nice + prev.system + prev.idle + prev.iowait + prev.irq + prev.softirq + prev.steal
 	currentTotal := current.user + current.nice + current.system + current.idle + current.iowait + current.irq + current.softirq + current.steal
 
