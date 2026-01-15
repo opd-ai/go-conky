@@ -964,7 +964,9 @@ func (cr *CairoRenderer) Clip() {
 		return
 	}
 
-	// Store the current path as the clip path
+	// Store the current path as the clip path.
+	// We're swapping out the path pointer and creating a new one,
+	// so the clip path is safe from future modifications.
 	cr.clipPath = cr.path
 	cr.hasClip = true
 
@@ -975,6 +977,8 @@ func (cr *CairoRenderer) Clip() {
 
 // ClipPreserve establishes a new clip region without clearing the current path.
 // This is equivalent to cairo_clip_preserve.
+// Note: Unlike Cairo, the clip path shares a reference with the preserved path.
+// If you need isolation, call cairo_save() before clip and cairo_restore() after.
 func (cr *CairoRenderer) ClipPreserve() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
@@ -983,7 +987,11 @@ func (cr *CairoRenderer) ClipPreserve() {
 		return
 	}
 
-	// Store the current path as the clip path
+	// Store the current path as the clip path.
+	// Note: This is a reference to the same path object. Subsequent path
+	// operations will affect both the current path and the clip path.
+	// This matches Ebiten's behavior since vector.Path cannot be copied.
+	// To work around this, use cairo_save/cairo_restore to isolate state.
 	cr.clipPath = cr.path
 	cr.hasClip = true
 	// Path is preserved (not cleared)
