@@ -231,6 +231,7 @@ type SystemData struct {
 	Process    ProcessStats
 	Battery    BatteryStats
 	Audio      AudioStats
+	SysInfo    SystemInfo
 	mu         sync.RWMutex
 }
 
@@ -507,4 +508,24 @@ func (sd *SystemData) setAudio(audio AudioStats) {
 	sd.mu.Lock()
 	defer sd.mu.Unlock()
 	sd.Audio = audio
+}
+
+// GetSysInfo returns a copy of the system info with proper locking.
+func (sd *SystemData) GetSysInfo() SystemInfo {
+	sd.mu.RLock()
+	defer sd.mu.RUnlock()
+	return sd.SysInfo
+}
+
+// setSysInfo updates the system info with proper locking.
+func (sd *SystemData) setSysInfo(sysInfo SystemInfo) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	sd.SysInfo = sysInfo
+}
+
+// copySysInfo returns a copy of the system info.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copySysInfo() SystemInfo {
+	return sd.SysInfo
 }
