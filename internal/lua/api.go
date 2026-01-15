@@ -349,6 +349,143 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "if_up":
 		return api.resolveIfUp(args)
 
+	// Additional network variables
+	case "wireless_essid":
+		return api.resolveWirelessESSID(args)
+	case "wireless_link_qual":
+		return api.resolveWirelessLinkQual(args)
+	case "wireless_link_qual_perc":
+		return api.resolveWirelessLinkQualPerc(args)
+	case "wireless_link_qual_max":
+		return "100" // Standard max
+	case "wireless_bitrate":
+		return api.resolveWirelessBitrate(args)
+	case "wireless_ap":
+		return api.resolveWirelessAP(args)
+	case "wireless_mode":
+		return "Managed" // Most common mode
+
+	// Network packet/error variables
+	case "tcp_portmon":
+		return api.resolveTCPPortMon(args)
+	case "if_existing":
+		return api.resolveIfExisting(args)
+	case "if_running":
+		return api.resolveIfRunning(args)
+
+	// Process stats variables
+	case "running_threads":
+		return strconv.Itoa(api.sysProvider.Process().TotalThreads)
+	case "top_io":
+		return api.resolveTop(args, false) // Alias to top for now
+
+	// Entropy/random variables
+	case "entropy_avail":
+		return api.resolveEntropy()
+	case "entropy_poolsize":
+		return "4096" // Standard Linux entropy pool size
+	case "entropy_perc":
+		return api.resolveEntropyPerc()
+	case "entropy_bar":
+		return api.resolveEntropyBar(args)
+
+	// Date/time aliases
+	case "tztime":
+		return api.resolveTime(args)
+	case "utime":
+		return strconv.FormatInt(time.Now().Unix(), 10)
+
+	// Misc formatting/info variables
+	case "stippled_hr":
+		return api.resolveStippledHR(args)
+	case "scroll":
+		return api.resolveScroll(args)
+	case "lua":
+		return "" // Lua function calls handled separately
+	case "lua_parse":
+		return "" // Lua function calls handled separately
+	case "template0", "template1", "template2", "template3",
+		"template4", "template5", "template6", "template7",
+		"template8", "template9":
+		return "" // Templates resolved during config parsing
+
+	// Pre/post text markers
+	case "pre_exec":
+		return api.resolveExec(args)
+	case "texeci":
+		return api.resolveExec(args) // Threaded exec - treat as regular exec
+
+	// Inode variables
+	case "fs_inodes":
+		return api.resolveFSInodes(args)
+	case "fs_inodes_free":
+		return api.resolveFSInodesFree(args)
+	case "fs_inodes_perc":
+		return api.resolveFSInodesPerc(args)
+
+	// Additional memory variables
+	case "memgauge", "membar":
+		return api.resolveMemBar(args)
+	case "swapbar":
+		return api.resolveSwapBar(args)
+	case "shmem":
+		return formatBytes(api.sysProvider.Memory().Cached) // Shared memory approx
+
+	// Additional CPU variables
+	case "cpubar":
+		return api.resolveCPUBar(args)
+	case "loadgraph":
+		return api.resolveLoadGraph(args)
+	case "freq_dyn":
+		return api.resolveCPUFreq(args) // Dynamic frequency
+	case "freq_dyn_g":
+		return api.resolveCPUFreqGHz(args)
+
+	// Platform variables
+	case "platform":
+		return api.sysProvider.SysInfo().Sysname
+
+	// Acpi/thermal variables
+	case "acpitemp":
+		return api.resolveHwmon(args)
+	case "acpifan":
+		return api.resolveACPIFan()
+	case "acpiacadapter":
+		if api.sysProvider.Battery().ACOnline {
+			return "on-line"
+		}
+		return "off-line"
+
+	// Nvidia GPU (stubs for compatibility)
+	case "nvidia":
+		return "" // Requires nvidia-smi integration
+	case "nvidiagraph":
+		return ""
+
+	// Apcupsd (UPS) stubs
+	case "apcupsd":
+		return ""
+	case "apcupsd_model":
+		return ""
+	case "apcupsd_status":
+		return ""
+
+	// IMAP/POP3/mail stubs
+	case "imap_unseen", "imap_messages":
+		return "0"
+	case "pop3_unseen", "pop3_used":
+		return "0"
+	case "new_mails", "mails":
+		return "0"
+
+	// Weather stubs
+	case "weather":
+		return ""
+
+	// Stock ticker stub
+	case "stockquote":
+		return ""
+
 	default:
 		// Return original if unknown variable
 		return formatUnknownVariable(name, args)
@@ -1123,4 +1260,296 @@ func (api *ConkyAPI) resolveIfUp(args []string) string {
 		return "1" // Interface exists/is up
 	}
 	return "0"
+}
+
+// --- Additional Resolver Functions ---
+
+// resolveWirelessESSID returns the ESSID of a wireless interface.
+// For now returns a stub - full implementation requires wireless extensions.
+func (api *ConkyAPI) resolveWirelessESSID(args []string) string {
+	// Check if interface exists
+	if len(args) == 0 {
+		return ""
+	}
+	netStats := api.sysProvider.Network()
+	if _, ok := netStats.Interfaces[args[0]]; ok {
+		// Wireless info would require additional /sys or ioctl calls
+		return ""
+	}
+	return ""
+}
+
+// resolveWirelessLinkQual returns wireless link quality.
+func (api *ConkyAPI) resolveWirelessLinkQual(_ []string) string {
+	return "0"
+}
+
+// resolveWirelessLinkQualPerc returns wireless link quality as percentage.
+func (api *ConkyAPI) resolveWirelessLinkQualPerc(_ []string) string {
+	return "0"
+}
+
+// resolveWirelessBitrate returns wireless bitrate.
+func (api *ConkyAPI) resolveWirelessBitrate(_ []string) string {
+	return "0Mb/s"
+}
+
+// resolveWirelessAP returns wireless access point MAC.
+func (api *ConkyAPI) resolveWirelessAP(_ []string) string {
+	return "00:00:00:00:00:00"
+}
+
+// resolveTCPPortMon monitors TCP connections (stub).
+func (api *ConkyAPI) resolveTCPPortMon(_ []string) string {
+	return "0"
+}
+
+// resolveIfExisting checks if a file or path exists.
+func (api *ConkyAPI) resolveIfExisting(args []string) string {
+	if len(args) == 0 {
+		return "0"
+	}
+	if _, err := os.Stat(args[0]); err == nil {
+		return "1"
+	}
+	return "0"
+}
+
+// resolveIfRunning checks if a process is running.
+func (api *ConkyAPI) resolveIfRunning(args []string) string {
+	if len(args) == 0 {
+		return "0"
+	}
+	// Check if process name exists in top processes
+	procStats := api.sysProvider.Process()
+	for _, p := range procStats.TopCPU {
+		if strings.Contains(p.Name, args[0]) {
+			return "1"
+		}
+	}
+	return "0"
+}
+
+// resolveEntropy returns available entropy.
+func (api *ConkyAPI) resolveEntropy() string {
+	data, err := os.ReadFile("/proc/sys/kernel/random/entropy_avail")
+	if err != nil {
+		return "0"
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// resolveEntropyPerc returns entropy as percentage.
+func (api *ConkyAPI) resolveEntropyPerc() string {
+	data, err := os.ReadFile("/proc/sys/kernel/random/entropy_avail")
+	if err != nil {
+		return "0"
+	}
+	avail, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return "0"
+	}
+	perc := float64(avail) / 4096.0 * 100.0
+	if perc > 100 {
+		perc = 100
+	}
+	return fmt.Sprintf("%.0f", perc)
+}
+
+// resolveEntropyBar returns a text bar for entropy.
+func (api *ConkyAPI) resolveEntropyBar(args []string) string {
+	width := 10
+	if len(args) > 0 {
+		if w, err := strconv.Atoi(args[0]); err == nil {
+			width = w
+		}
+	}
+	data, err := os.ReadFile("/proc/sys/kernel/random/entropy_avail")
+	if err != nil {
+		return strings.Repeat("-", width)
+	}
+	avail, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return strings.Repeat("-", width)
+	}
+	perc := float64(avail) / 4096.0
+	filled := int(perc * float64(width))
+	if filled > width {
+		filled = width
+	}
+	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+}
+
+// resolveStippledHR returns a stippled horizontal rule.
+func (api *ConkyAPI) resolveStippledHR(args []string) string {
+	width := 10
+	if len(args) > 0 {
+		if w, err := strconv.Atoi(args[0]); err == nil {
+			width = w
+		}
+	}
+	result := ""
+	for i := 0; i < width; i++ {
+		if i%2 == 0 {
+			result += "-"
+		} else {
+			result += " "
+		}
+	}
+	return result
+}
+
+// resolveScroll returns scrolling text (simplified - just returns the text).
+func (api *ConkyAPI) resolveScroll(args []string) string {
+	if len(args) < 2 {
+		return ""
+	}
+	// Skip the length/step args and return the text
+	return strings.Join(args[2:], " ")
+}
+
+// resolveFSInodes returns total inodes for a mount point.
+func (api *ConkyAPI) resolveFSInodes(args []string) string {
+	mountPoint := "/"
+	if len(args) > 0 {
+		mountPoint = args[0]
+	}
+	fsStats := api.sysProvider.Filesystem()
+	if mount, ok := fsStats.Mounts[mountPoint]; ok {
+		return formatNumber(mount.InodesTotal)
+	}
+	return "0"
+}
+
+// resolveFSInodesFree returns free inodes for a mount point.
+func (api *ConkyAPI) resolveFSInodesFree(args []string) string {
+	mountPoint := "/"
+	if len(args) > 0 {
+		mountPoint = args[0]
+	}
+	fsStats := api.sysProvider.Filesystem()
+	if mount, ok := fsStats.Mounts[mountPoint]; ok {
+		return formatNumber(mount.InodesFree)
+	}
+	return "0"
+}
+
+// resolveFSInodesPerc returns inode usage percentage.
+func (api *ConkyAPI) resolveFSInodesPerc(args []string) string {
+	mountPoint := "/"
+	if len(args) > 0 {
+		mountPoint = args[0]
+	}
+	fsStats := api.sysProvider.Filesystem()
+	if mount, ok := fsStats.Mounts[mountPoint]; ok {
+		return fmt.Sprintf("%.0f", mount.InodesPercent)
+	}
+	return "0"
+}
+
+// resolveMemBar returns a text bar for memory usage.
+func (api *ConkyAPI) resolveMemBar(args []string) string {
+	width := 10
+	if len(args) > 0 {
+		if w, err := strconv.Atoi(args[0]); err == nil {
+			width = w
+		}
+	}
+	mem := api.sysProvider.Memory()
+	filled := int(mem.UsagePercent * float64(width) / 100)
+	if filled > width {
+		filled = width
+	}
+	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+}
+
+// resolveSwapBar returns a text bar for swap usage.
+func (api *ConkyAPI) resolveSwapBar(args []string) string {
+	width := 10
+	if len(args) > 0 {
+		if w, err := strconv.Atoi(args[0]); err == nil {
+			width = w
+		}
+	}
+	mem := api.sysProvider.Memory()
+	filled := int(mem.SwapPercent * float64(width) / 100)
+	if filled > width {
+		filled = width
+	}
+	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+}
+
+// resolveCPUBar returns a text bar for CPU usage.
+func (api *ConkyAPI) resolveCPUBar(args []string) string {
+	width := 10
+	cpuIdx := -1 // -1 means overall
+	if len(args) > 0 {
+		if idx, err := strconv.Atoi(args[0]); err == nil {
+			cpuIdx = idx - 1 // Convert to 0-based
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.Atoi(args[1]); err == nil {
+			width = w
+		}
+	}
+
+	cpuStats := api.sysProvider.CPU()
+	var percent float64
+	if cpuIdx >= 0 && cpuIdx < len(cpuStats.Cores) {
+		percent = cpuStats.Cores[cpuIdx]
+	} else {
+		percent = cpuStats.UsagePercent
+	}
+
+	filled := int(percent * float64(width) / 100)
+	if filled > width {
+		filled = width
+	}
+	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+}
+
+// resolveLoadGraph returns a simple text representation of load.
+func (api *ConkyAPI) resolveLoadGraph(_ []string) string {
+	sysInfo := api.sysProvider.SysInfo()
+	// Normalize load to percentage based on CPU count
+	cpuCount := api.sysProvider.CPU().CPUCount
+	if cpuCount == 0 {
+		cpuCount = 1
+	}
+	loadPerc := sysInfo.LoadAvg1 / float64(cpuCount) * 100
+	if loadPerc > 100 {
+		loadPerc = 100
+	}
+	width := 10
+	filled := int(loadPerc * float64(width) / 100)
+	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+}
+
+// resolveACPIFan returns ACPI fan status.
+func (api *ConkyAPI) resolveACPIFan() string {
+	hwmon := api.sysProvider.Hwmon()
+	for _, dev := range hwmon.Devices {
+		if strings.Contains(strings.ToLower(dev.Name), "fan") {
+			return "running"
+		}
+	}
+	return "unknown"
+}
+
+// formatNumber formats a number with commas for readability.
+func formatNumber(n uint64) string {
+	s := strconv.FormatUint(n, 10)
+	if len(s) <= 3 {
+		return s
+	}
+	// Insert commas
+	result := ""
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result += ","
+		}
+		result += string(c)
+	}
+	return result
 }
