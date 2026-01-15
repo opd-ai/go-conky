@@ -1468,6 +1468,68 @@ func TestExecVariable(t *testing.T) {
 	}
 }
 
+func TestExeciVariable(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Test basic execi command with interval
+	result := api.Parse("${execi 60 echo cached}")
+	if result != "cached" {
+		t.Errorf("expected 'cached', got %q", result)
+	}
+
+	// Test that result is cached - second call should return cached value
+	result2 := api.Parse("${execi 60 echo cached}")
+	if result2 != "cached" {
+		t.Errorf("expected cached 'cached', got %q", result2)
+	}
+
+	// Test with missing interval (should return empty)
+	result = api.Parse("${execi echo only}")
+	if result != "" {
+		t.Errorf("expected empty for missing interval, got %q", result)
+	}
+
+	// Test with interval 0 (always re-execute)
+	result = api.Parse("${execi 0 echo fresh}")
+	if result != "fresh" {
+		t.Errorf("expected 'fresh', got %q", result)
+	}
+
+	// Test with multi-word command
+	result = api.Parse("${execi 30 echo hello world}")
+	if result != "hello world" {
+		t.Errorf("expected 'hello world', got %q", result)
+	}
+
+	// Test execpi (same as execi, parsing handled elsewhere)
+	result = api.Parse("${execpi 60 echo parsed}")
+	if result != "parsed" {
+		t.Errorf("expected 'parsed', got %q", result)
+	}
+
+	// Test invalid interval
+	result = api.Parse("${execi abc echo test}")
+	if result != "" {
+		t.Errorf("expected empty for invalid interval, got %q", result)
+	}
+
+	// Test negative interval
+	result = api.Parse("${execi -5 echo test}")
+	if result != "" {
+		t.Errorf("expected empty for negative interval, got %q", result)
+	}
+}
+
 func TestEntropyVariables(t *testing.T) {
 	runtime, err := New(DefaultConfig())
 	if err != nil {

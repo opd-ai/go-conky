@@ -37,11 +37,18 @@ type SystemDataProvider interface {
 	SysInfo() monitor.SystemInfo
 }
 
+// execCacheEntry stores cached output from execi commands.
+type execCacheEntry struct {
+	output    string
+	expiresAt time.Time
+}
+
 // ConkyAPI provides the Conky Lua API implementation.
 // It registers conky_parse() and other Conky functions in the Lua environment.
 type ConkyAPI struct {
 	runtime     *ConkyRuntime
 	sysProvider SystemDataProvider
+	execCache   map[string]*execCacheEntry
 	mu          sync.RWMutex
 }
 
@@ -55,6 +62,7 @@ func NewConkyAPI(runtime *ConkyRuntime, provider SystemDataProvider) (*ConkyAPI,
 	api := &ConkyAPI{
 		runtime:     runtime,
 		sysProvider: provider,
+		execCache:   make(map[string]*execCacheEntry),
 	}
 
 	api.registerFunctions()
@@ -284,6 +292,10 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		return api.resolveExec(args)
 	case "execp":
 		return api.resolveExec(args) // Same as exec, parsing handled elsewhere
+	case "execi":
+		return api.resolveExeci(args)
+	case "execpi":
+		return api.resolveExeci(args) // Same as execi, parsing handled elsewhere
 
 	// Text formatting variables (return empty/spacing - actual formatting in renderer)
 	case "color", "color0", "color1", "color2", "color3", "color4",
@@ -1104,6 +1116,57 @@ func (api *ConkyAPI) resolveExec(args []string) string {
 
 	// Trim trailing newlines
 	return strings.TrimRight(string(output), "\n\r")
+}
+
+// resolveExeci executes a shell command with interval-based caching.
+// Usage: ${execi interval command}
+// The command output is cached for 'interval' seconds before re-execution.
+func (api *ConkyAPI) resolveExeci(args []string) string {
+	if len(args) < 2 {
+		return ""
+	}
+
+	// Parse interval from first argument
+	interval, err := strconv.Atoi(args[0])
+	if err != nil || interval < 0 {
+		return ""
+	}
+
+	// Build command string from remaining arguments
+	cmdStr := strings.Join(args[1:], " ")
+
+	// Check cache with read lock
+	api.mu.RLock()
+	entry, exists := api.execCache[cmdStr]
+	api.mu.RUnlock()
+
+	now := time.Now()
+	if exists && now.Before(entry.expiresAt) {
+		return entry.output
+	}
+
+	// Cache miss or expired - execute command
+	cmd := exec.Command("sh", "-c", cmdStr)
+	output, err := cmd.Output()
+	if err != nil {
+		// On error, return cached value if available, otherwise empty
+		if exists {
+			return entry.output
+		}
+		return ""
+	}
+
+	result := strings.TrimRight(string(output), "\n\r")
+
+	// Update cache with write lock
+	api.mu.Lock()
+	api.execCache[cmdStr] = &execCacheEntry{
+		output:    result,
+		expiresAt: now.Add(time.Duration(interval) * time.Second),
+	}
+	api.mu.Unlock()
+
+	return result
 }
 
 // resolveHR returns a horizontal rule of specified length.
