@@ -94,22 +94,30 @@ Total Gaps Found: 9
    - `CAIRO_FONT_WEIGHT_NORMAL`, `CAIRO_FONT_WEIGHT_BOLD`
    - `CAIRO_FORMAT_ARGB32`, `CAIRO_FORMAT_RGB24`, `CAIRO_FORMAT_A8`, `CAIRO_FORMAT_A1`, `CAIRO_FORMAT_RGB16_565`
 
-**Current Function Count:** ~35 implemented functions (up from 30)
+**Current Function Count:** ~41 implemented functions (up from 35)
 
 **Implementation Files:**
-- `internal/render/cairo.go` - Added CairoSurface type, CairoContext type, and surface management methods
-- `internal/render/cairo_test.go` - Comprehensive tests for surface and context management
-- `internal/lua/cairo_bindings.go` - Added Lua bindings for surface management functions
+- `internal/render/cairo.go` - Added CairoSurface type, CairoContext type, surface management methods, relative path functions, and clip functions
+- `internal/render/cairo_test.go` - Comprehensive tests for surface and context management, relative paths, and clipping
+- `internal/lua/cairo_bindings.go` - Added Lua bindings for surface management, relative path, and clip functions
 - `internal/lua/cairo_bindings_test.go` - Tests for new Lua bindings
 - `internal/lua/cairo_module.go` - Added surface functions to cairo module
 - `internal/lua/errors.go` - Added new error types for surface operations
 
-**Remaining Work:** Additional Cairo functions for full compatibility:
-- Additional path functions: `cairo_rel_move_to`, `cairo_rel_line_to`, `cairo_rel_curve_to`
-- Pattern functions: `cairo_pattern_create_*`, `cairo_set_source`
-- Clip functions: `cairo_clip`, `cairo_reset_clip`
+**Newly Added Functions (6 functions):**
+1. `cairo_rel_move_to(dx, dy)` - Move current point by relative offset
+2. `cairo_rel_line_to(dx, dy)` - Draw line by relative offset
+3. `cairo_rel_curve_to(dx1, dy1, dx2, dy2, dx3, dy3)` - Draw cubic Bézier curve with relative control points
+4. `cairo_clip()` - Establish clip region from current path (clears path)
+5. `cairo_clip_preserve()` - Establish clip region from current path (preserves path)
+6. `cairo_reset_clip()` - Reset clip region to infinite
 
-**Production Impact:** Moderate - Text rendering, transformations, and surface management now work. Users can create surfaces, contexts, and properly manage Cairo resources. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly with context-based drawing.
+**Remaining Work:** Additional Cairo functions for full compatibility:
+- Pattern functions: `cairo_pattern_create_*`, `cairo_set_source`
+- More clip functions: `cairo_clip_extents`, `cairo_in_clip`
+- Path query functions: `cairo_get_current_point`, `cairo_path_extents`
+
+**Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, and clipping now work. Users can create surfaces, contexts, use relative drawing commands, and clip drawing regions. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly with context-based drawing.
 
 **Usage Example:**
 ```lua
@@ -372,7 +380,7 @@ c.Start() // No window, monitor runs in background
 | Gap # | Description | Severity | Category | Status |
 |-------|-------------|----------|----------|--------|
 | 1 | Variable count (42 vs 200+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 10 system info variables |
-| 2 | Cairo functions (35 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 15 text/transform/surface functions |
+| 2 | Cairo functions (41 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 21 functions (text/transform/surface/relative path/clip) |
 | 3 | `require 'cairo'` pattern not supported | Moderate | Feature Gap | ✅ Fixed - cairo module and conky_window implemented |
 | 4 | Uptime format mismatch | Minor | Behavioral Nuance | ✅ Fixed - docs updated to match implementation |
 | 5 | `--convert` CLI flag not implemented | Minor | Feature Gap | ✅ Fixed - CLI flag implemented in main.go |

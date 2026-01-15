@@ -1295,3 +1295,359 @@ func TestCairoBindings_ContextBasedDrawingVerifiesRenderer(t *testing.T) {
 		t.Error("Expected context-based drawing to succeed")
 	}
 }
+
+// --- Relative Path Function Tests ---
+
+func TestCairoBindings_RelMoveTo(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test relative move
+	_, err = runtime.ExecuteString("test", `
+		cairo_move_to(100, 100)
+		cairo_rel_move_to(50, 25)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_rel_move_to: %v", err)
+	}
+
+	// Verify the current point moved relatively
+	x, y, hasPoint := cb.Renderer().GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected current point after cairo_rel_move_to")
+	}
+	if x != 150 || y != 125 {
+		t.Errorf("Expected current point (150, 125), got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoBindings_RelLineTo(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test relative line
+	_, err = runtime.ExecuteString("test", `
+		cairo_move_to(100, 100)
+		cairo_rel_line_to(50, 25)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_rel_line_to: %v", err)
+	}
+
+	// Verify the current point moved relatively
+	x, y, hasPoint := cb.Renderer().GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected current point after cairo_rel_line_to")
+	}
+	if x != 150 || y != 125 {
+		t.Errorf("Expected current point (150, 125), got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoBindings_RelCurveTo(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test relative curve
+	_, err = runtime.ExecuteString("test", `
+		cairo_move_to(100, 100)
+		cairo_rel_curve_to(10, 20, 30, 40, 50, 60)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_rel_curve_to: %v", err)
+	}
+
+	// Verify the current point moved to the end point (100+50, 100+60)
+	x, y, hasPoint := cb.Renderer().GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected current point after cairo_rel_curve_to")
+	}
+	if x != 150 || y != 160 {
+		t.Errorf("Expected current point (150, 160), got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoBindings_RelMoveToNoPath(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test relative move without a current point (should do nothing)
+	_, err = runtime.ExecuteString("test", `
+		cairo_new_path()
+		cairo_rel_move_to(50, 25)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_rel_move_to: %v", err)
+	}
+
+	// Verify there is no current point
+	_, _, hasPoint := cb.Renderer().GetCurrentPoint()
+	if hasPoint {
+		t.Error("Expected no current point after cairo_rel_move_to without initial point")
+	}
+}
+
+func TestCairoBindings_RelativePathChain(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test a chain of relative path operations
+	_, err = runtime.ExecuteString("test", `
+		cairo_move_to(0, 0)
+		cairo_rel_line_to(100, 0)
+		cairo_rel_line_to(0, 100)
+		cairo_rel_line_to(-100, 0)
+		cairo_close_path()
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute relative path chain: %v", err)
+	}
+
+	// Verify the final current point (0, 100)
+	x, y, hasPoint := cb.Renderer().GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected current point after relative path chain")
+	}
+	if x != 0 || y != 100 {
+		t.Errorf("Expected current point (0, 100), got (%f, %f)", x, y)
+	}
+}
+
+// --- Clipping Function Tests ---
+
+func TestCairoBindings_Clip(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test clip
+	_, err = runtime.ExecuteString("test", `
+		cairo_rectangle(10, 10, 100, 100)
+		cairo_clip()
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_clip: %v", err)
+	}
+
+	// Verify clip is set and path is cleared
+	if !cb.Renderer().HasClip() {
+		t.Error("Expected clip to be set after cairo_clip")
+	}
+
+	// Path should be cleared after clip
+	_, _, hasPoint := cb.Renderer().GetCurrentPoint()
+	if hasPoint {
+		t.Error("Expected path to be cleared after cairo_clip")
+	}
+}
+
+func TestCairoBindings_ClipPreserve(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test clip preserve
+	_, err = runtime.ExecuteString("test", `
+		cairo_rectangle(10, 10, 100, 100)
+		cairo_clip_preserve()
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_clip_preserve: %v", err)
+	}
+
+	// Verify clip is set and path is preserved
+	if !cb.Renderer().HasClip() {
+		t.Error("Expected clip to be set after cairo_clip_preserve")
+	}
+
+	// Path should be preserved after clip_preserve
+	_, _, hasPoint := cb.Renderer().GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected path to be preserved after cairo_clip_preserve")
+	}
+}
+
+func TestCairoBindings_ResetClip(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Set and then reset clip
+	_, err = runtime.ExecuteString("test", `
+		cairo_rectangle(10, 10, 100, 100)
+		cairo_clip()
+		cairo_reset_clip()
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_reset_clip: %v", err)
+	}
+
+	// Verify clip is reset
+	if cb.Renderer().HasClip() {
+		t.Error("Expected clip to be reset after cairo_reset_clip")
+	}
+}
+
+func TestCairoBindings_ClipSaveRestore(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test that clip is saved and restored
+	_, err = runtime.ExecuteString("test", `
+		-- Save initial state (no clip)
+		cairo_save()
+		
+		-- Set clip
+		cairo_rectangle(10, 10, 100, 100)
+		cairo_clip()
+		
+		-- Restore state (should restore no-clip)
+		cairo_restore()
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute clip save/restore: %v", err)
+	}
+
+	// Verify clip is restored to no-clip state
+	if cb.Renderer().HasClip() {
+		t.Error("Expected clip to be restored (no clip) after cairo_restore")
+	}
+}
+
+func TestCairoBindings_ClipNoPath(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test clip without a path (should do nothing)
+	_, err = runtime.ExecuteString("test", `
+		cairo_new_path()
+		cairo_clip()
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_clip without path: %v", err)
+	}
+
+	// Verify clip is not set
+	if cb.Renderer().HasClip() {
+		t.Error("Expected no clip after cairo_clip without path")
+	}
+}
+
+func TestCairoBindings_ComplexClippingWorkflow(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test a complex clipping workflow
+	luaCode := `
+		-- Set up a clip region
+		cairo_save()
+		cairo_rectangle(0, 0, 100, 100)
+		cairo_clip()
+		
+		-- Draw something within the clip
+		cairo_set_source_rgb(1, 0, 0)
+		cairo_rectangle(50, 50, 100, 100)
+		cairo_fill()
+		
+		-- Reset and draw without clip
+		cairo_reset_clip()
+		cairo_rectangle(200, 200, 50, 50)
+		cairo_fill()
+		
+		cairo_restore()
+		return true
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute complex clipping workflow: %v", err)
+	}
+
+	if !result.AsBool() {
+		t.Error("Expected complex clipping workflow to succeed")
+	}
+}

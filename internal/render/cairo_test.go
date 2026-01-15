@@ -1150,3 +1150,274 @@ func TestCairoContext_ConcurrentAccess(t *testing.T) {
 	ctx.Destroy()
 	surface.Destroy()
 }
+
+// --- Relative Path Function Tests ---
+
+func TestCairoRenderer_RelMoveTo(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// First move to an absolute position
+	cr.MoveTo(100, 100)
+
+	// Verify initial position
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after MoveTo")
+	}
+	if x != 100 || y != 100 {
+		t.Errorf("Expected initial position (100, 100), got (%f, %f)", x, y)
+	}
+
+	// Now do a relative move
+	cr.RelMoveTo(50, 25)
+
+	// Verify relative move
+	x, y, hasPoint = cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after RelMoveTo")
+	}
+	if x != 150 || y != 125 {
+		t.Errorf("Expected position (150, 125) after RelMoveTo, got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoRenderer_RelMoveToNoPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Relative move without a current point should do nothing
+	cr.RelMoveTo(50, 25)
+
+	// Verify no current point
+	_, _, hasPoint := cr.GetCurrentPoint()
+	if hasPoint {
+		t.Error("Expected no current point after RelMoveTo without initial point")
+	}
+}
+
+func TestCairoRenderer_RelLineTo(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// First move to an absolute position
+	cr.MoveTo(100, 100)
+
+	// Now do a relative line
+	cr.RelLineTo(50, 25)
+
+	// Verify relative line end point
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after RelLineTo")
+	}
+	if x != 150 || y != 125 {
+		t.Errorf("Expected position (150, 125) after RelLineTo, got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoRenderer_RelLineToNoPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Relative line without a current point should do nothing
+	cr.RelLineTo(50, 25)
+
+	// Verify no current point
+	_, _, hasPoint := cr.GetCurrentPoint()
+	if hasPoint {
+		t.Error("Expected no current point after RelLineTo without initial point")
+	}
+}
+
+func TestCairoRenderer_RelCurveTo(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// First move to an absolute position
+	cr.MoveTo(100, 100)
+
+	// Now do a relative curve
+	cr.RelCurveTo(10, 20, 30, 40, 50, 60)
+
+	// Verify relative curve end point
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after RelCurveTo")
+	}
+	// End point should be (100+50, 100+60) = (150, 160)
+	if x != 150 || y != 160 {
+		t.Errorf("Expected position (150, 160) after RelCurveTo, got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoRenderer_RelCurveToNoPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Relative curve without a current point should do nothing
+	cr.RelCurveTo(10, 20, 30, 40, 50, 60)
+
+	// Verify no current point
+	_, _, hasPoint := cr.GetCurrentPoint()
+	if hasPoint {
+		t.Error("Expected no current point after RelCurveTo without initial point")
+	}
+}
+
+func TestCairoRenderer_RelativePathChain(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create a square using relative moves
+	cr.MoveTo(0, 0)
+	cr.RelLineTo(100, 0)   // right
+	cr.RelLineTo(0, 100)   // down
+	cr.RelLineTo(-100, 0)  // left
+	cr.RelLineTo(0, -100)  // up (back to start)
+
+	// Verify we're back at the origin
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after relative path chain")
+	}
+	if x != 0 || y != 0 {
+		t.Errorf("Expected position (0, 0) after relative square, got (%f, %f)", x, y)
+	}
+}
+
+// --- Clipping Function Tests ---
+
+func TestCairoRenderer_Clip(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create a clip path
+	cr.Rectangle(10, 10, 100, 100)
+
+	// Verify we have a path before clip
+	_, _, hasPointBefore := cr.GetCurrentPoint()
+	if !hasPointBefore {
+		t.Fatal("Expected current point before clip")
+	}
+
+	// Apply clip
+	cr.Clip()
+
+	// Verify clip is set and path is cleared
+	if !cr.HasClip() {
+		t.Error("Expected clip to be set after Clip()")
+	}
+
+	// Path should be cleared after clip
+	_, _, hasPointAfter := cr.GetCurrentPoint()
+	if hasPointAfter {
+		t.Error("Expected path to be cleared after Clip()")
+	}
+}
+
+func TestCairoRenderer_ClipNoPath(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Clip without a path should do nothing
+	cr.Clip()
+
+	// Verify clip is not set
+	if cr.HasClip() {
+		t.Error("Expected no clip after Clip() without path")
+	}
+}
+
+func TestCairoRenderer_ClipPreserve(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create a clip path
+	cr.Rectangle(10, 10, 100, 100)
+
+	// Apply clip preserve
+	cr.ClipPreserve()
+
+	// Verify clip is set and path is preserved
+	if !cr.HasClip() {
+		t.Error("Expected clip to be set after ClipPreserve()")
+	}
+
+	// Path should be preserved after clip preserve
+	_, _, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected path to be preserved after ClipPreserve()")
+	}
+}
+
+func TestCairoRenderer_ResetClip(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set clip
+	cr.Rectangle(10, 10, 100, 100)
+	cr.Clip()
+
+	// Verify clip is set
+	if !cr.HasClip() {
+		t.Fatal("Expected clip to be set before reset")
+	}
+
+	// Reset clip
+	cr.ResetClip()
+
+	// Verify clip is reset
+	if cr.HasClip() {
+		t.Error("Expected clip to be reset after ResetClip()")
+	}
+}
+
+func TestCairoRenderer_ClipSaveRestore(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Save initial state (no clip)
+	cr.Save()
+
+	// Set clip
+	cr.Rectangle(10, 10, 100, 100)
+	cr.Clip()
+
+	// Verify clip is set
+	if !cr.HasClip() {
+		t.Fatal("Expected clip to be set after Clip()")
+	}
+
+	// Restore state
+	cr.Restore()
+
+	// Verify clip is restored to no-clip state
+	if cr.HasClip() {
+		t.Error("Expected clip to be restored (no clip) after Restore()")
+	}
+}
+
+func TestCairoRenderer_ClipSaveRestoreWithClip(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set initial clip
+	cr.Rectangle(0, 0, 50, 50)
+	cr.Clip()
+
+	// Save state with clip
+	cr.Save()
+
+	// Reset clip
+	cr.ResetClip()
+
+	// Verify no clip
+	if cr.HasClip() {
+		t.Fatal("Expected no clip after ResetClip()")
+	}
+
+	// Restore state
+	cr.Restore()
+
+	// Verify clip is restored
+	if !cr.HasClip() {
+		t.Error("Expected clip to be restored after Restore()")
+	}
+}
+
+func TestCairoRenderer_HasClipInitialState(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Verify initial state has no clip
+	if cr.HasClip() {
+		t.Error("Expected no clip in initial state")
+	}
+}
