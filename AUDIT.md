@@ -117,7 +117,7 @@ Total Gaps Found: 9
 - More clip functions: `cairo_clip_extents`, `cairo_in_clip`
 - Path query functions: `cairo_get_current_point`, `cairo_path_extents`
 
-**Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, and clipping now work. Users can create surfaces, contexts, use relative drawing commands, and clip drawing regions. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly with context-based drawing.
+**Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, and clipping state tracking now work (clip regions are recorded but not yet enforced during drawing). Users can create surfaces, contexts, use relative drawing commands, and define clip regions for future enforcement. Scripts that use the standard Conky pattern of creating surfaces from conky_window now execute correctly with context-based drawing.
 
 **Usage Example:**
 ```lua
