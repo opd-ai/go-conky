@@ -1,5 +1,5 @@
-//go:build linux && !android
-// +build linux,!android
+//go:build android
+// +build android
 
 package platform
 
@@ -8,11 +8,11 @@ import (
 	"testing"
 )
 
-func TestLinuxPlatform_Initialize(t *testing.T) {
-	platform := NewLinuxPlatform()
+func TestAndroidPlatform_Initialize(t *testing.T) {
+	platform := NewAndroidPlatform()
 
-	if platform.Name() != "linux" {
-		t.Errorf("Name() = %v, want linux", platform.Name())
+	if platform.Name() != "android" {
+		t.Errorf("Name() = %v, want android", platform.Name())
 	}
 
 	ctx := context.Background()
@@ -43,8 +43,8 @@ func TestLinuxPlatform_Initialize(t *testing.T) {
 	}
 }
 
-func TestLinuxPlatform_Close(t *testing.T) {
-	platform := NewLinuxPlatform()
+func TestAndroidPlatform_Close(t *testing.T) {
+	platform := NewAndroidPlatform()
 
 	ctx := context.Background()
 	err := platform.Initialize(ctx)
@@ -64,8 +64,8 @@ func TestLinuxPlatform_Close(t *testing.T) {
 	}
 }
 
-func TestLinuxPlatform_ConcurrentAccess(t *testing.T) {
-	platform := NewLinuxPlatform()
+func TestAndroidPlatform_ConcurrentAccess(t *testing.T) {
+	platform := NewAndroidPlatform()
 
 	ctx := context.Background()
 	err := platform.Initialize(ctx)

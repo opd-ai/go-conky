@@ -1,5 +1,5 @@
-//go:build linux && !android
-// +build linux,!android
+//go:build android
+// +build android
 
 package platform
 
@@ -13,18 +13,19 @@ import (
 	"time"
 )
 
-// linuxFilesystemProvider implements FilesystemProvider for Linux systems.
-type linuxFilesystemProvider struct {
+// androidFilesystemProvider implements FilesystemProvider for Android systems.
+// Android uses the same filesystem interface as Linux.
+type androidFilesystemProvider struct {
 	procMountsPath string
 }
 
-func newLinuxFilesystemProvider() *linuxFilesystemProvider {
-	return &linuxFilesystemProvider{
+func newAndroidFilesystemProvider() *androidFilesystemProvider {
+	return &androidFilesystemProvider{
 		procMountsPath: "/proc/mounts",
 	}
 }
 
-func (f *linuxFilesystemProvider) Mounts() ([]MountInfo, error) {
+func (f *androidFilesystemProvider) Mounts() ([]MountInfo, error) {
 	file, err := os.Open(f.procMountsPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", f.procMountsPath, err)
@@ -66,7 +67,7 @@ func (f *linuxFilesystemProvider) Mounts() ([]MountInfo, error) {
 	return mounts, nil
 }
 
-func (f *linuxFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, error) {
+func (f *androidFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, error) {
 	var statfs syscall.Statfs_t
 	if err := syscall.Statfs(mountPoint, &statfs); err != nil {
 		return nil, fmt.Errorf("statfs %s: %w", mountPoint, err)
@@ -107,7 +108,7 @@ func (f *linuxFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, er
 	}, nil
 }
 
-func (f *linuxFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
+func (f *androidFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
 	// Read from /proc/diskstats
 	file, err := os.Open("/proc/diskstats")
 	if err != nil {
@@ -129,7 +130,6 @@ func (f *linuxFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
 		}
 
 		// Parse disk I/O statistics
-		// Field layout: https://www.kernel.org/doc/Documentation/ABI/testing/procfs-diskstats
 		readsCompleted := parseUint64(fields[3])
 		sectorsRead := parseUint64(fields[5])
 		readTimeMs := parseUint64(fields[6])
@@ -161,11 +161,9 @@ func (f *linuxFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
 
 // unescapeMountPath unescapes octal sequences in mount paths from /proc/mounts.
 func unescapeMountPath(path string) string {
-	// /proc/mounts escapes spaces and other characters as octal sequences (e.g., \040 for space)
 	result := strings.Builder{}
 	for i := 0; i < len(path); i++ {
 		if path[i] == '\\' && i+3 < len(path) {
-			// Try to parse octal sequence
 			octalStr := path[i+1 : i+4]
 			if val, err := strconv.ParseInt(octalStr, 8, 32); err == nil {
 				result.WriteByte(byte(val))
@@ -199,6 +197,8 @@ func isVirtualFS(fsType string) bool {
 		"hugetlbfs":  true,
 		"autofs":     true,
 		"rpc_pipefs": true,
+		"selinuxfs":  true, // Android-specific
+		"functionfs": true, // Android-specific (USB)
 	}
 	return virtualFS[fsType]
 }

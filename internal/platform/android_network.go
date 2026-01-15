@@ -1,5 +1,5 @@
-//go:build linux && !android
-// +build linux,!android
+//go:build android
+// +build android
 
 package platform
 
@@ -11,8 +11,9 @@ import (
 	"sync"
 )
 
-// linuxNetworkProvider implements NetworkProvider for Linux systems by reading /proc/net/dev.
-type linuxNetworkProvider struct {
+// androidNetworkProvider implements NetworkProvider for Android systems.
+// Android uses /proc/net/dev similar to Linux for network statistics.
+type androidNetworkProvider struct {
 	mu             sync.Mutex
 	procNetDevPath string
 }
@@ -29,13 +30,13 @@ type rawNetStats struct {
 	dropOut     uint64
 }
 
-func newLinuxNetworkProvider() *linuxNetworkProvider {
-	return &linuxNetworkProvider{
+func newAndroidNetworkProvider() *androidNetworkProvider {
+	return &androidNetworkProvider{
 		procNetDevPath: "/proc/net/dev",
 	}
 }
 
-func (n *linuxNetworkProvider) Interfaces() ([]string, error) {
+func (n *androidNetworkProvider) Interfaces() ([]string, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -52,7 +53,7 @@ func (n *linuxNetworkProvider) Interfaces() ([]string, error) {
 	return interfaces, nil
 }
 
-func (n *linuxNetworkProvider) Stats(interfaceName string) (*NetworkStats, error) {
+func (n *androidNetworkProvider) Stats(interfaceName string) (*NetworkStats, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -78,7 +79,7 @@ func (n *linuxNetworkProvider) Stats(interfaceName string) (*NetworkStats, error
 	}, nil
 }
 
-func (n *linuxNetworkProvider) AllStats() (map[string]*NetworkStats, error) {
+func (n *androidNetworkProvider) AllStats() (map[string]*NetworkStats, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -105,7 +106,7 @@ func (n *linuxNetworkProvider) AllStats() (map[string]*NetworkStats, error) {
 }
 
 // readProcNetDev parses /proc/net/dev and returns raw network statistics.
-func (n *linuxNetworkProvider) readProcNetDev() (map[string]rawNetStats, error) {
+func (n *androidNetworkProvider) readProcNetDev() (map[string]rawNetStats, error) {
 	file, err := os.Open(n.procNetDevPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", n.procNetDevPath, err)
