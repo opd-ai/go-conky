@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/opd-ai/go-conky/internal/config"
 	"github.com/opd-ai/go-conky/internal/profiling"
 	"github.com/opd-ai/go-conky/pkg/conky"
 )
@@ -30,11 +31,17 @@ func run() int {
 	version := flag.Bool("v", false, "Print version and exit")
 	cpuProfile := flag.String("cpuprofile", "", "Write CPU profile to file")
 	memProfile := flag.String("memprofile", "", "Write memory profile to file")
+	convert := flag.String("convert", "", "Convert legacy .conkyrc to Lua format and print to stdout")
 	flag.Parse()
 
 	if *version {
 		fmt.Printf("conky-go version %s\n", Version)
 		return 0
+	}
+
+	// Handle --convert flag for legacy config migration
+	if *convert != "" {
+		return runConvert(*convert)
 	}
 
 	// Initialize profiling if requested
@@ -117,5 +124,30 @@ func run() int {
 		}
 	}
 
+	return 0
+}
+
+// runConvert converts a legacy .conkyrc file to Lua format and outputs to stdout.
+// This implements the --convert CLI flag documented in docs/migration.md.
+func runConvert(path string) int {
+	// Verify file exists
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "Configuration file not found: %s\n", path)
+		} else {
+			fmt.Fprintf(os.Stderr, "Error accessing configuration file %s: %v\n", path, err)
+		}
+		return 1
+	}
+
+	// Migrate the legacy config to Lua format
+	luaContent, err := config.MigrateLegacyFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error converting configuration: %v\n", err)
+		return 1
+	}
+
+	// Output to stdout (user can redirect to file)
+	fmt.Print(string(luaContent))
 	return 0
 }

@@ -9,7 +9,7 @@ Total Gaps Found: 8
 - Moderate: 5
 - Minor: 3
 
-**Fixed Gaps: 3** (Gap #4, #6, #7 - documentation updates)
+**Fixed Gaps: 4** (Gap #4, #5, #6, #7 - documentation updates and CLI feature)
 
 ## Detailed Findings
 
@@ -178,38 +178,23 @@ if days > 0 {
 > "# Convert a legacy config to Lua (future feature)
 > ./conky-go --convert ~/.conkyrc > ~/.config/conky/conky.conf" (docs/migration.md:102-103)
 
-**Implementation Location:** `cmd/conky-go/main.go:28-33`
+**Implementation Location:** `cmd/conky-go/main.go:28-45`
 
-**Expected Behavior:** A `--convert` CLI flag should convert legacy configurations to modern Lua format.
+**Status:** ✅ **FIXED**
 
-**Actual Implementation:** The `main.go` only implements these flags:
-- `-c` for config path
-- `-v` for version
-- `--cpuprofile` for CPU profiling
-- `--memprofile` for memory profiling
+**Fix Details:** The `--convert` flag has been implemented in `cmd/conky-go/main.go`. It uses the existing `config.MigrateLegacyFile()` function to convert legacy .conkyrc files to Lua format and outputs to stdout.
 
-The `--convert` flag mentioned in migration.md is not implemented. However, the `internal/config/migration.go` file contains the `MigrateLegacyFile()` function that could power this feature.
-
-**Gap Details:** The migration functionality exists in the library (`config.MigrateLegacyFile`, `config.MigrateLegacyContent`) but is not exposed via CLI. Users cannot convert configurations from command line as documented.
-
-**Reproduction:**
+**Usage:**
 ```bash
-# This command from docs/migration.md fails:
+# Convert a legacy config to Lua format
 ./conky-go --convert ~/.conkyrc > ~/.config/conky/conky.conf
-# Error: flag provided but not defined: -convert
 ```
 
-**Production Impact:** Minor - The migration code exists but is inaccessible via CLI. Users can still run legacy configs directly or use the library programmatically.
-
-**Evidence:**
-```go
-// main.go:28-33 - Only these flags exist:
-configPath := flag.String("c", "", "Path to configuration file")
-version := flag.Bool("v", false, "Print version and exit")
-cpuProfile := flag.String("cpuprofile", "", "Write CPU profile to file")
-memProfile := flag.String("memprofile", "", "Write memory profile to file")
-// No --convert flag
-```
+**Implementation:**
+- Added `--convert` flag to CLI (line 34)
+- Added `runConvert()` function to handle the conversion (lines 130-153)
+- Proper error handling for missing files and invalid content
+- Unit tests added in `cmd/conky-go/main_test.go`
 
 ---
 
@@ -347,7 +332,7 @@ go func() {
 | 2 | Cairo functions (20 vs 180+) | Moderate | Feature Gap | Open |
 | 3 | `require 'cairo'` pattern not supported | Moderate | Feature Gap | Open |
 | 4 | Uptime format mismatch | Minor | Behavioral Nuance | ✅ Fixed - docs updated to match implementation |
-| 5 | `--convert` CLI flag not implemented | Minor | Feature Gap | Open |
+| 5 | `--convert` CLI flag not implemented | Minor | Feature Gap | ✅ Fixed - CLI flag implemented in main.go |
 | 6 | Go version requirement mismatch | Minor | Documentation Drift | ✅ Fixed - go.mod uses Go 1.24.11, docs are correct |
 | 7 | Cross-platform status inconsistency | Minor | Documentation Drift | ✅ Fixed - migration.md updated |
 | 8 | Rendering loop not integrated | Moderate | Integration Gap | Open |
@@ -362,7 +347,7 @@ go func() {
 
 4. **Implement `conky_window` global** - Required for Cairo surface creation in existing scripts.
 
-5. **Add `--convert` CLI flag** - The migration code exists; just needs CLI exposure.
+5. ~~**Add `--convert` CLI flag** - The migration code exists; just needs CLI exposure.~~ ✅ FIXED
 
 6. **Complete Ebiten rendering integration** - Connect `render.Game` to the public `Conky` interface.
 
