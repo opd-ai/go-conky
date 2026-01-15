@@ -151,6 +151,32 @@ func (cb *CairoBindings) registerFunctions() {
 	cb.runtime.SetGoFunction("cairo_get_line_join", cb.getLineJoin, 0, true)
 	cb.runtime.SetGoFunction("cairo_get_antialias", cb.getAntialias, 0, true)
 
+	// Hit testing functions
+	cb.runtime.SetGoFunction("cairo_in_fill", cb.inFill, 2, true)
+	cb.runtime.SetGoFunction("cairo_in_stroke", cb.inStroke, 2, true)
+
+	// Path extent functions
+	cb.runtime.SetGoFunction("cairo_stroke_extents", cb.strokeExtents, 0, true)
+	cb.runtime.SetGoFunction("cairo_fill_extents", cb.fillExtents, 0, true)
+
+	// Font functions
+	cb.runtime.SetGoFunction("cairo_font_extents", cb.fontExtents, 0, true)
+	cb.runtime.SetGoFunction("cairo_get_font_face", cb.getFontFace, 0, true)
+	cb.runtime.SetGoFunction("cairo_get_font_size", cb.getFontSize, 0, true)
+
+	// Sub-path function
+	cb.runtime.SetGoFunction("cairo_new_sub_path", cb.newSubPath, 0, true)
+
+	// Coordinate transformation functions
+	cb.runtime.SetGoFunction("cairo_user_to_device", cb.userToDevice, 2, true)
+	cb.runtime.SetGoFunction("cairo_user_to_device_distance", cb.userToDeviceDistance, 2, true)
+	cb.runtime.SetGoFunction("cairo_device_to_user", cb.deviceToUser, 2, true)
+	cb.runtime.SetGoFunction("cairo_device_to_user_distance", cb.deviceToUserDistance, 2, true)
+
+	// Path copying functions
+	cb.runtime.SetGoFunction("cairo_copy_path", cb.copyPath, 0, true)
+	cb.runtime.SetGoFunction("cairo_append_path", cb.appendPath, 1, true)
+
 	// Register Cairo constants
 	cb.registerConstants()
 
@@ -1953,4 +1979,328 @@ func (cb *CairoBindings) getAntialias(t *rt.Thread, c *rt.GoCont) (rt.Cont, erro
 		return c.PushingNext1(t.Runtime, rt.IntValue(1)), nil // CAIRO_ANTIALIAS_DEFAULT
 	}
 	return c.PushingNext1(t.Runtime, rt.IntValue(0)), nil // CAIRO_ANTIALIAS_NONE
+}
+
+// --- Hit Testing Functions ---
+
+// inFill handles cairo_in_fill(x, y)
+func (cb *CairoBindings) inFill(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	startIdx := 0
+	if len(args) > 2 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				startIdx = 1
+			}
+		}
+	}
+	x, _ := args[startIdx].TryFloat()
+	y, _ := args[startIdx+1].TryFloat()
+	result := renderer.InFill(x, y)
+	return c.PushingNext1(t.Runtime, rt.BoolValue(result)), nil
+}
+
+// inStroke handles cairo_in_stroke(x, y)
+func (cb *CairoBindings) inStroke(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	startIdx := 0
+	if len(args) > 2 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				startIdx = 1
+			}
+		}
+	}
+	x, _ := args[startIdx].TryFloat()
+	y, _ := args[startIdx+1].TryFloat()
+	result := renderer.InStroke(x, y)
+	return c.PushingNext1(t.Runtime, rt.BoolValue(result)), nil
+}
+
+// --- Path Extent Functions ---
+
+// strokeExtents handles cairo_stroke_extents()
+func (cb *CairoBindings) strokeExtents(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	x1, y1, x2, y2 := renderer.StrokeExtents()
+	return c.PushingNext(t.Runtime, rt.FloatValue(x1), rt.FloatValue(y1),
+		rt.FloatValue(x2), rt.FloatValue(y2)), nil
+}
+
+// fillExtents handles cairo_fill_extents()
+func (cb *CairoBindings) fillExtents(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	x1, y1, x2, y2 := renderer.FillExtents()
+	return c.PushingNext(t.Runtime, rt.FloatValue(x1), rt.FloatValue(y1),
+		rt.FloatValue(x2), rt.FloatValue(y2)), nil
+}
+
+// --- Font Functions ---
+
+// fontExtents handles cairo_font_extents()
+func (cb *CairoBindings) fontExtents(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	extents := renderer.FontExtents()
+	table := rt.NewTable()
+	table.Set(rt.StringValue("ascent"), rt.FloatValue(extents.Ascent))
+	table.Set(rt.StringValue("descent"), rt.FloatValue(extents.Descent))
+	table.Set(rt.StringValue("height"), rt.FloatValue(extents.Height))
+	table.Set(rt.StringValue("max_x_advance"), rt.FloatValue(extents.MaxXAdvance))
+	table.Set(rt.StringValue("max_y_advance"), rt.FloatValue(extents.MaxYAdvance))
+	return c.PushingNext1(t.Runtime, rt.TableValue(table)), nil
+}
+
+// getFontFace handles cairo_get_font_face()
+func (cb *CairoBindings) getFontFace(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	face := renderer.GetFontFace()
+	return c.PushingNext1(t.Runtime, rt.StringValue(face)), nil
+}
+
+// getFontSize handles cairo_get_font_size()
+func (cb *CairoBindings) getFontSize(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	size := renderer.GetFontSize()
+	return c.PushingNext1(t.Runtime, rt.FloatValue(size)), nil
+}
+
+// --- Sub-path Function ---
+
+// newSubPath handles cairo_new_sub_path()
+func (cb *CairoBindings) newSubPath(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	renderer.NewSubPath()
+	return c.Next(), nil
+}
+
+// --- Coordinate Transformation Functions ---
+
+// userToDevice handles cairo_user_to_device(x, y)
+func (cb *CairoBindings) userToDevice(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	startIdx := 0
+	if len(args) > 2 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				startIdx = 1
+			}
+		}
+	}
+	x, _ := args[startIdx].TryFloat()
+	y, _ := args[startIdx+1].TryFloat()
+	dx, dy := renderer.UserToDevice(x, y)
+	return c.PushingNext(t.Runtime, rt.FloatValue(dx), rt.FloatValue(dy)), nil
+}
+
+// userToDeviceDistance handles cairo_user_to_device_distance(dx, dy)
+func (cb *CairoBindings) userToDeviceDistance(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	startIdx := 0
+	if len(args) > 2 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				startIdx = 1
+			}
+		}
+	}
+	dx, _ := args[startIdx].TryFloat()
+	dy, _ := args[startIdx+1].TryFloat()
+	ddx, ddy := renderer.UserToDeviceDistance(dx, dy)
+	return c.PushingNext(t.Runtime, rt.FloatValue(ddx), rt.FloatValue(ddy)), nil
+}
+
+// deviceToUser handles cairo_device_to_user(x, y)
+func (cb *CairoBindings) deviceToUser(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	startIdx := 0
+	if len(args) > 2 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				startIdx = 1
+			}
+		}
+	}
+	dx, _ := args[startIdx].TryFloat()
+	dy, _ := args[startIdx+1].TryFloat()
+	x, y := renderer.DeviceToUser(dx, dy)
+	return c.PushingNext(t.Runtime, rt.FloatValue(x), rt.FloatValue(y)), nil
+}
+
+// deviceToUserDistance handles cairo_device_to_user_distance(dx, dy)
+func (cb *CairoBindings) deviceToUserDistance(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	startIdx := 0
+	if len(args) > 2 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				startIdx = 1
+			}
+		}
+	}
+	ddx, _ := args[startIdx].TryFloat()
+	ddy, _ := args[startIdx+1].TryFloat()
+	dx, dy := renderer.DeviceToUserDistance(ddx, ddy)
+	return c.PushingNext(t.Runtime, rt.FloatValue(dx), rt.FloatValue(dy)), nil
+}
+
+// --- Path Copying Functions ---
+
+// copyPath handles cairo_copy_path()
+func (cb *CairoBindings) copyPath(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	if len(args) > 0 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+			}
+		}
+	}
+	segments := renderer.CopyPath()
+	// Return as a table of segments
+	table := rt.NewTable()
+	for i, seg := range segments {
+		segTable := rt.NewTable()
+		segTable.Set(rt.StringValue("type"), rt.IntValue(int64(seg.Type)))
+		segTable.Set(rt.StringValue("x"), rt.FloatValue(seg.X))
+		segTable.Set(rt.StringValue("y"), rt.FloatValue(seg.Y))
+		if seg.Type == render.PathCurveTo {
+			segTable.Set(rt.StringValue("x1"), rt.FloatValue(seg.X1))
+			segTable.Set(rt.StringValue("y1"), rt.FloatValue(seg.Y1))
+			segTable.Set(rt.StringValue("x2"), rt.FloatValue(seg.X2))
+			segTable.Set(rt.StringValue("y2"), rt.FloatValue(seg.Y2))
+		}
+		table.Set(rt.IntValue(int64(i+1)), rt.TableValue(segTable))
+	}
+	return c.PushingNext1(t.Runtime, rt.TableValue(table)), nil
+}
+
+// appendPath handles cairo_append_path(path)
+func (cb *CairoBindings) appendPath(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	renderer := cb.renderer
+	startIdx := 0
+	if len(args) > 1 {
+		if ud, ok := args[0].TryUserData(); ok {
+			if ctx, ok := ud.Value().(*sharedContext); ok {
+				renderer = ctx.renderer
+				startIdx = 1
+			}
+		}
+	}
+	pathTable, ok := args[startIdx].TryTable()
+	if !ok {
+		return c.Next(), nil
+	}
+	var segments []render.PathSegment
+	// Iterate through consecutive indices (Lua tables are 1-indexed)
+	for i := int64(1); ; i++ {
+		v := pathTable.Get(rt.IntValue(i))
+		if v == rt.NilValue {
+			break
+		}
+		if segTable, ok := v.TryTable(); ok {
+			seg := render.PathSegment{}
+			if typeVal := segTable.Get(rt.StringValue("type")); typeVal != rt.NilValue {
+				if ti, ok := typeVal.TryInt(); ok {
+					seg.Type = render.PathSegmentType(ti)
+				}
+			}
+			if xVal := segTable.Get(rt.StringValue("x")); xVal != rt.NilValue {
+				if f, ok := xVal.TryFloat(); ok {
+					seg.X = f
+				}
+			}
+			if yVal := segTable.Get(rt.StringValue("y")); yVal != rt.NilValue {
+				if f, ok := yVal.TryFloat(); ok {
+					seg.Y = f
+				}
+			}
+			if seg.Type == render.PathCurveTo {
+				if x1Val := segTable.Get(rt.StringValue("x1")); x1Val != rt.NilValue {
+					if f, ok := x1Val.TryFloat(); ok {
+						seg.X1 = f
+					}
+				}
+				if y1Val := segTable.Get(rt.StringValue("y1")); y1Val != rt.NilValue {
+					if f, ok := y1Val.TryFloat(); ok {
+						seg.Y1 = f
+					}
+				}
+				if x2Val := segTable.Get(rt.StringValue("x2")); x2Val != rt.NilValue {
+					if f, ok := x2Val.TryFloat(); ok {
+						seg.X2 = f
+					}
+				}
+				if y2Val := segTable.Get(rt.StringValue("y2")); y2Val != rt.NilValue {
+					if f, ok := y2Val.TryFloat(); ok {
+						seg.Y2 = f
+					}
+				}
+			}
+			segments = append(segments, seg)
+		}
+	}
+	renderer.AppendPath(segments)
+	return c.Next(), nil
 }

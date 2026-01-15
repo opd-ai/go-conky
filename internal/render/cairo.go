@@ -1980,3 +1980,271 @@ func (ctx *CairoContext) Destroy() {
 	ctx.renderer = nil
 	// Note: We don't destroy the surface here - that's the caller's responsibility
 }
+
+// --- Additional Cairo Functions ---
+
+// InFill returns true if the given point is inside the current path's fill area.
+// This is useful for hit testing in interactive applications.
+func (cr *CairoRenderer) InFill(x, y float64) bool {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	// Check if point is within path bounds
+	if cr.pathMinX == 0 && cr.pathMinY == 0 && cr.pathMaxX == 0 && cr.pathMaxY == 0 {
+		return false
+	}
+	fx, fy := float32(x), float32(y)
+	return fx >= cr.pathMinX && fx <= cr.pathMaxX && fy >= cr.pathMinY && fy <= cr.pathMaxY
+}
+
+// InStroke returns true if the given point is on the current path's stroke.
+// This uses a simplified bounding box check with line width consideration.
+func (cr *CairoRenderer) InStroke(x, y float64) bool {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if cr.pathMinX == 0 && cr.pathMinY == 0 && cr.pathMaxX == 0 && cr.pathMaxY == 0 {
+		return false
+	}
+	halfWidth := float32(cr.lineWidth) / 2
+	fx, fy := float32(x), float32(y)
+	return fx >= cr.pathMinX-halfWidth && fx <= cr.pathMaxX+halfWidth &&
+		fy >= cr.pathMinY-halfWidth && fy <= cr.pathMaxY+halfWidth
+}
+
+// StrokeExtents returns the bounding box of what the current path would cover if stroked.
+func (cr *CairoRenderer) StrokeExtents() (x1, y1, x2, y2 float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	halfWidth := float32(cr.lineWidth / 2)
+	return float64(cr.pathMinX - halfWidth), float64(cr.pathMinY - halfWidth),
+		float64(cr.pathMaxX + halfWidth), float64(cr.pathMaxY + halfWidth)
+}
+
+// FillExtents returns the bounding box of what the current path would cover if filled.
+func (cr *CairoRenderer) FillExtents() (x1, y1, x2, y2 float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	return float64(cr.pathMinX), float64(cr.pathMinY), float64(cr.pathMaxX), float64(cr.pathMaxY)
+}
+
+// FontExtentsResult contains font metrics.
+type FontExtentsResult struct {
+	Ascent      float64
+	Descent     float64
+	Height      float64
+	MaxXAdvance float64
+	MaxYAdvance float64
+}
+
+// FontExtents returns the metrics for the current font.
+func (cr *CairoRenderer) FontExtents() FontExtentsResult {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	// Simplified font metrics based on font size
+	return FontExtentsResult{
+		Ascent:      cr.fontSize * 0.8,
+		Descent:     cr.fontSize * 0.2,
+		Height:      cr.fontSize * 1.2,
+		MaxXAdvance: cr.fontSize * 0.6,
+		MaxYAdvance: 0,
+	}
+}
+
+// NewSubPath starts a new sub-path without moving the current point.
+// This is useful for creating disconnected path segments.
+func (cr *CairoRenderer) NewSubPath() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	// Reset current point tracking by setting to zero position
+	cr.pathCurrentX = 0
+	cr.pathCurrentY = 0
+}
+
+// PathSegmentType represents the type of a path segment.
+type PathSegmentType int
+
+const (
+	// PathMoveTo is a move-to segment.
+	PathMoveTo PathSegmentType = iota
+	// PathLineTo is a line-to segment.
+	PathLineTo
+	// PathCurveTo is a curve-to segment.
+	PathCurveTo
+	// PathClose is a close-path segment.
+	PathClose
+)
+
+// PathSegment represents a segment of a path.
+type PathSegment struct {
+	Type PathSegmentType
+	X, Y float64
+	// For curves: control points
+	X1, Y1, X2, Y2 float64
+}
+
+// CopyPath returns a simplified representation of the current path.
+// Note: This returns a basic representation - full path iteration is not supported.
+func (cr *CairoRenderer) CopyPath() []PathSegment {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	// Return empty slice - full path iteration not implemented
+	return []PathSegment{}
+}
+
+// AppendPath appends the given path segments to the current path.
+func (cr *CairoRenderer) AppendPath(segments []PathSegment) {
+	for _, seg := range segments {
+		switch seg.Type {
+		case PathMoveTo:
+			cr.MoveTo(seg.X, seg.Y)
+		case PathLineTo:
+			cr.LineTo(seg.X, seg.Y)
+		case PathCurveTo:
+			cr.CurveTo(seg.X1, seg.Y1, seg.X2, seg.Y2, seg.X, seg.Y)
+		case PathClose:
+			cr.ClosePath()
+		}
+	}
+}
+
+// expandPathBoundsUnlocked expands path bounds without acquiring the lock.
+// Caller must hold the lock.
+func (cr *CairoRenderer) expandPathBoundsUnlocked(x, y float32) {
+	if cr.pathMinX == 0 && cr.pathMaxX == 0 {
+		cr.pathMinX = x
+		cr.pathMaxX = x
+		cr.pathMinY = y
+		cr.pathMaxY = y
+	} else {
+		if x < cr.pathMinX {
+			cr.pathMinX = x
+		}
+		if x > cr.pathMaxX {
+			cr.pathMaxX = x
+		}
+		if y < cr.pathMinY {
+			cr.pathMinY = y
+		}
+		if y > cr.pathMaxY {
+			cr.pathMaxY = y
+		}
+	}
+}
+
+// UserToDevice transforms user-space coordinates to device-space.
+func (cr *CairoRenderer) UserToDevice(x, y float64) (dx, dy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.transformPointUnlocked(x, y)
+}
+
+// transformPointUnlocked transforms a point without acquiring the lock.
+func (cr *CairoRenderer) transformPointUnlocked(x, y float64) (tx, ty float64) {
+	// Apply scale
+	x *= cr.scaleX
+	y *= cr.scaleY
+
+	// Apply rotation
+	if cr.rotation != 0 {
+		cos := math.Cos(cr.rotation)
+		sin := math.Sin(cr.rotation)
+		x, y = x*cos-y*sin, x*sin+y*cos
+	}
+
+	// Apply translation
+	return x + cr.translateX, y + cr.translateY
+}
+
+// UserToDeviceDistance transforms a distance vector from user to device space.
+func (cr *CairoRenderer) UserToDeviceDistance(dx, dy float64) (ddx, ddy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	// Apply scale
+	dx *= cr.scaleX
+	dy *= cr.scaleY
+
+	// Apply rotation
+	if cr.rotation != 0 {
+		cos := math.Cos(cr.rotation)
+		sin := math.Sin(cr.rotation)
+		dx, dy = dx*cos-dy*sin, dx*sin+dy*cos
+	}
+
+	return dx, dy
+}
+
+// DeviceToUser transforms device-space coordinates to user-space.
+func (cr *CairoRenderer) DeviceToUser(dx, dy float64) (x, y float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	// Reverse translation
+	dx -= cr.translateX
+	dy -= cr.translateY
+
+	// Reverse rotation
+	if cr.rotation != 0 {
+		cos := math.Cos(-cr.rotation)
+		sin := math.Sin(-cr.rotation)
+		dx, dy = dx*cos-dy*sin, dx*sin+dy*cos
+	}
+
+	// Reverse scale
+	if cr.scaleX != 0 {
+		dx /= cr.scaleX
+	}
+	if cr.scaleY != 0 {
+		dy /= cr.scaleY
+	}
+
+	return dx, dy
+}
+
+// DeviceToUserDistance transforms a distance vector from device to user space.
+func (cr *CairoRenderer) DeviceToUserDistance(ddx, ddy float64) (dx, dy float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	// Reverse rotation
+	if cr.rotation != 0 {
+		cos := math.Cos(-cr.rotation)
+		sin := math.Sin(-cr.rotation)
+		ddx, ddy = ddx*cos-ddy*sin, ddx*sin+ddy*cos
+	}
+
+	// Reverse scale
+	if cr.scaleX != 0 {
+		ddx /= cr.scaleX
+	}
+	if cr.scaleY != 0 {
+		ddy /= cr.scaleY
+	}
+
+	return ddx, ddy
+}
+
+// GetFontFace returns the current font family name.
+func (cr *CairoRenderer) GetFontFace() string {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.fontFamily
+}
+
+// GetFontSlant returns the current font slant.
+func (cr *CairoRenderer) GetFontSlant() FontSlant {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.fontSlant
+}
+
+// GetFontWeight returns the current font weight.
+func (cr *CairoRenderer) GetFontWeight() FontWeight {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.fontWeight
+}

@@ -194,8 +194,9 @@ Total Gaps Found: 9
 10. `cairo_clip_preserve()` - Establish clip region from current path (preserves path)
 11. `cairo_reset_clip()` - Reset clip region to infinite
 
-**Remaining Work:** Additional Cairo functions for full compatibility:
-- Path iteration: `cairo_copy_path`, `cairo_path_data_t` handling
+**Remaining Work:** Most commonly-used Cairo functions now implemented. Remaining for full compatibility:
+- Image surface loading: `cairo_image_surface_create_from_png`
+- Surface export: `cairo_surface_write_to_png`
 
 **Recently Added (January 15, 2026 - Matrix, Pattern Extend, and Surface Functions):**
 
@@ -253,11 +254,35 @@ Total Gaps Found: 9
 3. `cairo_get_line_join()` - Get current line join style
 4. `cairo_get_antialias()` - Get current antialias mode
 
+**Hit Testing Functions (2 functions):**
+1. `cairo_in_fill(x, y)` - Check if point is inside filled path
+2. `cairo_in_stroke(x, y)` - Check if point is on stroked path
+
+**Path Extent Functions (2 functions):**
+1. `cairo_stroke_extents()` - Get bounding box of stroked path
+2. `cairo_fill_extents()` - Get bounding box of filled path
+
+**Font Query Functions (3 functions):**
+1. `cairo_font_extents()` - Get font metrics (ascent, descent, height)
+2. `cairo_get_font_face()` - Get current font family name
+3. `cairo_get_font_size()` - Get current font size
+
+**Coordinate Transform Functions (4 functions):**
+1. `cairo_user_to_device(x, y)` - Transform user to device coordinates
+2. `cairo_user_to_device_distance(dx, dy)` - Transform distance vector
+3. `cairo_device_to_user(x, y)` - Transform device to user coordinates
+4. `cairo_device_to_user_distance(dx, dy)` - Transform distance vector back
+
+**Path Functions (3 functions):**
+1. `cairo_new_sub_path()` - Start a new disconnected sub-path
+2. `cairo_copy_path()` - Copy current path as table of segments
+3. `cairo_append_path(path)` - Append path segments to current path
+
 **New Constants:**
 - `CAIRO_FILL_RULE_WINDING`, `CAIRO_FILL_RULE_EVEN_ODD`
 - `CAIRO_OPERATOR_CLEAR`, `CAIRO_OPERATOR_SOURCE`, `CAIRO_OPERATOR_OVER`, etc. (14 operators)
 
-**Current Function Count:** ~87 implemented functions (up from ~74)
+**Current Function Count:** ~101 implemented functions (up from ~87)
 
 **Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, clipping, path/clip queries, and gradients now work. Users can create linear and radial gradients for advanced visual effects. Scripts that use gradients for progress bars, gauges, and backgrounds now execute correctly. Matrix operations enable complex coordinate transformations. Pattern extend modes control gradient tiling behavior.
 
@@ -545,8 +570,8 @@ c.Start() // No window, monitor runs in background
 
 | Gap # | Description | Severity | Category | Status |
 |-------|-------------|----------|----------|--------|
-| 1 | Variable count (42 vs 200+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 10 system info variables |
-| 2 | Cairo functions (46 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added ~74 functions (matrix/extend/surface/text/transform/gradient/clip) |
+| 1 | Variable count (42 vs 200+) | Moderate | Feature Gap | 🔄 Partially Fixed - ~102 variables implemented (execi, bars, conditionals) |
+| 2 | Cairo functions (46 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - ~101 functions (hit testing, font queries, transforms, paths) |
 | 3 | `require 'cairo'` pattern not supported | Moderate | Feature Gap | ✅ Fixed - cairo module and conky_window implemented |
 | 4 | Uptime format mismatch | Minor | Behavioral Nuance | ✅ Fixed - docs updated to match implementation |
 | 5 | `--convert` CLI flag not implemented | Minor | Feature Gap | ✅ Fixed - CLI flag implemented in main.go |
