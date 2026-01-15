@@ -1651,3 +1651,211 @@ func TestCairoBindings_ComplexClippingWorkflow(t *testing.T) {
 		t.Error("Expected complex clipping workflow to succeed")
 	}
 }
+
+// --- Tests for Path Query Functions ---
+
+func TestCairoBindings_GetCurrentPoint(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test getting current point after move_to
+	luaCode := `
+		cairo_move_to(10, 20)
+		local x, y = cairo_get_current_point()
+		return x, y
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_get_current_point: %v", err)
+	}
+
+	x := result.AsFloat()
+	if x != 10 {
+		t.Errorf("Expected x=10, got %f", x)
+	}
+}
+
+func TestCairoBindings_HasCurrentPoint(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test has_current_point
+	luaCode := `
+		-- Initially no current point
+		local has1 = cairo_has_current_point()
+		
+		-- After move_to, should have current point
+		cairo_move_to(10, 20)
+		local has2 = cairo_has_current_point()
+		
+		-- After new_path, should not have current point
+		cairo_new_path()
+		local has3 = cairo_has_current_point()
+		
+		return has1, has2, has3
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_has_current_point: %v", err)
+	}
+
+	has1 := result.AsBool()
+	if has1 {
+		t.Error("Expected has_current_point to be false initially")
+	}
+}
+
+func TestCairoBindings_PathExtents(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test path_extents
+	luaCode := `
+		cairo_rectangle(10, 20, 100, 50)
+		local x1, y1, x2, y2 = cairo_path_extents()
+		return x1, y1, x2, y2
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_path_extents: %v", err)
+	}
+
+	x1 := result.AsFloat()
+	if x1 != 10 {
+		t.Errorf("Expected x1=10, got %f", x1)
+	}
+}
+
+func TestCairoBindings_ClipExtents(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test clip_extents
+	luaCode := `
+		cairo_rectangle(10, 20, 100, 50)
+		cairo_clip()
+		local x1, y1, x2, y2 = cairo_clip_extents()
+		return x1, y1, x2, y2
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_clip_extents: %v", err)
+	}
+
+	x1 := result.AsFloat()
+	if x1 != 10 {
+		t.Errorf("Expected x1=10, got %f", x1)
+	}
+}
+
+func TestCairoBindings_InClip(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test in_clip
+	luaCode := `
+		-- No clip - all points should be in clip
+		local in1 = cairo_in_clip(50, 50)
+		
+		-- Set clip and test points
+		cairo_rectangle(10, 20, 100, 50)
+		cairo_clip()
+		
+		-- Inside clip
+		local in2 = cairo_in_clip(50, 40)
+		
+		-- Outside clip
+		local in3 = cairo_in_clip(5, 40)
+		
+		return in1, in2, in3
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_in_clip: %v", err)
+	}
+
+	in1 := result.AsBool()
+	if !in1 {
+		t.Error("Expected point to be in clip when no clip is set")
+	}
+}
+
+func TestCairoBindings_PathQueryWithContext(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test path query functions with context argument
+	luaCode := `
+		local cs = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(cs)
+		
+		cairo_move_to(cr, 10, 20)
+		local x, y = cairo_get_current_point(cr)
+		local has = cairo_has_current_point(cr)
+		
+		cairo_rectangle(cr, 0, 0, 50, 50)
+		local x1, y1, x2, y2 = cairo_path_extents(cr)
+		
+		cairo_destroy(cr)
+		cairo_surface_destroy(cs)
+		
+		return x, y, has, x1, y1
+	`
+	result, err := runtime.ExecuteString("test", luaCode)
+	if err != nil {
+		t.Fatalf("Failed to execute path query with context: %v", err)
+	}
+
+	x := result.AsFloat()
+	if x != 10 {
+		t.Errorf("Expected x=10, got %f", x)
+	}
+}
