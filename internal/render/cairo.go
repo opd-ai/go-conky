@@ -1010,6 +1010,10 @@ func (cr *CairoRenderer) Save() {
 		scaleY:       cr.scaleY,
 		clipPath:     cr.clipPath,
 		hasClip:      cr.hasClip,
+		clipMinX:     cr.clipMinX,
+		clipMinY:     cr.clipMinY,
+		clipMaxX:     cr.clipMaxX,
+		clipMaxY:     cr.clipMaxY,
 	}
 	cr.stateStack = append(cr.stateStack, state)
 }
@@ -1047,6 +1051,10 @@ func (cr *CairoRenderer) Restore() {
 	cr.scaleY = state.scaleY
 	cr.clipPath = state.clipPath
 	cr.hasClip = state.hasClip
+	cr.clipMinX = state.clipMinX
+	cr.clipMinY = state.clipMinY
+	cr.clipMaxX = state.clipMaxX
+	cr.clipMaxY = state.clipMaxY
 
 	// Update text renderer to match restored state
 	cr.textRenderer.SetFontSize(state.fontSize)
