@@ -43,7 +43,7 @@ Total Gaps Found: 9
 - `internal/lua/api_test.go` - Tests for new variables including comprehensive disk I/O tests
 - `docs/migration.md` - Updated with disk I/O variable documentation
 
-**Current Variable Count:** ~50 implemented variables (up from ~45)
+**Current Variable Count:** ~75 implemented variables (up from ~50)
 
 **Recently Added (January 15, 2026):**
 11. `${diskio}` - Returns total disk I/O speed (read + write) for specified device or all devices
@@ -54,24 +54,40 @@ Total Gaps Found: 9
 16. `${gw_ip}` - Returns the default gateway IP address
 17. `${gw_iface}` - Returns the default gateway interface name
 18. `${nameserver index}` - Returns the DNS nameserver at the specified index (0-based)
+19. `${top field index}` - Returns top CPU process info (name, pid, cpu, mem, mem_res, mem_vsize, threads)
+20. `${top_mem field index}` - Returns top memory process info
+21. `${exec command}` - Executes shell command and returns output
+22. `${execp command}` - Same as exec (parsing handled elsewhere)
+23. `${color}`, `${color0-9}` - Color formatting (returns empty, handled by renderer)
+24. `${font}` - Font control (returns empty, handled by renderer)
+25. `${alignr}`, `${alignc}` - Alignment (returns empty, handled by renderer)
+26. `${voffset}`, `${offset}`, `${goto}` - Positioning (returns empty, handled by renderer)
+27. `${tab}` - Returns tab character
+28. `${hr height}` - Returns horizontal rule (dashes)
+29. `${fs_bar}` - Returns text-based filesystem usage bar
+30. `${fs_type mountpoint}` - Returns filesystem type (ext4, xfs, etc.)
+31. `${cpu_count}`, `${cpu_cores}` - Returns CPU core count
+32. `${memwithbuffers}` - Returns memory without buffers/cache
+33. `${battery}` - Returns battery status and percentage
+34. `${battery_bar}` - Returns text-based battery level bar
+35. `${battery_time}` - Returns estimated battery time remaining
+36. `${user_names}`, `${user_name}` - Returns current username
+37. `${desktop_name}` - Returns current desktop environment
+38. `${uid}`, `${gid}` - Returns user/group ID
+39. `${downspeedf}`, `${upspeedf}` - Returns network speed as float
+40. `${if_up interface}` - Returns 1 if interface exists, 0 otherwise
 
-**Implementation Files (Network Address Variables):**
-- `internal/monitor/network_addr.go` - New network address reader for IP addresses, gateway, and nameservers
-- `internal/monitor/network_addr_test.go` - Comprehensive tests for network address reader
-- `internal/monitor/types.go` - Added IPv4Addrs, IPv6Addrs to InterfaceStats; GatewayIP, GatewayInterface, Nameservers to NetworkStats
-- `internal/monitor/monitor.go` - Added networkAddressReader integration and augmentNetworkStats method
-- `internal/lua/api.go` - Added resolveAddr, resolveAddrs, resolveNameserver functions
-- `internal/lua/api_test.go` - Tests for new network address variables
+**Implementation Files (Batch Update January 15, 2026):**
+- `internal/lua/api.go` - Added 25+ new variable cases and resolver functions
+- `internal/lua/api_test.go` - Updated mock provider with TopCPU/TopMem, added comprehensive tests
 
-**Remaining Work:** Many variables still need implementation:
-- `cpubar`, `cpugraph`, `membar`, `memgraph` (graphical widgets)
-- `wireless_essid`, `wireless_link_qual`, `wireless_link_bar` (wireless info)
-- `top`, `top_mem`, `top_time` (process listing)
-- `exec`, `execi`, `execp` (command execution)
-- `if_existing`, `if_match`, `if_running` (conditionals)
-- And more...
+**Remaining Work:** Some variables still need implementation:
+- `cpubar`, `cpugraph`, `membar`, `memgraph` (graphical widgets - require renderer integration)
+- `wireless_essid`, `wireless_link_qual` (wireless info - requires wireless extension reading)
+- `execi interval command` (cached command execution)
+- `if_existing`, `if_match`, `if_running` (conditionals - require parser changes)
 
-**Production Impact:** Moderate - Core system info variables now work. Users can display kernel version, hostname, load averages, and formatted time. Some advanced variables still return template strings.
+**Production Impact:** Moderate - Most commonly used variables now work. Top process monitoring, command execution, and battery info are functional.
 
 ---
 

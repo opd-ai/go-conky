@@ -186,22 +186,36 @@ Conky-Go supports the most commonly used Conky variables:
 
 ### Hardware
 
-| Variable | Description |
-|----------|-------------|
-| `${hwmon 0 temp 1}` | Temperature sensor |
-| `${battery}` | Battery level |
-| `${battery_time}` | Battery time remaining |
-| `${acpiacadapter}` | AC adapter status |
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `${hwmon 0 temp 1}` | Temperature sensor | `55` |
+| `${cpu_count}` | Number of CPU cores | `4` |
+| `${battery}` | Battery status and level | `Discharging 85%` |
+| `${battery_percent}` | Battery percentage | `85` |
+| `${battery_short}` | Short battery status | `D 85%` |
+| `${battery_bar}` | Battery level bar | `########--` |
+| `${battery_time}` | Battery time remaining | `2:30` |
 
 ### Processes
 
-| Variable | Description |
-|----------|-------------|
-| `${processes}` | Total processes |
-| `${running_processes}` | Running process count |
-| `${top name 1}` | Top CPU process name |
-| `${top cpu 1}` | Top process CPU % |
-| `${top mem 1}` | Top process memory % |
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `${processes}` | Total processes | `150` |
+| `${running_processes}` | Running process count | `5` |
+| `${threads}` | Total threads | `500` |
+| `${top name 1}` | Top CPU process name | `firefox` |
+| `${top pid 1}` | Top CPU process PID | `1234` |
+| `${top cpu 1}` | Top process CPU % | `25.5` |
+| `${top mem 1}` | Top process memory % | `10.2` |
+| `${top_mem name 1}` | Top memory process name | `vscode` |
+| `${top_mem mem 1}` | Top memory process % | `12.0` |
+
+### Command Execution
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `${exec command}` | Execute command | `${exec date +%H:%M}` |
+| `${execp command}` | Execute command (parsed) | `${execp echo hello}` |
 
 ### Formatting
 
@@ -212,6 +226,22 @@ Conky-Go supports the most commonly used Conky variables:
 | `${color0}` - `${color9}` | Use predefined color |
 | `${font}` | Reset to default font |
 | `${font name:size=N}` | Set font |
+| `${alignr}` | Right align text |
+| `${alignc}` | Center align text |
+| `${voffset N}` | Vertical offset |
+| `${offset N}` | Horizontal offset |
+| `${goto N}` | Go to pixel position |
+| `${tab}` | Tab character |
+| `${hr N}` | Horizontal rule |
+
+### Environment
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `${user_name}` | Current username | `john` |
+| `${desktop_name}` | Desktop environment | `GNOME` |
+| `${uid}` | User ID | `1000` |
+| `${gid}` | Group ID | `1000` |
 
 ## Lua Scripting
 
