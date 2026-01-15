@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package platform
 
 import (
@@ -16,18 +19,6 @@ type linuxCPUProvider struct {
 	procStatPath    string
 	procInfoPath    string
 	procLoadavgPath string
-}
-
-// cpuTimes stores raw CPU time values from /proc/stat.
-type cpuTimes struct {
-	user    uint64
-	nice    uint64
-	system  uint64
-	idle    uint64
-	iowait  uint64
-	irq     uint64
-	softirq uint64
-	steal   uint64
 }
 
 func newLinuxCPUProvider() *linuxCPUProvider {
