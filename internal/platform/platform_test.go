@@ -39,10 +39,10 @@ func TestNewPlatform(t *testing.T) {
 	}
 }
 
-// TestNewPlatformForOS tests creating platform instances for specific operating systems.
+// TestNewPlatformCurrentOS tests creating a platform instance for the current operating system.
 // Note: This test now only tests the current platform since NewPlatformForOS was removed
 // to support proper build tag separation.
-func TestNewPlatformForOS(t *testing.T) {
+func TestNewPlatformCurrentOS(t *testing.T) {
 	p, err := NewPlatform()
 	if err != nil {
 		t.Fatalf("NewPlatform() failed: %v", err)
