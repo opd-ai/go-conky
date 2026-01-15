@@ -1367,6 +1367,10 @@ func (cr *CairoRenderer) Translate(tx, ty float64) {
 	defer cr.mu.Unlock()
 	cr.translateX += tx
 	cr.translateY += ty
+	// Also update the matrix
+	if cr.matrix != nil {
+		cr.matrix.Translate(tx, ty)
+	}
 }
 
 // GetTranslate returns the current translation values.
@@ -1382,6 +1386,10 @@ func (cr *CairoRenderer) Rotate(angle float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	cr.rotation += angle
+	// Also update the matrix
+	if cr.matrix != nil {
+		cr.matrix.Rotate(angle)
+	}
 }
 
 // GetRotation returns the current rotation in radians.
@@ -1398,6 +1406,10 @@ func (cr *CairoRenderer) Scale(sx, sy float64) {
 	defer cr.mu.Unlock()
 	cr.scaleX *= sx
 	cr.scaleY *= sy
+	// Also update the matrix
+	if cr.matrix != nil {
+		cr.matrix.Scale(sx, sy)
+	}
 }
 
 // GetScale returns the current scale factors.
@@ -1478,6 +1490,7 @@ func (cr *CairoRenderer) Restore() {
 	cr.rotation = state.rotation
 	cr.scaleX = state.scaleX
 	cr.scaleY = state.scaleY
+	cr.matrix = state.matrix
 	cr.clipPath = state.clipPath
 	cr.hasClip = state.hasClip
 	cr.clipMinX = state.clipMinX
@@ -1494,11 +1507,12 @@ func (cr *CairoRenderer) Restore() {
 // transformPoint applies the current transformation to a point.
 // Must be called while holding the mutex.
 func (cr *CairoRenderer) transformPoint(x, y float64) (tx, ty float64) {
-	// Early return if transformation is identity
-	if cr.scaleX == 1 && cr.scaleY == 1 && cr.rotation == 0 && cr.translateX == 0 && cr.translateY == 0 {
-		return x, y
+	// Use the matrix if available
+	if cr.matrix != nil {
+		return cr.matrix.TransformPoint(x, y)
 	}
 
+	// Fallback to simple transformations
 	// Apply scale
 	x *= cr.scaleX
 	y *= cr.scaleY
@@ -1526,6 +1540,55 @@ func (cr *CairoRenderer) IdentityMatrix() {
 	cr.rotation = 0
 	cr.scaleX = 1.0
 	cr.scaleY = 1.0
+	cr.matrix = NewIdentityMatrix()
+}
+
+// GetMatrix returns a copy of the current transformation matrix.
+// This is equivalent to cairo_get_matrix.
+func (cr *CairoRenderer) GetMatrix() *CairoMatrix {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if cr.matrix == nil {
+		return NewIdentityMatrix()
+	}
+	return cr.matrix.Copy()
+}
+
+// SetMatrix sets the current transformation matrix.
+// This is equivalent to cairo_set_matrix.
+func (cr *CairoRenderer) SetMatrix(m *CairoMatrix) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if m == nil {
+		cr.matrix = NewIdentityMatrix()
+	} else {
+		cr.matrix = m.Copy()
+	}
+	// Sync the legacy transformation fields for backward compatibility
+	cr.translateX = cr.matrix.X0
+	cr.translateY = cr.matrix.Y0
+	// Note: scaleX/Y and rotation cannot be easily extracted from a general matrix
+	// We keep them at 1.0/0.0 when using SetMatrix directly
+	cr.scaleX = 1.0
+	cr.scaleY = 1.0
+	cr.rotation = 0
+}
+
+// Transform multiplies the current transformation matrix by the given matrix.
+// This is equivalent to cairo_transform.
+func (cr *CairoRenderer) Transform(m *CairoMatrix) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if m == nil {
+		return
+	}
+	if cr.matrix == nil {
+		cr.matrix = NewIdentityMatrix()
+	}
+	cr.matrix.Multiply(m)
+	// Sync translation for backward compatibility
+	cr.translateX = cr.matrix.X0
+	cr.translateY = cr.matrix.Y0
 }
 
 // --- Clipping Functions ---
@@ -1736,6 +1799,30 @@ func (s *CairoSurface) Destroy() {
 		s.image.Deallocate()
 		s.image = nil
 	}
+}
+
+// Flush completes any pending drawing operations.
+// This is equivalent to cairo_surface_flush.
+// In Ebiten, drawing is immediate, so this is a no-op for API compatibility.
+func (s *CairoSurface) Flush() {
+	// Ebiten handles drawing synchronization automatically.
+	// This method exists for API compatibility with Cairo scripts.
+}
+
+// MarkDirty marks the entire surface as dirty.
+// This is equivalent to cairo_surface_mark_dirty.
+// In Ebiten, this is not needed as the GPU texture is managed automatically.
+func (s *CairoSurface) MarkDirty() {
+	// Ebiten manages GPU texture updates automatically.
+	// This method exists for API compatibility with Cairo scripts.
+}
+
+// MarkDirtyRectangle marks a rectangular region as dirty.
+// This is equivalent to cairo_surface_mark_dirty_rectangle.
+// In Ebiten, this is not needed as the GPU texture is managed automatically.
+func (s *CairoSurface) MarkDirtyRectangle(x, y, width, height int) {
+	// Ebiten manages GPU texture updates automatically.
+	// This method exists for API compatibility with Cairo scripts.
 }
 
 // CairoContext wraps a CairoRenderer with its associated surface.

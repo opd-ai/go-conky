@@ -2219,3 +2219,195 @@ func TestCairoPattern_GradientWithMultipleStops(t *testing.T) {
 		t.Errorf("Expected blue at 1.0, got RGB(%d,%d,%d)", c.R, c.G, c.B)
 	}
 }
+
+// --- Matrix Bindings Tests ---
+
+func TestCairoBindings_MatrixInitIdentity(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	_, err = runtime.ExecuteString("test", `
+		local m = cairo_matrix_init_identity()
+		local x, y = cairo_matrix_transform_point(m, 10, 20)
+		assert(math.abs(x - 10) < 0.001, "x should be 10")
+		assert(math.abs(y - 20) < 0.001, "y should be 20")
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute matrix test: %v", err)
+	}
+}
+
+func TestCairoBindings_MatrixTranslate(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	_, err = runtime.ExecuteString("test", `
+		local m = cairo_matrix_init_translate(100, 200)
+		local x, y = cairo_matrix_transform_point(m, 0, 0)
+		assert(math.abs(x - 100) < 0.001, "x should be 100")
+		assert(math.abs(y - 200) < 0.001, "y should be 200")
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute matrix translate test: %v", err)
+	}
+}
+
+func TestCairoBindings_MatrixScale(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	_, err = runtime.ExecuteString("test", `
+		local m = cairo_matrix_init_scale(2, 3)
+		local x, y = cairo_matrix_transform_point(m, 5, 4)
+		assert(math.abs(x - 10) < 0.001, "x should be 10")
+		assert(math.abs(y - 12) < 0.001, "y should be 12")
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute matrix scale test: %v", err)
+	}
+}
+
+func TestCairoBindings_MatrixRotate(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	_, err = runtime.ExecuteString("test", `
+		local m = cairo_matrix_init_rotate(math.pi / 2)  -- 90 degrees
+		local x, y = cairo_matrix_transform_point(m, 1, 0)
+		-- After 90 degree rotation, (1, 0) -> (0, 1)
+		assert(math.abs(x) < 0.001, "x should be 0")
+		assert(math.abs(y - 1) < 0.001, "y should be 1")
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute matrix rotate test: %v", err)
+	}
+}
+
+func TestCairoBindings_GetSetMatrix(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cb, err := NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	_, err = runtime.ExecuteString("test", `
+		local m = cairo_matrix_init_translate(50, 100)
+		cairo_set_matrix(m)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute set_matrix: %v", err)
+	}
+
+	m := cb.Renderer().GetMatrix()
+	if m.X0 != 50 || m.Y0 != 100 {
+		t.Errorf("Expected translation (50, 100), got (%f, %f)", m.X0, m.Y0)
+	}
+}
+
+func TestCairoBindings_PatternExtend(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	_, err = runtime.ExecuteString("test", `
+		local pattern = cairo_pattern_create_linear(0, 0, 100, 0)
+		cairo_pattern_set_extend(pattern, CAIRO_EXTEND_REPEAT)
+		local extend = cairo_pattern_get_extend(pattern)
+		assert(extend == CAIRO_EXTEND_REPEAT, "extend should be CAIRO_EXTEND_REPEAT")
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute pattern extend test: %v", err)
+	}
+}
+
+func TestCairoBindings_ExtendConstants(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	_, err = runtime.ExecuteString("test", `
+		assert(CAIRO_EXTEND_NONE ~= nil, "CAIRO_EXTEND_NONE should exist")
+		assert(CAIRO_EXTEND_REPEAT ~= nil, "CAIRO_EXTEND_REPEAT should exist")
+		assert(CAIRO_EXTEND_REFLECT ~= nil, "CAIRO_EXTEND_REFLECT should exist")
+		assert(CAIRO_EXTEND_PAD ~= nil, "CAIRO_EXTEND_PAD should exist")
+	`)
+	if err != nil {
+		t.Fatalf("Failed to verify extend constants: %v", err)
+	}
+}
+
+func TestCairoBindings_SurfaceFlush(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// This should not panic - flush is a no-op in Ebiten
+	_, err = runtime.ExecuteString("test", `
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		cairo_surface_flush(surface)
+		cairo_surface_mark_dirty(surface)
+		cairo_surface_mark_dirty_rectangle(surface, 0, 0, 50, 50)
+		cairo_surface_destroy(surface)
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute surface flush test: %v", err)
+	}
+}

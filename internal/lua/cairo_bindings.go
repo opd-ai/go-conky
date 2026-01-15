@@ -112,6 +112,25 @@ func (cb *CairoBindings) registerFunctions() {
 	cb.runtime.SetGoFunction("cairo_pattern_add_color_stop_rgb", cb.patternAddColorStopRGB, 5, false)
 	cb.runtime.SetGoFunction("cairo_pattern_add_color_stop_rgba", cb.patternAddColorStopRGBA, 6, false)
 	cb.runtime.SetGoFunction("cairo_set_source", cb.setSource, 2, false)
+	cb.runtime.SetGoFunction("cairo_pattern_set_extend", cb.patternSetExtend, 2, false)
+	cb.runtime.SetGoFunction("cairo_pattern_get_extend", cb.patternGetExtend, 1, false)
+
+	// Matrix functions
+	cb.runtime.SetGoFunction("cairo_get_matrix", cb.getMatrix, 0, true)
+	cb.runtime.SetGoFunction("cairo_set_matrix", cb.setMatrix, 1, true)
+	cb.runtime.SetGoFunction("cairo_transform", cb.transform, 1, true)
+	cb.runtime.SetGoFunction("cairo_matrix_init", cb.matrixInit, 6, false)
+	cb.runtime.SetGoFunction("cairo_matrix_init_identity", cb.matrixInitIdentity, 0, false)
+	cb.runtime.SetGoFunction("cairo_matrix_init_translate", cb.matrixInitTranslate, 2, false)
+	cb.runtime.SetGoFunction("cairo_matrix_init_scale", cb.matrixInitScale, 2, false)
+	cb.runtime.SetGoFunction("cairo_matrix_init_rotate", cb.matrixInitRotate, 1, false)
+	cb.runtime.SetGoFunction("cairo_matrix_translate", cb.matrixTranslate, 3, false)
+	cb.runtime.SetGoFunction("cairo_matrix_scale", cb.matrixScale, 3, false)
+	cb.runtime.SetGoFunction("cairo_matrix_rotate", cb.matrixRotate, 2, false)
+	cb.runtime.SetGoFunction("cairo_matrix_invert", cb.matrixInvert, 1, false)
+	cb.runtime.SetGoFunction("cairo_matrix_multiply", cb.matrixMultiply, 3, false)
+	cb.runtime.SetGoFunction("cairo_matrix_transform_point", cb.matrixTransformPoint, 3, false)
+	cb.runtime.SetGoFunction("cairo_matrix_transform_distance", cb.matrixTransformDistance, 3, false)
 
 	// Register Cairo constants
 	cb.registerConstants()
@@ -151,6 +170,12 @@ func (cb *CairoBindings) registerConstants() {
 	cb.runtime.SetGlobal("CAIRO_FORMAT_A8", rt.IntValue(2))
 	cb.runtime.SetGlobal("CAIRO_FORMAT_A1", rt.IntValue(3))
 	cb.runtime.SetGlobal("CAIRO_FORMAT_RGB16_565", rt.IntValue(4))
+
+	// Pattern extend constants
+	cb.runtime.SetGlobal("CAIRO_EXTEND_NONE", rt.IntValue(int64(render.PatternExtendNone)))
+	cb.runtime.SetGlobal("CAIRO_EXTEND_REPEAT", rt.IntValue(int64(render.PatternExtendRepeat)))
+	cb.runtime.SetGlobal("CAIRO_EXTEND_REFLECT", rt.IntValue(int64(render.PatternExtendReflect)))
+	cb.runtime.SetGlobal("CAIRO_EXTEND_PAD", rt.IntValue(int64(render.PatternExtendPad)))
 }
 
 // registerSurfaceFunctions registers surface management functions.
@@ -160,6 +185,9 @@ func (cb *CairoBindings) registerSurfaceFunctions() {
 	cb.runtime.SetGoFunction("cairo_create", cb.cairoCreate, 1, false)
 	cb.runtime.SetGoFunction("cairo_destroy", cb.cairoDestroy, 1, false)
 	cb.runtime.SetGoFunction("cairo_surface_destroy", cb.surfaceDestroy, 1, false)
+	cb.runtime.SetGoFunction("cairo_surface_flush", cb.surfaceFlush, 1, false)
+	cb.runtime.SetGoFunction("cairo_surface_mark_dirty", cb.surfaceMarkDirty, 1, false)
+	cb.runtime.SetGoFunction("cairo_surface_mark_dirty_rectangle", cb.surfaceMarkDirtyRectangle, 5, false)
 }
 
 // --- Surface Management Functions (CairoBindings) ---
@@ -1291,4 +1319,350 @@ func (cb *CairoBindings) getRendererFromArgs(args []rt.Value) (*render.CairoRend
 		}
 	}
 	return cb.renderer, 0
+}
+
+// --- Pattern Extend Functions ---
+
+// patternSetExtend handles cairo_pattern_set_extend(pattern, extend)
+func (cb *CairoBindings) patternSetExtend(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	pattern, err := getPatternArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_set_extend: pattern: %w", err)
+	}
+	extend, err := getIntArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_set_extend: extend: %w", err)
+	}
+	pattern.SetExtend(render.PatternExtend(extend))
+	return c.Next(), nil
+}
+
+// patternGetExtend handles cairo_pattern_get_extend(pattern)
+func (cb *CairoBindings) patternGetExtend(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	pattern, err := getPatternArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_pattern_get_extend: pattern: %w", err)
+	}
+	extend := pattern.GetExtend()
+	return c.PushingNext1(t.Runtime, rt.IntValue(int64(extend))), nil
+}
+
+// --- Matrix Functions ---
+
+// getMatrix handles cairo_get_matrix(cr)
+func (cb *CairoBindings) getMatrix(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, _ := cb.getRendererFromContext(c)
+	m := renderer.GetMatrix()
+	ud := rt.NewUserData(m, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// setMatrix handles cairo_set_matrix(cr, matrix)
+func (cb *CairoBindings) setMatrix(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
+	args := getAllArgs(c)
+	m, err := getMatrixArg(args, offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_set_matrix: matrix: %w", err)
+	}
+	renderer.SetMatrix(m)
+	return c.Next(), nil
+}
+
+// transform handles cairo_transform(cr, matrix)
+func (cb *CairoBindings) transform(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
+	args := getAllArgs(c)
+	m, err := getMatrixArg(args, offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_transform: matrix: %w", err)
+	}
+	renderer.Transform(m)
+	return c.Next(), nil
+}
+
+// matrixInit handles cairo_matrix_init(xx, yx, xy, yy, x0, y0)
+func (cb *CairoBindings) matrixInit(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	xx, err := getFloatArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init: xx: %w", err)
+	}
+	yx, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init: yx: %w", err)
+	}
+	xy, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init: xy: %w", err)
+	}
+	yy, err := getFloatArg(args, 3)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init: yy: %w", err)
+	}
+	x0, err := getFloatArg(args, 4)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init: x0: %w", err)
+	}
+	y0, err := getFloatArg(args, 5)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init: y0: %w", err)
+	}
+	m := &render.CairoMatrix{XX: xx, YX: yx, XY: xy, YY: yy, X0: x0, Y0: y0}
+	ud := rt.NewUserData(m, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// matrixInitIdentity handles cairo_matrix_init_identity()
+func (cb *CairoBindings) matrixInitIdentity(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	m := render.NewIdentityMatrix()
+	ud := rt.NewUserData(m, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// matrixInitTranslate handles cairo_matrix_init_translate(tx, ty)
+func (cb *CairoBindings) matrixInitTranslate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	tx, err := getFloatArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init_translate: tx: %w", err)
+	}
+	ty, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init_translate: ty: %w", err)
+	}
+	m := render.NewTranslateMatrix(tx, ty)
+	ud := rt.NewUserData(m, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// matrixInitScale handles cairo_matrix_init_scale(sx, sy)
+func (cb *CairoBindings) matrixInitScale(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	sx, err := getFloatArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init_scale: sx: %w", err)
+	}
+	sy, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init_scale: sy: %w", err)
+	}
+	m := render.NewScaleMatrix(sx, sy)
+	ud := rt.NewUserData(m, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// matrixInitRotate handles cairo_matrix_init_rotate(angle)
+func (cb *CairoBindings) matrixInitRotate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	angle, err := getFloatArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_init_rotate: angle: %w", err)
+	}
+	m := render.NewRotateMatrix(angle)
+	ud := rt.NewUserData(m, nil)
+	return c.PushingNext1(t.Runtime, rt.UserDataValue(ud)), nil
+}
+
+// matrixTranslate handles cairo_matrix_translate(matrix, tx, ty)
+func (cb *CairoBindings) matrixTranslate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	m, err := getMatrixArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_translate: matrix: %w", err)
+	}
+	tx, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_translate: tx: %w", err)
+	}
+	ty, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_translate: ty: %w", err)
+	}
+	m.Translate(tx, ty)
+	return c.Next(), nil
+}
+
+// matrixScale handles cairo_matrix_scale(matrix, sx, sy)
+func (cb *CairoBindings) matrixScale(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	m, err := getMatrixArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_scale: matrix: %w", err)
+	}
+	sx, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_scale: sx: %w", err)
+	}
+	sy, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_scale: sy: %w", err)
+	}
+	m.Scale(sx, sy)
+	return c.Next(), nil
+}
+
+// matrixRotate handles cairo_matrix_rotate(matrix, angle)
+func (cb *CairoBindings) matrixRotate(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	m, err := getMatrixArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_rotate: matrix: %w", err)
+	}
+	angle, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_rotate: angle: %w", err)
+	}
+	m.Rotate(angle)
+	return c.Next(), nil
+}
+
+// matrixInvert handles cairo_matrix_invert(matrix)
+func (cb *CairoBindings) matrixInvert(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	m, err := getMatrixArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_invert: matrix: %w", err)
+	}
+	success := m.Invert()
+	if !success {
+		return nil, fmt.Errorf("cairo_matrix_invert: matrix is singular")
+	}
+	return c.Next(), nil
+}
+
+// matrixMultiply handles cairo_matrix_multiply(result, a, b)
+func (cb *CairoBindings) matrixMultiply(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	result, err := getMatrixArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_multiply: result: %w", err)
+	}
+	a, err := getMatrixArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_multiply: a: %w", err)
+	}
+	b, err := getMatrixArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_multiply: b: %w", err)
+	}
+	// result = a * b
+	result.XX = a.XX*b.XX + a.XY*b.YX
+	result.XY = a.XX*b.XY + a.XY*b.YY
+	result.YX = a.YX*b.XX + a.YY*b.YX
+	result.YY = a.YX*b.XY + a.YY*b.YY
+	result.X0 = a.XX*b.X0 + a.XY*b.Y0 + a.X0
+	result.Y0 = a.YX*b.X0 + a.YY*b.Y0 + a.Y0
+	return c.Next(), nil
+}
+
+// matrixTransformPoint handles cairo_matrix_transform_point(matrix, x, y)
+func (cb *CairoBindings) matrixTransformPoint(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	m, err := getMatrixArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_transform_point: matrix: %w", err)
+	}
+	x, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_transform_point: x: %w", err)
+	}
+	y, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_transform_point: y: %w", err)
+	}
+	tx, ty := m.TransformPoint(x, y)
+	return c.PushingNext(t.Runtime, rt.FloatValue(tx), rt.FloatValue(ty)), nil
+}
+
+// matrixTransformDistance handles cairo_matrix_transform_distance(matrix, dx, dy)
+func (cb *CairoBindings) matrixTransformDistance(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	m, err := getMatrixArg(args, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_transform_distance: matrix: %w", err)
+	}
+	dx, err := getFloatArg(args, 1)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_transform_distance: dx: %w", err)
+	}
+	dy, err := getFloatArg(args, 2)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_matrix_transform_distance: dy: %w", err)
+	}
+	tdx, tdy := m.TransformDistance(dx, dy)
+	return c.PushingNext(t.Runtime, rt.FloatValue(tdx), rt.FloatValue(tdy)), nil
+}
+
+// --- Surface Functions ---
+
+// surfaceFlush handles cairo_surface_flush(surface)
+func (cb *CairoBindings) surfaceFlush(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	if c.NArgs() == 0 {
+		return c.Next(), nil
+	}
+	surfaceVal, err := c.UserDataArg(0)
+	if err != nil {
+		return c.Next(), nil // Ignore for compatibility
+	}
+	surface, ok := surfaceVal.Value().(*render.CairoSurface)
+	if !ok {
+		return c.Next(), nil
+	}
+	surface.Flush()
+	return c.Next(), nil
+}
+
+// surfaceMarkDirty handles cairo_surface_mark_dirty(surface)
+func (cb *CairoBindings) surfaceMarkDirty(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	if c.NArgs() == 0 {
+		return c.Next(), nil
+	}
+	surfaceVal, err := c.UserDataArg(0)
+	if err != nil {
+		return c.Next(), nil // Ignore for compatibility
+	}
+	surface, ok := surfaceVal.Value().(*render.CairoSurface)
+	if !ok {
+		return c.Next(), nil
+	}
+	surface.MarkDirty()
+	return c.Next(), nil
+}
+
+// surfaceMarkDirtyRectangle handles cairo_surface_mark_dirty_rectangle(surface, x, y, width, height)
+func (cb *CairoBindings) surfaceMarkDirtyRectangle(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	args := getAllArgs(c)
+	if len(args) < 5 {
+		return c.Next(), nil
+	}
+	surfaceVal, ok := args[0].TryUserData()
+	if !ok {
+		return c.Next(), nil
+	}
+	surface, ok := surfaceVal.Value().(*render.CairoSurface)
+	if !ok {
+		return c.Next(), nil
+	}
+	x, _ := getIntArg(args, 1)
+	y, _ := getIntArg(args, 2)
+	width, _ := getIntArg(args, 3)
+	height, _ := getIntArg(args, 4)
+	surface.MarkDirtyRectangle(int(x), int(y), int(width), int(height))
+	return c.Next(), nil
+}
+
+// getMatrixArg extracts a CairoMatrix from the args slice
+func getMatrixArg(args []rt.Value, idx int) (*render.CairoMatrix, error) {
+	if idx >= len(args) {
+		return nil, fmt.Errorf("argument %d out of range (have %d)", idx, len(args))
+	}
+	if ud, ok := args[idx].TryUserData(); ok {
+		if m, ok := ud.Value().(*render.CairoMatrix); ok {
+			return m, nil
+		}
+	}
+	return nil, fmt.Errorf("argument %d is not a matrix", idx)
 }

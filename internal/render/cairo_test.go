@@ -1588,3 +1588,247 @@ func TestCairoRenderer_ClipBoundsSaveRestore(t *testing.T) {
 		t.Errorf("Expected (10,20,110,70) after restore, got (%f,%f,%f,%f)", x1, y1, x2, y2)
 	}
 }
+
+// --- CairoMatrix Tests ---
+
+func TestNewIdentityMatrix(t *testing.T) {
+	m := NewIdentityMatrix()
+	if m.XX != 1 || m.XY != 0 || m.YX != 0 || m.YY != 1 || m.X0 != 0 || m.Y0 != 0 {
+		t.Errorf("Expected identity matrix, got %+v", m)
+	}
+}
+
+func TestNewTranslateMatrix(t *testing.T) {
+	m := NewTranslateMatrix(10, 20)
+	x, y := m.TransformPoint(0, 0)
+	if x != 10 || y != 20 {
+		t.Errorf("Expected (10, 20), got (%f, %f)", x, y)
+	}
+}
+
+func TestNewScaleMatrix(t *testing.T) {
+	m := NewScaleMatrix(2, 3)
+	x, y := m.TransformPoint(5, 4)
+	if x != 10 || y != 12 {
+		t.Errorf("Expected (10, 12), got (%f, %f)", x, y)
+	}
+}
+
+func TestNewRotateMatrix(t *testing.T) {
+	m := NewRotateMatrix(math.Pi / 2) // 90 degrees
+	x, y := m.TransformPoint(1, 0)
+	// After 90 degree rotation, (1, 0) -> (0, 1)
+	if math.Abs(x) > 1e-10 || math.Abs(y-1) > 1e-10 {
+		t.Errorf("Expected (0, 1), got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoMatrix_Translate(t *testing.T) {
+	m := NewIdentityMatrix()
+	m.Translate(10, 20)
+	x, y := m.TransformPoint(0, 0)
+	if x != 10 || y != 20 {
+		t.Errorf("Expected (10, 20), got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoMatrix_Scale(t *testing.T) {
+	m := NewIdentityMatrix()
+	m.Scale(2, 3)
+	x, y := m.TransformPoint(5, 4)
+	if x != 10 || y != 12 {
+		t.Errorf("Expected (10, 12), got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoMatrix_Rotate(t *testing.T) {
+	m := NewIdentityMatrix()
+	m.Rotate(math.Pi / 2) // 90 degrees
+	x, y := m.TransformPoint(1, 0)
+	if math.Abs(x) > 1e-10 || math.Abs(y-1) > 1e-10 {
+		t.Errorf("Expected (0, 1), got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoMatrix_Multiply(t *testing.T) {
+	// Create a translation then a scale
+	translate := NewTranslateMatrix(10, 20)
+	scale := NewScaleMatrix(2, 2)
+
+	// Combine: scale * translate means translate first, then scale
+	translate.Multiply(scale)
+
+	// (0, 0) -> translate by (10, 20) -> (10, 20) -> scale by 2 -> (20, 40)
+	x, y := translate.TransformPoint(0, 0)
+	if x != 20 || y != 40 {
+		t.Errorf("Expected (20, 40), got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoMatrix_TransformDistance(t *testing.T) {
+	m := NewScaleMatrix(2, 3)
+	m.Translate(100, 100) // Translation shouldn't affect distance
+
+	dx, dy := m.TransformDistance(5, 4)
+	if dx != 10 || dy != 12 {
+		t.Errorf("Expected (10, 12), got (%f, %f)", dx, dy)
+	}
+}
+
+func TestCairoMatrix_Invert(t *testing.T) {
+	m := NewTranslateMatrix(10, 20)
+	if !m.Invert() {
+		t.Fatal("Expected inversion to succeed")
+	}
+	x, y := m.TransformPoint(10, 20)
+	if math.Abs(x) > 1e-10 || math.Abs(y) > 1e-10 {
+		t.Errorf("Expected (0, 0), got (%f, %f)", x, y)
+	}
+}
+
+func TestCairoMatrix_InvertSingular(t *testing.T) {
+	// Create a singular matrix (all zeros)
+	m := &CairoMatrix{XX: 0, XY: 0, YX: 0, YY: 0, X0: 0, Y0: 0}
+	if m.Invert() {
+		t.Error("Expected inversion to fail for singular matrix")
+	}
+}
+
+func TestCairoMatrix_Copy(t *testing.T) {
+	m := NewTranslateMatrix(10, 20)
+	copy := m.Copy()
+
+	// Modify original
+	m.Translate(5, 5)
+
+	// Copy should be unchanged
+	if copy.X0 != 10 || copy.Y0 != 20 {
+		t.Errorf("Expected copy to be (10, 20), got (%f, %f)", copy.X0, copy.Y0)
+	}
+}
+
+func TestCairoRenderer_GetSetMatrix(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Get initial matrix (should be identity)
+	m := cr.GetMatrix()
+	if m.XX != 1 || m.XY != 0 || m.YX != 0 || m.YY != 1 || m.X0 != 0 || m.Y0 != 0 {
+		t.Errorf("Expected identity matrix, got %+v", m)
+	}
+
+	// Set a new matrix
+	newMatrix := NewTranslateMatrix(100, 200)
+	cr.SetMatrix(newMatrix)
+
+	m = cr.GetMatrix()
+	if m.X0 != 100 || m.Y0 != 200 {
+		t.Errorf("Expected translation (100, 200), got (%f, %f)", m.X0, m.Y0)
+	}
+}
+
+func TestCairoRenderer_Transform(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Apply a translation
+	translate := NewTranslateMatrix(10, 20)
+	cr.Transform(translate)
+
+	m := cr.GetMatrix()
+	if m.X0 != 10 || m.Y0 != 20 {
+		t.Errorf("Expected translation (10, 20), got (%f, %f)", m.X0, m.Y0)
+	}
+}
+
+func TestCairoRenderer_MatrixSaveRestore(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set a matrix
+	cr.SetMatrix(NewTranslateMatrix(100, 200))
+
+	// Save
+	cr.Save()
+
+	// Modify matrix
+	cr.SetMatrix(NewTranslateMatrix(500, 600))
+
+	m := cr.GetMatrix()
+	if m.X0 != 500 || m.Y0 != 600 {
+		t.Errorf("Expected (500, 600), got (%f, %f)", m.X0, m.Y0)
+	}
+
+	// Restore
+	cr.Restore()
+
+	m = cr.GetMatrix()
+	if m.X0 != 100 || m.Y0 != 200 {
+		t.Errorf("Expected (100, 200) after restore, got (%f, %f)", m.X0, m.Y0)
+	}
+}
+
+// --- Pattern Extend Tests ---
+
+func TestCairoPattern_SetGetExtend(t *testing.T) {
+	tests := []struct {
+		name   string
+		extend PatternExtend
+	}{
+		{"none", PatternExtendNone},
+		{"repeat", PatternExtendRepeat},
+		{"reflect", PatternExtendReflect},
+		{"pad", PatternExtendPad},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewLinearPattern(0, 0, 100, 0)
+			p.SetExtend(tt.extend)
+			if got := p.GetExtend(); got != tt.extend {
+				t.Errorf("Expected extend %v, got %v", tt.extend, got)
+			}
+		})
+	}
+}
+
+// --- Surface Functions Tests ---
+
+func TestCairoSurface_FlushAndMarkDirty(t *testing.T) {
+	s := NewCairoSurface(100, 100)
+	defer s.Destroy()
+
+	// These should not panic (they are no-ops in Ebiten)
+	s.Flush()
+	s.MarkDirty()
+	s.MarkDirtyRectangle(0, 0, 50, 50)
+}
+
+func TestCairoSurface_FlushAfterDestroy(t *testing.T) {
+	s := NewCairoSurface(100, 100)
+	s.Destroy()
+
+	// Should not panic even after destroy
+	s.Flush()
+	s.MarkDirty()
+}
+
+// --- Matrix Concurrency Tests ---
+
+func TestCairoRenderer_MatrixConcurrency(t *testing.T) {
+	cr := NewCairoRenderer()
+	var wg sync.WaitGroup
+
+	// Run multiple goroutines modifying and reading the matrix
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				m := NewTranslateMatrix(float64(j), float64(j))
+				cr.SetMatrix(m)
+				_ = cr.GetMatrix()
+				cr.Transform(NewScaleMatrix(1.01, 1.01))
+			}
+		}()
+	}
+
+	wg.Wait()
+}
