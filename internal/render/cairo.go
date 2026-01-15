@@ -1004,7 +1004,7 @@ func (cr *CairoRenderer) ClipPreserve() {
 	cr.path.MoveTo(currentX, currentY)
 	cr.pathStartX = currentX
 	cr.pathStartY = currentY
-	// hasPath remains true since we still have a current point
+	cr.hasPath = true // Explicitly set for consistency with MoveTo
 }
 
 // ResetClip resets the clip region to an infinitely large shape.
