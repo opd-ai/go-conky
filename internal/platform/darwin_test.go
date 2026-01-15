@@ -85,11 +85,11 @@ func TestDarwinPlatform_Providers(t *testing.T) {
 	}
 	defer platform.Close()
 
-	// Test CPU provider - sysctl may fail on ARM64 CI runners
+	// Test CPU provider - sysctl may fail in some environments
 	cpuUsage, err := platform.CPU().TotalUsage()
 	if err != nil {
 		if isDarwinCIError(err) {
-			t.Logf("CPU().TotalUsage() skipped - sysctl unavailable: %v", err)
+			t.Skipf("CPU().TotalUsage() skipped - sysctl unavailable: %v", err)
 		} else {
 			t.Errorf("CPU().TotalUsage() failed: %v", err)
 		}
@@ -97,11 +97,11 @@ func TestDarwinPlatform_Providers(t *testing.T) {
 		t.Logf("CPU usage: %.2f%%", cpuUsage)
 	}
 
-	// Test Memory provider - sysctl parsing may fail on CI
+	// Test Memory provider - sysctl may fail in some environments
 	memStats, err := platform.Memory().Stats()
 	if err != nil {
 		if isDarwinCIError(err) {
-			t.Logf("Memory().Stats() skipped - sysctl unavailable: %v", err)
+			t.Skipf("Memory().Stats() skipped - sysctl unavailable: %v", err)
 		} else {
 			t.Errorf("Memory().Stats() failed: %v", err)
 		}
