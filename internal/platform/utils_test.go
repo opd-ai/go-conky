@@ -51,10 +51,10 @@ func TestSafeMultiplyDivide(t *testing.T) {
 		},
 		{
 			name:     "battery charge calculation example",
-			a:        5000000,   // charge in µAh
-			b:        4200000,   // voltage in µV
-			divisor:  1000000,   // convert to µWh
-			expected: 21000000,  // 5000000 * 4200000 / 1000000 = 21000000000000 / 1000000 = 21000000
+			a:        5000000,  // charge in µAh
+			b:        4200000,  // voltage in µV
+			divisor:  1000000,  // convert to µWh
+			expected: 21000000, // 5000000 * 4200000 / 1000000 = 21000000000000 / 1000000 = 21000000
 		},
 		{
 			name:     "values that would overflow in naive multiplication",
@@ -128,7 +128,7 @@ func TestReadUint64File(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	value, ok = readUint64File(testPath)
+	_, ok = readUint64File(testPath)
 	if ok {
 		t.Error("readUint64File should return false for invalid content")
 	}
@@ -192,7 +192,7 @@ func TestReadInt64File(t *testing.T) {
 	}
 
 	// Test file not found
-	value, ok = readInt64File(filepath.Join(tmpDir, "nonexistent"))
+	_, ok = readInt64File(filepath.Join(tmpDir, "nonexistent"))
 	if ok {
 		t.Error("readInt64File should return false for nonexistent file")
 	}
