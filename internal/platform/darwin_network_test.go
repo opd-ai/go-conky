@@ -46,6 +46,9 @@ func TestDarwinNetworkProvider_Stats(t *testing.T) {
 	// Test getting stats for the first interface
 	ifaceName := interfaces[0]
 	stats, err := provider.Stats(ifaceName)
+	if isDarwinCIError(err) {
+		t.Skipf("Skipping: sysctl for interface %s unavailable: %v", ifaceName, err)
+	}
 	if err != nil {
 		t.Fatalf("Stats(%s) failed: %v", ifaceName, err)
 	}
