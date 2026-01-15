@@ -1695,18 +1695,20 @@ fmt.Printf("Remote CPU: %.1f%%, Memory: %.1f%%\n", cpuUsage, memStats.UsedPercen
 
 | Feature | Linux | Windows | macOS | Android | Remote/SSH |
 |---------|-------|---------|-------|---------|------------|
-| CPU usage | ✓ | ✓ | ✓ | ✓ | Planned |
-| Memory stats | ✓ | ✓ | ✓ | ✓ | Planned |
-| Network I/O | ✓ | ✓ | ✓ | ✓ | Planned |
-| Filesystem usage | ✓ | ✓ | ✓ | ✓ | Planned |
+| CPU usage | ✓ | ✓ | ✓ | ✓ | ✓*** |
+| Memory stats | ✓ | ✓ | ✓ | ✓ | ✓*** |
+| Network I/O | ✓ | ✓ | ✓ | ✓ | ✓*** |
+| Filesystem usage | ✓ | ✓ | ✓ | ✓ | ✓*** |
 | Battery status | ✓ | ✓ | ✓ | ✓ | N/A |
-| Temperature sensors | ✓ | ✓ | ✓* | ✓** | Planned |
+| Temperature sensors | ✓ | ✓ | ✓* | ✓** | ✓**** |
 | Process list | ✓ | Planned | Planned | Limited | Planned |
 | GPU monitoring | Limited | Planned | Planned | N/A | N/A |
 | Window rendering | X11/Wayland | Planned | Planned | Planned | N/A |
 
 *macOS temperature sensors require root privileges (powermetrics)
 **Android temperature sensors read from thermal zones and battery temperature
+***Remote/SSH monitoring implemented for Linux and macOS targets; Windows remote targets not yet supported
+****Remote temperature sensors implemented for Linux targets only
 
 ## 5. DEVELOPMENT INFRASTRUCTURE
 
