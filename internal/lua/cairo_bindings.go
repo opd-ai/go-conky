@@ -1710,7 +1710,7 @@ func getMatrixArg(args []rt.Value, idx int) (*render.CairoMatrix, error) {
 
 // setDash handles cairo_set_dash(dashes, offset)
 func (cb *CairoBindings) setDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	offset := 0
 	renderer := cb.renderer
 	// Check if first arg is a context
@@ -1735,16 +1735,20 @@ func (cb *CairoBindings) setDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 			dashOffset = float64(i)
 		}
 	}
-	// Parse dashes table
+	// Parse dashes table - iterate through consecutive indices
 	var dashes []float64
 	if tbl, ok := dashesVal.TryTable(); ok {
-		tbl.ForEach(func(k, v rt.Value) {
+		for i := int64(1); ; i++ {
+			v := tbl.Get(rt.IntValue(i))
+			if v == rt.NilValue {
+				break
+			}
 			if f, ok := v.TryFloat(); ok {
 				dashes = append(dashes, f)
-			} else if i, ok := v.TryInt(); ok {
-				dashes = append(dashes, float64(i))
+			} else if iv, ok := v.TryInt(); ok {
+				dashes = append(dashes, float64(iv))
 			}
-		})
+		}
 	}
 	renderer.SetDash(dashes, dashOffset)
 	return c.Next(), nil
@@ -1752,7 +1756,7 @@ func (cb *CairoBindings) setDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 
 // getDash handles cairo_get_dash() -> returns dashes table, offset
 func (cb *CairoBindings) getDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	renderer := cb.renderer
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
@@ -1772,7 +1776,7 @@ func (cb *CairoBindings) getDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 
 // getDashCount handles cairo_get_dash_count()
 func (cb *CairoBindings) getDashCount(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	renderer := cb.renderer
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
@@ -1787,7 +1791,7 @@ func (cb *CairoBindings) getDashCount(t *rt.Thread, c *rt.GoCont) (rt.Cont, erro
 
 // setMiterLimit handles cairo_set_miter_limit(limit)
 func (cb *CairoBindings) setMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	offset := 0
 	renderer := cb.renderer
 	if len(args) > 0 {
@@ -1805,7 +1809,7 @@ func (cb *CairoBindings) setMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, err
 
 // getMiterLimit handles cairo_get_miter_limit()
 func (cb *CairoBindings) getMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	renderer := cb.renderer
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
@@ -1822,7 +1826,7 @@ func (cb *CairoBindings) getMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, err
 
 // setFillRule handles cairo_set_fill_rule(rule)
 func (cb *CairoBindings) setFillRule(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	offset := 0
 	renderer := cb.renderer
 	if len(args) > 0 {
@@ -1840,7 +1844,7 @@ func (cb *CairoBindings) setFillRule(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 
 // getFillRule handles cairo_get_fill_rule()
 func (cb *CairoBindings) getFillRule(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	renderer := cb.renderer
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
@@ -1855,7 +1859,7 @@ func (cb *CairoBindings) getFillRule(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 
 // setOperator handles cairo_set_operator(op)
 func (cb *CairoBindings) setOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	offset := 0
 	renderer := cb.renderer
 	if len(args) > 0 {
@@ -1873,7 +1877,7 @@ func (cb *CairoBindings) setOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 
 // getOperator handles cairo_get_operator()
 func (cb *CairoBindings) getOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	renderer := cb.renderer
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
@@ -1890,7 +1894,7 @@ func (cb *CairoBindings) getOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 
 // getLineWidth handles cairo_get_line_width()
 func (cb *CairoBindings) getLineWidth(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	renderer := cb.renderer
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
@@ -1905,7 +1909,7 @@ func (cb *CairoBindings) getLineWidth(t *rt.Thread, c *rt.GoCont) (rt.Cont, erro
 
 // getLineCap handles cairo_get_line_cap()
 func (cb *CairoBindings) getLineCap(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	renderer := cb.renderer
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
@@ -1920,7 +1924,7 @@ func (cb *CairoBindings) getLineCap(t *rt.Thread, c *rt.GoCont) (rt.Cont, error)
 
 // getLineJoin handles cairo_get_line_join()
 func (cb *CairoBindings) getLineJoin(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	renderer := cb.renderer
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
@@ -1935,7 +1939,7 @@ func (cb *CairoBindings) getLineJoin(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 
 // getAntialias handles cairo_get_antialias()
 func (cb *CairoBindings) getAntialias(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := collectArgs(c)
+	args := getAllArgs(c)
 	renderer := cb.renderer
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
