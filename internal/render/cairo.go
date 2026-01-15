@@ -950,12 +950,26 @@ func (cr *CairoRenderer) IdentityMatrix() {
 }
 
 // --- Clipping Functions ---
+//
+// IMPORTANT: Clipping is currently a partial implementation.
+// The clip region is tracked (stored in clipPath/hasClip) but NOT enforced
+// during drawing operations. This means calling Clip() will record the clip
+// region for API compatibility, but subsequent drawing will NOT be restricted
+// to the clip area.
+//
+// Full clipping support would require either:
+// - Using Ebiten's SubImage for rectangular clips only
+// - Implementing stencil buffer or alpha mask clipping for arbitrary paths
+//
+// For now, scripts that use clipping will execute without errors, but the
+// visual clipping effect will not be applied.
 
 // Clip establishes a new clip region by intersecting the current clip region
 // with the current path and clears the path.
 // This is equivalent to cairo_clip.
-// Note: In our Ebiten implementation, clipping is tracked but actual clipping
-// is applied during drawing operations.
+//
+// WARNING: Clipping is NOT currently enforced during drawing operations.
+// The clip region is recorded but drawing will not be restricted to the clip area.
 func (cr *CairoRenderer) Clip() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
@@ -977,6 +991,10 @@ func (cr *CairoRenderer) Clip() {
 
 // ClipPreserve establishes a new clip region without clearing the current path.
 // This is equivalent to cairo_clip_preserve.
+//
+// WARNING: Clipping is NOT currently enforced during drawing operations.
+// The clip region is recorded but drawing will not be restricted to the clip area.
+//
 // Note: Since Ebiten's vector.Path cannot be copied, we store the current path
 // as the clip path and create a fresh path for continued drawing. The path state
 // (current point, etc.) is preserved but the path data is now isolated.
@@ -1009,6 +1027,8 @@ func (cr *CairoRenderer) ClipPreserve() {
 
 // ResetClip resets the clip region to an infinitely large shape.
 // This is equivalent to cairo_reset_clip.
+//
+// Note: See the Clipping Functions section comment for limitations.
 func (cr *CairoRenderer) ResetClip() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
