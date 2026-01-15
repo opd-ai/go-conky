@@ -216,6 +216,8 @@ Conky-Go supports the most commonly used Conky variables:
 |----------|-------------|---------|
 | `${exec command}` | Execute command | `${exec date +%H:%M}` |
 | `${execp command}` | Execute command (parsed) | `${execp echo hello}` |
+| `${execi interval command}` | Execute command with caching | `${execi 60 sensors \| grep temp}` |
+| `${execpi interval command}` | Cached execution (parsed) | `${execpi 30 echo ${cpu}%}` |
 
 ### Formatting
 

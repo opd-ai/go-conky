@@ -43,7 +43,7 @@ Total Gaps Found: 9
 - `internal/lua/api_test.go` - Tests for new variables including comprehensive disk I/O tests
 - `docs/migration.md` - Updated with disk I/O variable documentation
 
-**Current Variable Count:** ~100 implemented variables (up from ~75)
+**Current Variable Count:** ~102 implemented variables (up from ~100)
 
 **Recently Added (January 15, 2026):**
 11. `${diskio}` - Returns total disk I/O speed (read + write) for specified device or all devices
@@ -93,16 +93,17 @@ Total Gaps Found: 9
 53. `${stippled_hr}` - Stippled horizontal rule
 54. `${scroll}` - Scrolling text (simplified)
 55. `${nvidia}`, `${apcupsd}`, `${imap}`, `${pop3}`, `${weather}`, `${stockquote}` - Stubs for compatibility
+56. `${execi interval command}` - Cached command execution with interval-based caching
+57. `${execpi interval command}` - Same as execi (parsing handled elsewhere)
 
 **Implementation Files (Batch Update January 15, 2026):**
 - `internal/lua/api.go` - Added 25+ new variable cases and resolver functions
 - `internal/lua/api_test.go` - Updated mock provider with TopCPU/TopMem, added comprehensive tests
 
 **Remaining Work:** Some variables still need implementation:
-- `execi interval command` (cached command execution)
 - Real wireless info (requires wireless extension reading)
 
-**Production Impact:** High - Most commonly used variables now work including bars, conditionals, and entropy.
+**Production Impact:** High - Most commonly used variables now work including bars, conditionals, entropy, and cached command execution.
 
 ---
 
