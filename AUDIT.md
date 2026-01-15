@@ -9,7 +9,7 @@ Total Gaps Found: 8
 - Moderate: 5
 - Minor: 3
 
-**Fixed Gaps: 5** (Gap #3, #4, #5, #6, #7 - Cairo module support, documentation updates and CLI feature)
+**Fixed Gaps: 6** (Gap #3, #4, #5, #6, #7, #8 - Cairo module support, documentation updates, CLI feature, and Ebiten rendering integration)
 
 ## Detailed Findings
 
@@ -271,50 +271,44 @@ From docs/migration.md:352-354:
 > "✅ **Core Implementation Complete** - Integration in progress" (README.md:22)
 > "Performance: Leverages Ebiten's optimized 2D rendering pipeline for smooth 60fps updates" (README.md:10)
 
-**Implementation Location:** `pkg/conky/impl.go:82-99`
+**Implementation Location:** `pkg/conky/impl.go` and `pkg/conky/render.go`
 
-**Expected Behavior:** The application should use Ebiten's rendering loop for 60fps visual updates.
+**Status:** ✅ **FIXED**
 
-**Actual Implementation:** The `Start()` method spawns a goroutine that only waits for context cancellation. The comment in the code explicitly states the Ebiten rendering integration is not yet implemented:
+**Fix Details:** The Ebiten rendering loop has been integrated with the Conky public API:
 
+1. **Added context cancellation support to `render.Game`** - The game loop can now be terminated programmatically via context cancellation, returning `ErrGameTerminated`.
+
+2. **Implemented `runRenderLoop()` method** - When `opts.Headless` is false, the `Start()` method now calls `runRenderLoop()` which:
+   - Creates a `render.Game` with configuration from `config.Config`
+   - Sets the `SystemMonitor` as the `DataProvider` interface
+   - Sets up initial text lines from the configuration template
+   - Runs the Ebiten game loop, which blocks until window close or context cancellation
+
+3. **Build tag support** - The rendering integration uses build tags (`!noebiten` / `noebiten`) to allow building and testing without Ebiten dependencies when needed (e.g., in CI environments without X11).
+
+**Usage:**
 ```go
-// When opts.Headless is false, this goroutine should integrate with
-// render.Game.Run() to run the Ebiten rendering loop. The integration
-// requires:
-// 1. Create render.Game with config from c.cfg
-// 2. Set c.monitor as the data provider
-// 3. Call game.Run() which blocks until window close or context cancel
-// See PLAN.md section 2.2.2 for render package changes needed.
-```
-
-**Gap Details:** The Ebiten rendering loop (`render.Game`) exists but is not connected to the main `Conky` interface. The public API starts monitoring but doesn't actually render anything to screen. The "60fps updates" claim cannot be verified as no visual output is produced.
-
-**Reproduction:**
-```go
-// This code from README example will start but show nothing:
+// Start with rendering (default mode)
 c, _ := conky.New("/path/to/config", nil)
-c.Start()
-// No window appears, no rendering occurs
+c.Start() // Opens window, starts Ebiten rendering loop
+
+// Start in headless mode (no rendering)
+opts := &conky.Options{Headless: true}
+c, _ := conky.New("/path/to/config", opts)
+c.Start() // No window, monitor runs in background
 ```
 
-**Production Impact:** Moderate - The application cannot display visual output through the documented public API. Users following README instructions will not see a working system monitor.
+**Implementation Files:**
+- `pkg/conky/render.go` - Ebiten integration (build tag: `!noebiten`)
+- `pkg/conky/render_stub.go` - Headless stub (build tag: `noebiten`)
+- `internal/render/game.go` - Added `SetContext()` and `ErrGameTerminated`
+- `internal/render/game_test.go` - Added tests for context cancellation
 
-**Evidence:**
-```go
-// impl.go:82-99 - Goroutine only waits, doesn't render
-go func() {
-    defer c.wg.Done()
-    defer c.cleanup()
-    defer c.running.Store(false)
-    
-    // Wait for context cancellation.
-    // When opts.Headless is false, this goroutine should integrate with
-    // render.Game.Run() to run the Ebiten rendering loop.
-    <-c.ctx.Done()
-    
-    c.emitEvent(EventStopped, "Instance stopped")
-}()
-```
+**Testing:**
+- Tests pass with `xvfb-run` for Ebiten tests
+- Tests pass with `-tags=noebiten` for headless testing
+- Added `make test-xvfb` target for CI environments
 
 ---
 
@@ -329,7 +323,7 @@ go func() {
 | 5 | `--convert` CLI flag not implemented | Minor | Feature Gap | ✅ Fixed - CLI flag implemented in main.go |
 | 6 | Go version requirement mismatch | Minor | Documentation Drift | ✅ Fixed - go.mod uses Go 1.24.11, docs are correct |
 | 7 | Cross-platform status inconsistency | Minor | Documentation Drift | ✅ Fixed - migration.md updated |
-| 8 | Rendering loop not integrated | Moderate | Integration Gap | Open |
+| 8 | Rendering loop not integrated | Moderate | Integration Gap | ✅ Fixed - Ebiten rendering loop integrated with context cancellation |
 
 ## Recommendations
 
@@ -343,7 +337,7 @@ go func() {
 
 5. ~~**Add `--convert` CLI flag** - The migration code exists; just needs CLI exposure.~~ ✅ FIXED
 
-6. **Complete Ebiten rendering integration** - Connect `render.Game` to the public `Conky` interface.
+6. ~~**Complete Ebiten rendering integration** - Connect `render.Game` to the public `Conky` interface.~~ ✅ FIXED - Rendering loop integrated with context cancellation support
 
 7. ~~**Reconcile documentation inconsistencies** - Ensure README, migration.md, and cross-platform.md agree on platform support status.~~ ✅ FIXED
 

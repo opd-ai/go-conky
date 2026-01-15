@@ -20,6 +20,11 @@ test:
 	@echo "Running tests..."
 	@go test -v -race ./...
 
+# Run tests with xvfb (for CI environments without display)
+test-xvfb:
+	@echo "Running tests with xvfb..."
+	@xvfb-run --auto-servernum --server-args='-screen 0 640x480x24' go test -v -race ./...
+
 # Run benchmarks
 bench:
 	@echo "Running benchmarks..."
