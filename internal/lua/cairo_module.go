@@ -690,7 +690,7 @@ func (cm *CairoModule) surfaceDestroy(t *rt.Thread, c *rt.GoCont) (rt.Cont, erro
 // getRendererFromContext extracts the CairoRenderer from a context userdata.
 // The context can be a *render.CairoContext or a *sharedContext.
 // Returns the renderer and the argument offset (1 if context was provided, 0 otherwise).
-// It uses Args() + Etc() to get all arguments including varargs.
+// It combines c.Args() and c.Etc() to get all arguments including varargs.
 func (cm *CairoModule) getRendererFromContext(c *rt.GoCont) (*render.CairoRenderer, int) {
 	// Combine regular args and varargs to get total argument count
 	allArgs := append(c.Args(), c.Etc()...)
