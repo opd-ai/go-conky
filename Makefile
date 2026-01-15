@@ -169,11 +169,11 @@ build-all: build-linux build-windows build-darwin build-android
 # Platform-specific tests (Phase 7)
 test-platform:
 	@echo "Running platform-specific tests..."
-	@go test -v ./internal/platform/...
+	@go test -race -v ./internal/platform/...
 
 test-remote:
 	@echo "Running remote monitoring tests..."
-	@go test -v ./internal/platform/... -run Remote
+	@go test -race -v ./internal/platform/... -run Remote
 
 # Cross-platform distribution packages
 .PHONY: dist-all dist-linux dist-windows dist-darwin
