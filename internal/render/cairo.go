@@ -41,7 +41,9 @@ type CairoPattern struct {
 	cx0, cy0, r0, cx1, cy1, r1 float64
 	// Color stops for gradients
 	colorStops []ColorStop
-	mu         sync.Mutex
+	// Extend mode for patterns
+	extend PatternExtend
+	mu     sync.Mutex
 }
 
 // NewSolidPattern creates a solid color pattern.
@@ -218,6 +220,190 @@ func (p *CairoPattern) radialColorAt(x, y float64) color.RGBA {
 	return p.ColorAt(t)
 }
 
+// PatternExtend represents the extend mode for patterns.
+// This controls how a pattern is rendered outside its defined area.
+type PatternExtend int
+
+const (
+	// PatternExtendNone pads with transparent pixels.
+	PatternExtendNone PatternExtend = iota
+	// PatternExtendRepeat tiles the pattern.
+	PatternExtendRepeat
+	// PatternExtendReflect tiles the pattern, reflecting at boundaries.
+	PatternExtendReflect
+	// PatternExtendPad extends the edge color.
+	PatternExtendPad
+)
+
+// SetExtend sets the extend mode for the pattern.
+// This is equivalent to cairo_pattern_set_extend.
+func (p *CairoPattern) SetExtend(extend PatternExtend) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.extend = extend
+}
+
+// GetExtend returns the current extend mode for the pattern.
+// This is equivalent to cairo_pattern_get_extend.
+func (p *CairoPattern) GetExtend() PatternExtend {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.extend
+}
+
+// CairoMatrix represents a 2D affine transformation matrix.
+// The matrix is represented as:
+//
+//	| xx  xy |   | x |   | x0 |
+//	| yx  yy | * | y | + | y0 |
+//
+// This matches Cairo's cairo_matrix_t structure.
+type CairoMatrix struct {
+	XX, XY float64 // First row: transformation for x
+	YX, YY float64 // Second row: transformation for y
+	X0, Y0 float64 // Translation offset
+}
+
+// NewIdentityMatrix creates a new identity matrix.
+// This is equivalent to cairo_matrix_init_identity.
+func NewIdentityMatrix() *CairoMatrix {
+	return &CairoMatrix{
+		XX: 1, XY: 0,
+		YX: 0, YY: 1,
+		X0: 0, Y0: 0,
+	}
+}
+
+// NewTranslateMatrix creates a matrix that translates by (tx, ty).
+// This is equivalent to cairo_matrix_init_translate.
+func NewTranslateMatrix(tx, ty float64) *CairoMatrix {
+	return &CairoMatrix{
+		XX: 1, XY: 0,
+		YX: 0, YY: 1,
+		X0: tx, Y0: ty,
+	}
+}
+
+// NewScaleMatrix creates a matrix that scales by (sx, sy).
+// This is equivalent to cairo_matrix_init_scale.
+func NewScaleMatrix(sx, sy float64) *CairoMatrix {
+	return &CairoMatrix{
+		XX: sx, XY: 0,
+		YX: 0, YY: sy,
+		X0: 0, Y0: 0,
+	}
+}
+
+// NewRotateMatrix creates a matrix that rotates by angle radians.
+// This is equivalent to cairo_matrix_init_rotate.
+func NewRotateMatrix(angle float64) *CairoMatrix {
+	c := math.Cos(angle)
+	s := math.Sin(angle)
+	return &CairoMatrix{
+		XX: c, XY: -s,
+		YX: s, YY: c,
+		X0: 0, Y0: 0,
+	}
+}
+
+// Translate applies a translation to the matrix.
+// This is equivalent to cairo_matrix_translate.
+func (m *CairoMatrix) Translate(tx, ty float64) {
+	m.X0 += m.XX*tx + m.XY*ty
+	m.Y0 += m.YX*tx + m.YY*ty
+}
+
+// Scale applies a scale to the matrix.
+// This is equivalent to cairo_matrix_scale.
+func (m *CairoMatrix) Scale(sx, sy float64) {
+	m.XX *= sx
+	m.XY *= sy
+	m.YX *= sx
+	m.YY *= sy
+}
+
+// Rotate applies a rotation to the matrix.
+// This is equivalent to cairo_matrix_rotate.
+func (m *CairoMatrix) Rotate(angle float64) {
+	c := math.Cos(angle)
+	s := math.Sin(angle)
+	newXX := m.XX*c + m.XY*s
+	newXY := m.XX*(-s) + m.XY*c
+	newYX := m.YX*c + m.YY*s
+	newYY := m.YX*(-s) + m.YY*c
+	m.XX = newXX
+	m.XY = newXY
+	m.YX = newYX
+	m.YY = newYY
+}
+
+// Multiply multiplies this matrix by another matrix.
+// The result is stored in this matrix.
+// This computes: this = this * other
+func (m *CairoMatrix) Multiply(other *CairoMatrix) {
+	xx := m.XX*other.XX + m.XY*other.YX
+	xy := m.XX*other.XY + m.XY*other.YY
+	yx := m.YX*other.XX + m.YY*other.YX
+	yy := m.YX*other.XY + m.YY*other.YY
+	x0 := m.XX*other.X0 + m.XY*other.Y0 + m.X0
+	y0 := m.YX*other.X0 + m.YY*other.Y0 + m.Y0
+	m.XX = xx
+	m.XY = xy
+	m.YX = yx
+	m.YY = yy
+	m.X0 = x0
+	m.Y0 = y0
+}
+
+// TransformPoint transforms a point using the matrix.
+// This is equivalent to cairo_matrix_transform_point.
+func (m *CairoMatrix) TransformPoint(x, y float64) (tx, ty float64) {
+	tx = m.XX*x + m.XY*y + m.X0
+	ty = m.YX*x + m.YY*y + m.Y0
+	return tx, ty
+}
+
+// TransformDistance transforms a distance vector (no translation).
+// This is equivalent to cairo_matrix_transform_distance.
+func (m *CairoMatrix) TransformDistance(dx, dy float64) (tdx, tdy float64) {
+	tdx = m.XX*dx + m.XY*dy
+	tdy = m.YX*dx + m.YY*dy
+	return tdx, tdy
+}
+
+// Invert inverts the matrix if possible.
+// Returns true if successful, false if the matrix is singular.
+// This is equivalent to cairo_matrix_invert.
+func (m *CairoMatrix) Invert() bool {
+	det := m.XX*m.YY - m.XY*m.YX
+	if det == 0 || math.IsInf(det, 0) || math.IsNaN(det) {
+		return false
+	}
+	invDet := 1.0 / det
+	newXX := m.YY * invDet
+	newXY := -m.XY * invDet
+	newYX := -m.YX * invDet
+	newYY := m.XX * invDet
+	newX0 := (m.XY*m.Y0 - m.YY*m.X0) * invDet
+	newY0 := (m.YX*m.X0 - m.XX*m.Y0) * invDet
+	m.XX = newXX
+	m.XY = newXY
+	m.YX = newYX
+	m.YY = newYY
+	m.X0 = newX0
+	m.Y0 = newY0
+	return true
+}
+
+// Copy creates a copy of the matrix.
+func (m *CairoMatrix) Copy() *CairoMatrix {
+	return &CairoMatrix{
+		XX: m.XX, XY: m.XY,
+		YX: m.YX, YY: m.YY,
+		X0: m.X0, Y0: m.Y0,
+	}
+}
+
 // CairoRenderer implements a Cairo-compatible drawing API using Ebiten.
 
 // CairoRenderer implements a Cairo-compatible drawing API using Ebiten.
@@ -255,6 +441,8 @@ type CairoRenderer struct {
 	rotation   float64
 	scaleX     float64
 	scaleY     float64
+	// Transformation matrix (full matrix representation)
+	matrix *CairoMatrix
 	// Clip state
 	clipPath *vector.Path
 	hasClip  bool
@@ -285,6 +473,7 @@ type cairoState struct {
 	rotation      float64
 	scaleX        float64
 	scaleY        float64
+	matrix        *CairoMatrix
 	clipPath      *vector.Path
 	hasClip       bool
 	// Clip bounding box (tracked when clip is set)
@@ -371,6 +560,7 @@ func NewCairoRenderer() *CairoRenderer {
 		rotation:     0,
 		scaleX:       1.0,
 		scaleY:       1.0,
+		matrix:       NewIdentityMatrix(),
 		stateStack:   make([]cairoState, 0),
 	}
 }
@@ -1223,6 +1413,12 @@ func (cr *CairoRenderer) Save() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 
+	// Copy the matrix for the saved state
+	var matrixCopy *CairoMatrix
+	if cr.matrix != nil {
+		matrixCopy = cr.matrix.Copy()
+	}
+
 	state := cairoState{
 		currentColor:  cr.currentColor,
 		sourcePattern: cr.sourcePattern,
@@ -1239,6 +1435,7 @@ func (cr *CairoRenderer) Save() {
 		rotation:      cr.rotation,
 		scaleX:        cr.scaleX,
 		scaleY:        cr.scaleY,
+		matrix:        matrixCopy,
 		clipPath:      cr.clipPath,
 		hasClip:       cr.hasClip,
 		clipMinX:      cr.clipMinX,
