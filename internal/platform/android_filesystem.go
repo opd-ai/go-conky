@@ -110,6 +110,7 @@ func (f *androidFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, 
 
 func (f *androidFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
 	// Read from /proc/diskstats
+	// Field layout: https://www.kernel.org/doc/Documentation/ABI/testing/procfs-diskstats
 	file, err := os.Open("/proc/diskstats")
 	if err != nil {
 		return nil, fmt.Errorf("opening /proc/diskstats: %w", err)
