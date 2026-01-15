@@ -133,9 +133,9 @@ func runConvert(path string) int {
 	// Verify file exists
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "Error: configuration file not found: %s\n", path)
+			fmt.Fprintf(os.Stderr, "Configuration file not found: %s\n", path)
 		} else {
-			fmt.Fprintf(os.Stderr, "Error accessing file %s: %v\n", path, err)
+			fmt.Fprintf(os.Stderr, "Error accessing configuration file %s: %v\n", path, err)
 		}
 		return 1
 	}
