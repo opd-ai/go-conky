@@ -977,8 +977,9 @@ func (cr *CairoRenderer) Clip() {
 
 // ClipPreserve establishes a new clip region without clearing the current path.
 // This is equivalent to cairo_clip_preserve.
-// Note: Unlike Cairo, the clip path shares a reference with the preserved path.
-// If you need isolation, call cairo_save() before clip and cairo_restore() after.
+// Note: Since Ebiten's vector.Path cannot be copied, we store the current path
+// as the clip path and create a fresh path for continued drawing. The path state
+// (current point, etc.) is preserved but the path data is now isolated.
 func (cr *CairoRenderer) ClipPreserve() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
@@ -988,13 +989,22 @@ func (cr *CairoRenderer) ClipPreserve() {
 	}
 
 	// Store the current path as the clip path.
-	// Note: This is a reference to the same path object. Subsequent path
-	// operations will affect both the current path and the clip path.
-	// This matches Ebiten's behavior since vector.Path cannot be copied.
-	// To work around this, use cairo_save/cairo_restore to isolate state.
+	// To avoid aliasing issues, we swap to a new path for drawing and
+	// restore the current point so subsequent path operations can continue.
 	cr.clipPath = cr.path
 	cr.hasClip = true
-	// Path is preserved (not cleared)
+
+	// Create a new path but preserve the current point for continued drawing.
+	// This avoids the aliasing issue where modifying the current path
+	// would also modify the clip path.
+	currentX := cr.pathCurrentX
+	currentY := cr.pathCurrentY
+	cr.path = &vector.Path{}
+	// Re-establish the current point on the new path
+	cr.path.MoveTo(currentX, currentY)
+	cr.pathStartX = currentX
+	cr.pathStartY = currentY
+	// hasPath remains true since we still have a current point
 }
 
 // ResetClip resets the clip region to an infinitely large shape.
