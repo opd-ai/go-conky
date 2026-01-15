@@ -75,7 +75,7 @@ coverage:
 # Format code
 fmt:
 	@echo "Formatting code..."
-	go install mvdan.cc/gofumpt@latest
+	@go install mvdan.cc/gofumpt@latest
 	@gofumpt -w -s -extra .
 
 # Run go vet
