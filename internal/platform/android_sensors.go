@@ -195,7 +195,10 @@ func (s *androidSensorProvider) readTemperatureSensors(devicePath string) ([]Sen
 		return nil, fmt.Errorf("reading device directory: %w", err)
 	}
 
-	readings := make([]SensorReading, 0, len(entries)/4)
+	// Each sensor typically has ~4 associated files (input, label, crit, max)
+	// so divide by 4 for initial capacity estimate
+	const filesPerSensor = 4
+	readings := make([]SensorReading, 0, len(entries)/filesPerSensor)
 
 	for _, entry := range entries {
 		name := entry.Name()
@@ -275,7 +278,10 @@ func (s *androidSensorProvider) readFanSensors(devicePath string) ([]SensorReadi
 		return nil, fmt.Errorf("reading device directory: %w", err)
 	}
 
-	readings := make([]SensorReading, 0, len(entries)/4)
+	// Each sensor typically has ~4 associated files (input, label, etc.)
+	// so divide by 4 for initial capacity estimate
+	const filesPerSensor = 4
+	readings := make([]SensorReading, 0, len(entries)/filesPerSensor)
 
 	for _, entry := range entries {
 		name := entry.Name()

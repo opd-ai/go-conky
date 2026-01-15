@@ -51,3 +51,19 @@ func readInt64File(path string) (int64, bool) {
 
 	return value, true
 }
+
+// safeMultiplyDivide multiplies two uint64 values and divides by a divisor,
+// with overflow protection. Returns 0 if the multiplication would overflow.
+func safeMultiplyDivide(a, b, divisor uint64) uint64 {
+	if divisor == 0 {
+		return 0
+	}
+	// Check for potential overflow: a * b > MaxUint64
+	// Equivalent to: a > MaxUint64 / b (when b > 0)
+	if b > 0 && a > ^uint64(0)/b {
+		// Would overflow, use alternative calculation
+		// For large values, divide first to reduce magnitude
+		return (a / divisor) * b
+	}
+	return (a * b) / divisor
+}

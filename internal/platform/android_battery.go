@@ -95,10 +95,11 @@ func (b *androidBatteryProvider) readBatteryStats(batteryPath string) (*BatteryS
 		chargeFull, _ := readUint64File(filepath.Join(batteryPath, "charge_full"))
 		voltage, _ := readUint64File(filepath.Join(batteryPath, "voltage_now"))
 
-		// Convert charge to energy: energy = charge * voltage
+		// Convert charge to energy: energy = charge * voltage / 1000000
+		// Use safe multiplication to prevent overflow
 		if voltage > 0 {
-			energyNow = chargeNow * voltage / 1000000 // Convert to µWh
-			energyFull = chargeFull * voltage / 1000000
+			energyNow = safeMultiplyDivide(chargeNow, voltage, 1000000)
+			energyFull = safeMultiplyDivide(chargeFull, voltage, 1000000)
 		}
 	}
 
@@ -109,8 +110,8 @@ func (b *androidBatteryProvider) readBatteryStats(batteryPath string) (*BatteryS
 		voltage, _ := readUint64File(filepath.Join(batteryPath, "voltage_now"))
 
 		if voltage > 0 && chargeCounter > 0 {
-			energyNow = chargeCounter * voltage / 1000000
-			energyFull = chargeFull * voltage / 1000000
+			energyNow = safeMultiplyDivide(chargeCounter, voltage, 1000000)
+			energyFull = safeMultiplyDivide(chargeFull, voltage, 1000000)
 		}
 	}
 
@@ -128,7 +129,8 @@ func (b *androidBatteryProvider) readBatteryStats(batteryPath string) (*BatteryS
 		currentNow, _ := readUint64File(filepath.Join(batteryPath, "current_now"))
 		if currentNow > 0 && voltage > 0 {
 			// Power = Current * Voltage (both in µA and µV)
-			powerNow = currentNow * voltage / 1000000
+			// Use safe multiplication to prevent overflow
+			powerNow = safeMultiplyDivide(currentNow, voltage, 1000000)
 		}
 	}
 
