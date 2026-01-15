@@ -98,9 +98,9 @@ Total Gaps Found: 9
 
 **Implementation Location:** `internal/lua/cairo_bindings.go:46-95`
 
-**Status:** 🔄 **Partially Fixed** - Text, transform, surface management, path/clip query, and pattern/gradient functions added
+**Status:** 🔄 **Partially Fixed** - Text, transform, surface management, path/clip query, pattern/gradient, matrix, and pattern extend functions added
 
-**Fix Details:** Added the most commonly used Cairo text, transformation, surface management, path/clip query, and pattern/gradient functions:
+**Fix Details:** Added the most commonly used Cairo text, transformation, surface management, path/clip query, pattern/gradient, matrix, and pattern extend functions:
 
 1. **Text Functions (4 functions):**
    - `cairo_select_font_face(family, slant, weight)` - Set font family, slant, and weight
@@ -179,12 +179,42 @@ Total Gaps Found: 9
 11. `cairo_reset_clip()` - Reset clip region to infinite
 
 **Remaining Work:** Additional Cairo functions for full compatibility:
-- Matrix functions: `cairo_get_matrix`, `cairo_set_matrix`, `cairo_transform`
 - Path iteration: `cairo_copy_path`, `cairo_path_data_t` handling
-- Surface functions: `cairo_surface_flush`, `cairo_surface_mark_dirty`
-- Extended pattern functions: `cairo_pattern_set_extend`, `cairo_pattern_get_extend`
 
-**Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, clipping, path/clip queries, and gradients now work. Users can create linear and radial gradients for advanced visual effects. Scripts that use gradients for progress bars, gauges, and backgrounds now execute correctly.
+**Recently Added (January 15, 2026 - Matrix, Pattern Extend, and Surface Functions):**
+
+**Matrix Functions (16 functions):**
+1. `cairo_get_matrix(cr)` - Get the current transformation matrix
+2. `cairo_set_matrix(cr, matrix)` - Set the transformation matrix
+3. `cairo_transform(cr, matrix)` - Multiply current matrix by another
+4. `cairo_matrix_init(xx, yx, xy, yy, x0, y0)` - Initialize matrix with components
+5. `cairo_matrix_init_identity()` - Create an identity matrix
+6. `cairo_matrix_init_translate(tx, ty)` - Create a translation matrix
+7. `cairo_matrix_init_scale(sx, sy)` - Create a scale matrix
+8. `cairo_matrix_init_rotate(angle)` - Create a rotation matrix
+9. `cairo_matrix_translate(matrix, tx, ty)` - Apply translation to matrix
+10. `cairo_matrix_scale(matrix, sx, sy)` - Apply scale to matrix
+11. `cairo_matrix_rotate(matrix, angle)` - Apply rotation to matrix
+12. `cairo_matrix_invert(matrix)` - Invert the matrix
+13. `cairo_matrix_multiply(result, a, b)` - Multiply two matrices
+14. `cairo_matrix_transform_point(matrix, x, y)` - Transform a point
+15. `cairo_matrix_transform_distance(matrix, dx, dy)` - Transform a distance vector
+
+**Pattern Extend Functions (2 functions):**
+1. `cairo_pattern_set_extend(pattern, extend)` - Set pattern extend mode
+2. `cairo_pattern_get_extend(pattern)` - Get pattern extend mode
+
+**Surface Management Functions (3 additional functions):**
+1. `cairo_surface_flush(surface)` - Flush pending drawing operations
+2. `cairo_surface_mark_dirty(surface)` - Mark entire surface as dirty
+3. `cairo_surface_mark_dirty_rectangle(surface, x, y, w, h)` - Mark rectangle as dirty
+
+**New Constants:**
+- `CAIRO_EXTEND_NONE`, `CAIRO_EXTEND_REPEAT`, `CAIRO_EXTEND_REFLECT`, `CAIRO_EXTEND_PAD`
+
+**Current Function Count:** ~74 implemented functions (up from ~53)
+
+**Production Impact:** Moderate - Text rendering, transformations, surface management, relative paths, clipping, path/clip queries, and gradients now work. Users can create linear and radial gradients for advanced visual effects. Scripts that use gradients for progress bars, gauges, and backgrounds now execute correctly. Matrix operations enable complex coordinate transformations. Pattern extend modes control gradient tiling behavior.
 
 **Usage Example:**
 ```lua
@@ -471,7 +501,7 @@ c.Start() // No window, monitor runs in background
 | Gap # | Description | Severity | Category | Status |
 |-------|-------------|----------|----------|--------|
 | 1 | Variable count (42 vs 200+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 10 system info variables |
-| 2 | Cairo functions (46 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added 26 functions (text/transform/surface/relative path/clip/query) |
+| 2 | Cairo functions (46 vs 180+) | Moderate | Feature Gap | 🔄 Partially Fixed - Added ~74 functions (matrix/extend/surface/text/transform/gradient/clip) |
 | 3 | `require 'cairo'` pattern not supported | Moderate | Feature Gap | ✅ Fixed - cairo module and conky_window implemented |
 | 4 | Uptime format mismatch | Minor | Behavioral Nuance | ✅ Fixed - docs updated to match implementation |
 | 5 | `--convert` CLI flag not implemented | Minor | Feature Gap | ✅ Fixed - CLI flag implemented in main.go |
