@@ -40,6 +40,53 @@ func TestNewCairoModule(t *testing.T) {
 	}
 }
 
+func TestCairoModule_WithCairoRenderer(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	// Create a shared renderer
+	sharedRenderer := render.NewCairoRenderer()
+	sharedRenderer.SetLineWidth(5.0) // Set a distinctive value
+
+	// Create CairoModule with the shared renderer
+	cm, err := NewCairoModule(runtime, WithCairoRenderer(sharedRenderer))
+	if err != nil {
+		t.Fatalf("Failed to create CairoModule: %v", err)
+	}
+
+	// Verify the shared renderer is used
+	if cm.Renderer() != sharedRenderer {
+		t.Error("Expected CairoModule to use the shared renderer")
+	}
+
+	// Verify the renderer state is shared
+	if cm.Renderer().GetLineWidth() != 5.0 {
+		t.Errorf("Expected line width 5.0, got %f", cm.Renderer().GetLineWidth())
+	}
+}
+
+func TestCairoModule_WithNilRenderer(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	// Create CairoModule with nil renderer option (should create new renderer)
+	cm, err := NewCairoModule(runtime, WithCairoRenderer(nil))
+	if err != nil {
+		t.Fatalf("Failed to create CairoModule: %v", err)
+	}
+
+	// Should still have a renderer (fallback to creating new one)
+	if cm.Renderer() == nil {
+		t.Error("Expected CairoModule to have a renderer even with nil option")
+	}
+}
+
 func TestCairoModule_RequireCairo(t *testing.T) {
 	runtime, err := New(DefaultConfig())
 	if err != nil {

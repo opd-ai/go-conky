@@ -17,18 +17,51 @@ type CairoModule struct {
 	renderer *render.CairoRenderer
 }
 
+// CairoModuleOption configures a CairoModule instance at construction time.
+// This allows callers to inject shared dependencies such as the CairoRenderer.
+type CairoModuleOption func(*CairoModule)
+
+// WithCairoRenderer configures a CairoModule to use the provided CairoRenderer
+// instance instead of creating its own. This is useful when CairoModule is
+// used alongside other Cairo integrations (e.g., CairoBindings) so that all
+// components share a single renderer instance.
+func WithCairoRenderer(renderer *render.CairoRenderer) CairoModuleOption {
+	return func(cm *CairoModule) {
+		if renderer != nil {
+			cm.renderer = renderer
+		}
+	}
+}
+
 // NewCairoModule creates a new CairoModule instance and registers
 // the 'cairo' module in Lua's package.preload table.
 // It also sets up the conky_window global table and registers global
 // cairo_* functions for backward compatibility with existing scripts.
-func NewCairoModule(runtime *ConkyRuntime) (*CairoModule, error) {
+//
+// By default, NewCairoModule creates its own CairoRenderer instance. When
+// integrating with other components that also use Cairo (such as
+// CairoBindings), callers should provide a shared renderer using
+// the WithCairoRenderer option to avoid multiple independent renderer
+// instances in the same application.
+func NewCairoModule(runtime *ConkyRuntime, opts ...CairoModuleOption) (*CairoModule, error) {
 	if runtime == nil {
 		return nil, ErrNilRuntime
 	}
 
 	cm := &CairoModule{
-		runtime:  runtime,
-		renderer: render.NewCairoRenderer(),
+		runtime: runtime,
+	}
+
+	// Apply any provided options (e.g., shared renderer injection).
+	for _, opt := range opts {
+		if opt != nil {
+			opt(cm)
+		}
+	}
+
+	// Preserve existing behavior: if no renderer was injected, create one.
+	if cm.renderer == nil {
+		cm.renderer = render.NewCairoRenderer()
 	}
 
 	cm.registerModule()
@@ -48,9 +81,7 @@ func (cm *CairoModule) Renderer() *render.CairoRenderer {
 // UpdateWindowInfo updates the conky_window global with current window dimensions.
 // This should be called each frame before Lua drawing hooks are executed.
 func (cm *CairoModule) UpdateWindowInfo(width, height int, display, drawable, visual uintptr) {
-	cm.runtime.mu.Lock()
-	defer cm.runtime.mu.Unlock()
-
+	// Create window table outside the lock
 	windowTable := rt.NewTable()
 	windowTable.Set(rt.StringValue("width"), rt.IntValue(int64(width)))
 	windowTable.Set(rt.StringValue("height"), rt.IntValue(int64(height)))
@@ -63,13 +94,29 @@ func (cm *CairoModule) UpdateWindowInfo(width, height int, display, drawable, vi
 	windowTable.Set(rt.StringValue("drawable"), rt.IntValue(int64(drawable)))
 	windowTable.Set(rt.StringValue("visual"), rt.IntValue(int64(visual)))
 
-	cm.runtime.runtime.GlobalEnv().Set(rt.StringValue("conky_window"), rt.TableValue(windowTable))
+	// Use the runtime's public API which handles locking
+	cm.runtime.SetGlobal("conky_window", rt.TableValue(windowTable))
 }
 
-// registerModule registers the cairo module as a global and in package.loaded.
-// The recommended pattern is to use the global cairo table directly (e.g., cairo.set_source_rgb()).
-// NOTE: require('cairo') is registered in package.loaded but may fail in resource-limited
-// contexts because Golua's require function is not marked as CPU/memory-safe.
+// registerModule registers the cairo module as a global and (when possible) in package.loaded.
+//
+// Preferred usage:
+//
+//	Scripts should use the global `cairo` table directly, e.g.:
+//	  cairo.set_source_rgb(...)
+//	  local cairo = cairo -- if a local alias is desired
+//
+// Compatibility usage:
+//
+//	For existing Conky Lua scripts that call `require "cairo"`, this method also
+//	registers the module in package.loaded so that `require("cairo")` returns
+//	the same table. However, this depends on the Lua `package` table and Golua's
+//	`require` implementation being available and enabled.
+//
+//	In sandboxed or resource-limited contexts, `require` may be disabled or
+//	restricted for CPU/memory-safety reasons, so scripts should not rely on
+//	`require("cairo")` being available. The global `cairo` table is always
+//	created by conky-go and is the recommended access pattern.
 func (cm *CairoModule) registerModule() {
 	// Create the cairo module table
 	cairoTable := rt.NewTable()
@@ -262,7 +309,8 @@ func (cm *CairoModule) setLineCap(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 	if err != nil {
 		return nil, err
 	}
-	if capStyle < 0 || capStyle > 2 {
+	// Validate line cap value against defined constants
+	if capStyle < int64(render.LineCapButt) || capStyle > int64(render.LineCapSquare) {
 		return nil, ErrInvalidLineCap
 	}
 	cm.renderer.SetLineCap(render.LineCap(capStyle))
@@ -274,7 +322,8 @@ func (cm *CairoModule) setLineJoin(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) 
 	if err != nil {
 		return nil, err
 	}
-	if join < 0 || join > 2 {
+	// Validate line join value against defined constants
+	if join < int64(render.LineJoinMiter) || join > int64(render.LineJoinBevel) {
 		return nil, ErrInvalidLineJoin
 	}
 	cm.renderer.SetLineJoin(render.LineJoin(join))
