@@ -1264,10 +1264,10 @@ func TestCairoRenderer_RelativePathChain(t *testing.T) {
 
 	// Create a square using relative moves
 	cr.MoveTo(0, 0)
-	cr.RelLineTo(100, 0)   // right
-	cr.RelLineTo(0, 100)   // down
-	cr.RelLineTo(-100, 0)  // left
-	cr.RelLineTo(0, -100)  // up (back to start)
+	cr.RelLineTo(100, 0)  // right
+	cr.RelLineTo(0, 100)  // down
+	cr.RelLineTo(-100, 0) // left
+	cr.RelLineTo(0, -100) // up (back to start)
 
 	// Verify we're back at the origin
 	x, y, hasPoint := cr.GetCurrentPoint()
@@ -1419,5 +1419,172 @@ func TestCairoRenderer_HasClipInitialState(t *testing.T) {
 	// Verify initial state has no clip
 	if cr.HasClip() {
 		t.Error("Expected no clip in initial state")
+	}
+}
+
+// --- Tests for Path Query Functions ---
+
+func TestCairoRenderer_HasCurrentPoint(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Initially no current point
+	if cr.HasCurrentPoint() {
+		t.Error("Expected no current point in initial state")
+	}
+
+	// After MoveTo, should have current point
+	cr.MoveTo(10, 20)
+	if !cr.HasCurrentPoint() {
+		t.Error("Expected current point after MoveTo")
+	}
+
+	// After NewPath, should have no current point
+	cr.NewPath()
+	if cr.HasCurrentPoint() {
+		t.Error("Expected no current point after NewPath")
+	}
+}
+
+func TestCairoRenderer_PathExtents(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// No path - should return zeros
+	x1, y1, x2, y2 := cr.PathExtents()
+	if x1 != 0 || y1 != 0 || x2 != 0 || y2 != 0 {
+		t.Errorf("Expected (0,0,0,0) for empty path, got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+
+	// Simple rectangle
+	cr.Rectangle(10, 20, 100, 50)
+	x1, y1, x2, y2 = cr.PathExtents()
+	if x1 != 10 || y1 != 20 || x2 != 110 || y2 != 70 {
+		t.Errorf("Expected (10,20,110,70), got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+
+	// After NewPath, bounds should reset
+	cr.NewPath()
+	x1, y1, x2, y2 = cr.PathExtents()
+	if x1 != 0 || y1 != 0 || x2 != 0 || y2 != 0 {
+		t.Errorf("Expected (0,0,0,0) after NewPath, got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+}
+
+func TestCairoRenderer_PathExtentsWithLines(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Build a path with lines
+	cr.MoveTo(0, 0)
+	cr.LineTo(100, 50)
+	cr.LineTo(50, 100)
+
+	x1, y1, x2, y2 := cr.PathExtents()
+	if x1 != 0 || y1 != 0 || x2 != 100 || y2 != 100 {
+		t.Errorf("Expected (0,0,100,100), got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+}
+
+func TestCairoRenderer_PathExtentsWithCurve(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Build a path with a curve
+	cr.MoveTo(0, 0)
+	cr.CurveTo(20, 30, 40, 50, 60, 70)
+
+	x1, y1, x2, y2 := cr.PathExtents()
+	// Bounds should include control points and endpoints
+	if x1 != 0 || y1 != 0 || x2 != 60 || y2 != 70 {
+		t.Errorf("Expected (0,0,60,70), got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+}
+
+func TestCairoRenderer_ClipExtents(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// No clip, no screen - should return zeros
+	x1, y1, x2, y2 := cr.ClipExtents()
+	if x1 != 0 || y1 != 0 || x2 != 0 || y2 != 0 {
+		t.Errorf("Expected (0,0,0,0) with no clip and no screen, got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+
+	// Set a clip region
+	cr.Rectangle(10, 20, 100, 50)
+	cr.Clip()
+
+	x1, y1, x2, y2 = cr.ClipExtents()
+	if x1 != 10 || y1 != 20 || x2 != 110 || y2 != 70 {
+		t.Errorf("Expected (10,20,110,70), got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+
+	// Reset clip
+	cr.ResetClip()
+	x1, y1, x2, y2 = cr.ClipExtents()
+	if x1 != 0 || y1 != 0 || x2 != 0 || y2 != 0 {
+		t.Errorf("Expected (0,0,0,0) after ResetClip, got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+}
+
+func TestCairoRenderer_InClip(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// No clip - all points should be in clip
+	if !cr.InClip(50, 50) {
+		t.Error("Expected point to be in clip when no clip is set")
+	}
+
+	// Set a clip region
+	cr.Rectangle(10, 20, 100, 50)
+	cr.Clip()
+
+	// Point inside clip
+	if !cr.InClip(50, 40) {
+		t.Error("Expected point (50,40) to be inside clip (10,20,110,70)")
+	}
+
+	// Point outside clip
+	if cr.InClip(5, 40) {
+		t.Error("Expected point (5,40) to be outside clip (10,20,110,70)")
+	}
+	if cr.InClip(50, 15) {
+		t.Error("Expected point (50,15) to be outside clip (10,20,110,70)")
+	}
+	if cr.InClip(200, 40) {
+		t.Error("Expected point (200,40) to be outside clip (10,20,110,70)")
+	}
+
+	// Point on boundary should be inside
+	if !cr.InClip(10, 20) {
+		t.Error("Expected point (10,20) on boundary to be inside clip")
+	}
+	if !cr.InClip(110, 70) {
+		t.Error("Expected point (110,70) on boundary to be inside clip")
+	}
+}
+
+func TestCairoRenderer_ClipBoundsSaveRestore(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set initial clip
+	cr.Rectangle(10, 20, 100, 50)
+	cr.Clip()
+
+	// Save state
+	cr.Save()
+
+	// Set a different clip
+	cr.Rectangle(0, 0, 200, 200)
+	cr.Clip()
+
+	x1, y1, x2, y2 := cr.ClipExtents()
+	if x1 != 0 || y1 != 0 || x2 != 200 || y2 != 200 {
+		t.Errorf("Expected (0,0,200,200), got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+
+	// Restore state
+	cr.Restore()
+
+	// Should have original clip bounds
+	x1, y1, x2, y2 = cr.ClipExtents()
+	if x1 != 10 || y1 != 20 || x2 != 110 || y2 != 70 {
+		t.Errorf("Expected (10,20,110,70) after restore, got (%f,%f,%f,%f)", x1, y1, x2, y2)
 	}
 }
