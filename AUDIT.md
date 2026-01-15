@@ -362,8 +362,6 @@ c.Start() // No window, monitor runs in background
 
 ## Recommendations
 
-## Recommendations
-
 1. **Update documentation to reflect actual implementation status** - Revise claims about "200+ variables" and "180+ Cairo functions" to match implementation.
 
 2. ~~**Implement missing Cairo text functions** - Text rendering is essential for most Conky Lua scripts. Prioritize `cairo_select_font_face`, `cairo_show_text`, `cairo_text_extents`.~~ ✅ FIXED - Text and transformation functions implemented
