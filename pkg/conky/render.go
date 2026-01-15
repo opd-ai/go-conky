@@ -52,10 +52,13 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	if interval <= 0 {
 		interval = defaultUpdateInterval
 	}
-	// Default background is semi-transparent black (not from config to avoid
-	// confusion with text color which uses Colors.Default)
+	// Background color uses a hardcoded semi-transparent black because
+	// config.ColorConfig currently has no dedicated background color field.
+	// Colors.Default is specifically "the default text color" per its documentation,
+	// so using it for background would be semantically incorrect and confusing.
+	// TODO: Consider adding a dedicated background color field to ColorConfig.
 	bgColor := color.RGBA{R: 0, G: 0, B: 0, A: defaultBackgroundAlpha}
-	// Default text color is white
+	// Default text color is white if not specified in config
 	if textColor == (color.RGBA{}) {
 		textColor = color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	}
