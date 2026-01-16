@@ -108,7 +108,7 @@ Total Gaps Found: 9
 - `internal/lua/api.go` - Updated wireless resolver functions to use real data
 - `internal/lua/api_test.go` - Added wireless variable tests with mock wireless interface
 
-**Current Variable Count:** ~107 implemented variables (up from ~102)
+**Current Variable Count:** ~117 implemented variables (up from ~107)
 
 **Newly Added Wireless Variables:**
 - `${wireless_essid interface}` - Returns the ESSID (network name) of a wireless interface
@@ -118,6 +118,40 @@ Total Gaps Found: 9
 - `${wireless_bitrate interface}` - Returns bit rate (e.g., "54Mb/s", "1.0Gb/s")
 - `${wireless_ap interface}` - Returns the access point MAC address
 - `${wireless_mode interface}` - Returns the operating mode (e.g., "Managed")
+
+**Implementation Files (TCP/GPU Update January 16, 2026):**
+- `internal/monitor/tcp.go` - New TCPConnection, TCPStats types and reader for /proc/net/tcp
+- `internal/monitor/tcp_test.go` - Comprehensive tests for TCP connection parsing
+- `internal/monitor/gpu.go` - New GPUStats type and reader for nvidia-smi integration
+- `internal/monitor/gpu_test.go` - Comprehensive tests for GPU stats parsing
+- `internal/monitor/monitor.go` - Added tcpReader and gpuReader to SystemMonitor
+- `internal/lua/api.go` - Full implementation of tcp_portmon and nvidia variable resolvers
+- `internal/lua/api_test.go` - Added TCP/GPU mock providers and tests
+
+**Newly Added TCP Port Monitor Variables:**
+- `${tcp_portmon start end count}` - Returns count of TCP connections in port range
+- `${tcp_portmon start end rip index}` - Returns remote IP of connection at index
+- `${tcp_portmon start end rhost index}` - Returns remote hostname of connection at index
+- `${tcp_portmon start end rport index}` - Returns remote port of connection at index
+- `${tcp_portmon start end rservice index}` - Returns remote service name at index
+- `${tcp_portmon start end lip index}` - Returns local IP of connection at index
+- `${tcp_portmon start end lhost index}` - Returns local hostname of connection at index
+- `${tcp_portmon start end lport index}` - Returns local port of connection at index
+- `${tcp_portmon start end lservice index}` - Returns local service name at index
+
+**Newly Added NVIDIA GPU Variables (fully implemented):**
+- `${nvidia temp}` - Returns GPU temperature in Celsius
+- `${nvidia gpuutil}` - Returns GPU utilization percentage
+- `${nvidia memutil}` - Returns memory utilization percentage
+- `${nvidia membw}` - Returns memory bandwidth utilization
+- `${nvidia memused}` - Returns memory used in bytes
+- `${nvidia memfree}` - Returns memory free in bytes
+- `${nvidia memtotal}` - Returns total memory in bytes
+- `${nvidia memperc}` - Returns memory usage percentage
+- `${nvidia fan}` - Returns fan speed percentage
+- `${nvidia power}` - Returns current power draw in watts
+- `${nvidia driver}` - Returns NVIDIA driver version
+- `${nvidia name}` - Returns GPU name
 
 **Production Impact:** High - All commonly used variables now work including wireless network info.
 

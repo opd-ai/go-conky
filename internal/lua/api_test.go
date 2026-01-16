@@ -221,6 +221,47 @@ func newMockProvider() *mockSystemDataProvider {
 			LoadAvg5:      1.25,
 			LoadAvg15:     1.00,
 		},
+		tcp: monitor.TCPStats{
+			Connections: []monitor.TCPConnection{
+				{
+					LocalIP:    "192.168.1.100",
+					LocalPort:  22,
+					RemoteIP:   "10.0.0.1",
+					RemotePort: 52345,
+					State:      "ESTABLISHED",
+				},
+				{
+					LocalIP:    "0.0.0.0",
+					LocalPort:  80,
+					RemoteIP:   "0.0.0.0",
+					RemotePort: 0,
+					State:      "LISTEN",
+				},
+				{
+					LocalIP:    "192.168.1.100",
+					LocalPort:  443,
+					RemoteIP:   "10.0.0.2",
+					RemotePort: 54321,
+					State:      "ESTABLISHED",
+				},
+			},
+			TotalCount:  3,
+			ListenCount: 1,
+		},
+		gpu: monitor.GPUStats{
+			Name:        "NVIDIA GeForce RTX 3080",
+			DriverVer:   "535.154.05",
+			MemTotal:    10 * 1024 * 1024 * 1024, // 10 GiB
+			MemUsed:     4 * 1024 * 1024 * 1024,  // 4 GiB
+			MemFree:     6 * 1024 * 1024 * 1024,  // 6 GiB
+			UtilGPU:     45,
+			UtilMem:     40,
+			Temperature: 65,
+			FanSpeed:    55,
+			PowerDraw:   180.5,
+			PowerLimit:  320.0,
+			Available:   true,
+		},
 	}
 }
 
@@ -1840,6 +1881,188 @@ func TestParseWirelessVariables(t *testing.T) {
 		{
 			name:     "wireless unknown interface",
 			template: "${wireless_essid unknown}",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestParseTCPPortMonVariables tests TCP port monitor variable parsing.
+func TestParseTCPPortMonVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "tcp portmon count in range",
+			template: "${tcp_portmon 1 1024 count}",
+			expected: "2", // SSH port 22 and HTTP port 80
+		},
+		{
+			name:     "tcp portmon count all ports",
+			template: "${tcp_portmon 1 65535 count}",
+			expected: "3", // All three connections
+		},
+		{
+			name:     "tcp portmon local ip",
+			template: "${tcp_portmon 1 1024 lip 0}",
+			expected: "192.168.1.100",
+		},
+		{
+			name:     "tcp portmon local port",
+			template: "${tcp_portmon 1 1024 lport 0}",
+			expected: "22",
+		},
+		{
+			name:     "tcp portmon local service",
+			template: "${tcp_portmon 1 1024 lservice 0}",
+			expected: "ssh",
+		},
+		{
+			name:     "tcp portmon remote ip",
+			template: "${tcp_portmon 1 1024 rip 0}",
+			expected: "10.0.0.1",
+		},
+		{
+			name:     "tcp portmon remote port",
+			template: "${tcp_portmon 1 1024 rport 0}",
+			expected: "52345",
+		},
+		{
+			name:     "tcp portmon insufficient args",
+			template: "${tcp_portmon 1}",
+			expected: "0",
+		},
+		{
+			name:     "tcp portmon invalid port range",
+			template: "${tcp_portmon abc 1024 count}",
+			expected: "0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestParseNvidiaVariables tests NVIDIA GPU variable parsing.
+func TestParseNvidiaVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "nvidia temp",
+			template: "${nvidia temp}",
+			expected: "65",
+		},
+		{
+			name:     "nvidia gpuutil",
+			template: "${nvidia gpuutil}",
+			expected: "45",
+		},
+		{
+			name:     "nvidia memutil",
+			template: "${nvidia memutil}",
+			expected: "40",
+		},
+		{
+			name:     "nvidia fan",
+			template: "${nvidia fan}",
+			expected: "55",
+		},
+		{
+			name:     "nvidia power",
+			template: "${nvidia power}",
+			expected: "180.50",
+		},
+		{
+			name:     "nvidia driver",
+			template: "${nvidia driver}",
+			expected: "535.154.05",
+		},
+		{
+			name:     "nvidia name",
+			template: "${nvidia name}",
+			expected: "NVIDIA GeForce RTX 3080",
+		},
+		{
+			name:     "nvidia memused",
+			template: "${nvidia memused}",
+			expected: "4.00 GiB",
+		},
+		{
+			name:     "nvidia memtotal",
+			template: "${nvidia memtotal}",
+			expected: "10.00 GiB",
+		},
+		{
+			name:     "nvidia memfree",
+			template: "${nvidia memfree}",
+			expected: "6.00 GiB",
+		},
+		{
+			name:     "nvidia memperc",
+			template: "${nvidia memperc}",
+			expected: "40",
+		},
+		{
+			name:     "nvidia_temp direct variable",
+			template: "${nvidia_temp}",
+			expected: "65",
+		},
+		{
+			name:     "nvidia_gpu direct variable",
+			template: "${nvidia_gpu}",
+			expected: "45",
+		},
+		{
+			name:     "nvidia_fan direct variable",
+			template: "${nvidia_fan}",
+			expected: "55",
+		},
+		{
+			name:     "nvidia unknown field",
+			template: "${nvidia unknown}",
 			expected: "",
 		},
 	}
