@@ -1404,7 +1404,7 @@ func TestCairoBindings_RelMoveToNoPath(t *testing.T) {
 		t.Fatalf("Failed to create CairoBindings: %v", err)
 	}
 
-	// Test relative move without a current point (should do nothing)
+	// Test relative move without a current point (should start from 0,0)
 	_, err = runtime.ExecuteString("test", `
 		cairo_new_path()
 		cairo_rel_move_to(50, 25)
@@ -1413,10 +1413,13 @@ func TestCairoBindings_RelMoveToNoPath(t *testing.T) {
 		t.Fatalf("Failed to execute cairo_rel_move_to: %v", err)
 	}
 
-	// Verify there is no current point
-	_, _, hasPoint := cb.Renderer().GetCurrentPoint()
-	if hasPoint {
-		t.Error("Expected no current point after cairo_rel_move_to without initial point")
+	// Verify current point is at (50, 25) - relative offset from (0, 0)
+	x, y, hasPoint := cb.Renderer().GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after cairo_rel_move_to without initial point (now starts from 0,0)")
+	}
+	if x != 50 || y != 25 {
+		t.Errorf("Expected position (50, 25) after cairo_rel_move_to from (0,0), got (%f, %f)", x, y)
 	}
 }
 

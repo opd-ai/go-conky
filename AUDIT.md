@@ -17,7 +17,7 @@ This audit compares the documented functionality in README.md and supporting doc
 | **FUNCTIONAL MISMATCH** | 4 | 3 |
 | **DOCUMENTATION ISSUE** | 1 | 1 |
 | **MISSING FEATURE** | 4 | 0 |
-| **EDGE CASE BUG** | 3 | 2 |
+| **EDGE CASE BUG** | 3 | 3 |
 | **PERFORMANCE ISSUE** | 1 | 0 |
 
 **Overall Assessment:** The codebase is well-implemented with proper concurrency safety, error handling, and modular architecture. Most discrepancies are partial implementations or documentation clarifications rather than critical bugs.
@@ -28,6 +28,7 @@ This audit compares the documented functionality in README.md and supporting doc
 - ✅ Fixed `expandPathBoundsUnlocked` to use `hasPath` flag instead of zero-checks
 - ✅ Fixed `Sysname` to use `runtime.GOOS` for platform-aware OS name detection
 - ✅ Implemented `CopyPath` to return actual path segments instead of empty slice
+- ✅ Fixed `RelMoveTo`, `RelLineTo`, `RelCurveTo` to default to (0,0) when there's no current point
 
 ---
 
@@ -299,32 +300,22 @@ func (cr *CairoRenderer) expandPathBoundsUnlocked(x, y float64) {
 
 ---
 
-### EDGE CASE BUG: RelMoveTo/RelLineTo/RelCurveTo Silently Fail Without Current Point
+### ~~EDGE CASE BUG: RelMoveTo/RelLineTo/RelCurveTo Silently Fail Without Current Point~~ [RESOLVED]
 
-**File:** internal/render/cairo.go:977-1035  
+**File:** internal/render/cairo.go:1048-1117  
 **Severity:** Low  
-**Description:** The relative path functions (`RelMoveTo`, `RelLineTo`, `RelCurveTo`) silently return without doing anything if there's no current point, without reporting an error. This matches Cairo's behavior but may be surprising.
+**Status:** ✅ RESOLVED - Relative path functions now start from (0,0) when there's no current point.
+
+**Description:** The relative path functions (`RelMoveTo`, `RelLineTo`, `RelCurveTo`) previously silently returned without doing anything if there's no current point. This has been fixed to start from (0,0), consistent with the `CurveTo` function behavior.
+
+**Resolution:** 
+- Updated `RelMoveTo`, `RelLineTo`, and `RelCurveTo` to initialize a current point at (0,0) when no path exists
+- Updated related tests in `internal/render/cairo_test.go` and `internal/lua/cairo_bindings_test.go`
+- Behavior is now consistent with the `CurveTo` function which also defaults to (0,0)
 
 **Expected Behavior:** Either set an error state or default to (0,0) like `CurveTo` does.
 
-**Actual Behavior:** Operations are silently skipped, which could lead to unexpected path shapes.
-
-**Impact:** User scripts may have silently incomplete paths if they start with relative operations.
-
-**Reproduction:** Call `cairo_rel_line_to(cr, 10, 10)` without first calling `cairo_move_to`.
-
-**Code Reference:**
-```go
-func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
-    cr.mu.Lock()
-    defer cr.mu.Unlock()
-    if !cr.hasPath {
-        // Cairo requires a current point for relative moves
-        return  // Silent failure
-    }
-    // ...
-}
-```
+**Actual Behavior:** Now defaults to (0,0) when there's no current point, consistent with `CurveTo`.
 
 ---
 
