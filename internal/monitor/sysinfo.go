@@ -186,13 +186,14 @@ func getSysname() string {
 		// Android uses Linux kernel, so return Linux for compatibility
 		return "Linux"
 	case "solaris", "illumos":
+		// Both Solaris and illumos report "SunOS" from uname -s for compatibility.
+		// illumos is a fork of OpenSolaris but shares the SunOS kernel interface.
 		return "SunOS"
 	default:
-		// For unknown platforms, capitalize the first letter
-		if len(runtime.GOOS) > 0 {
-			goos := runtime.GOOS
-			return string(goos[0]-32) + goos[1:]
-		}
+		// For unknown platforms, return GOOS as-is.
+		// Go's runtime.GOOS values are lowercase identifiers, but for unknown
+		// platforms it's safer to return them unchanged rather than attempting
+		// case conversion that could fail on non-ASCII or edge cases.
 		return runtime.GOOS
 	}
 }
