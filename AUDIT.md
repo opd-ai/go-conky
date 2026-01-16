@@ -14,7 +14,7 @@ This audit compares the documented functionality in README.md and supporting doc
 | Category | Count | Resolved |
 |----------|-------|----------|
 | **CRITICAL BUG** | 0 | 0 |
-| **FUNCTIONAL MISMATCH** | 4 | 2 |
+| **FUNCTIONAL MISMATCH** | 4 | 3 |
 | **DOCUMENTATION ISSUE** | 1 | 1 |
 | **MISSING FEATURE** | 4 | 0 |
 | **EDGE CASE BUG** | 3 | 2 |
@@ -27,6 +27,7 @@ This audit compares the documented functionality in README.md and supporting doc
 - ✅ Fixed `--convert` flag documentation (removed "future feature" label)
 - ✅ Fixed `expandPathBoundsUnlocked` to use `hasPath` flag instead of zero-checks
 - ✅ Fixed `Sysname` to use `runtime.GOOS` for platform-aware OS name detection
+- ✅ Implemented `CopyPath` to return actual path segments instead of empty slice
 
 ---
 
@@ -68,31 +69,26 @@ func (cr *CairoRenderer) Clip() {
 
 ---
 
-### FUNCTIONAL MISMATCH: CopyPath Returns Empty Slice
+### ~~FUNCTIONAL MISMATCH: CopyPath Returns Empty Slice~~ [RESOLVED]
 
-**File:** internal/render/cairo.go:2183-2189  
+**File:** internal/render/cairo.go:2238-2252  
 **Severity:** Low  
-**Description:** The `CopyPath` function is documented to return a representation of the current path, but the implementation always returns an empty slice with a comment stating "full path iteration not implemented."
+**Status:** ✅ RESOLVED - CopyPath now returns actual path segments.
 
-**Expected Behavior:** `cairo_copy_path()` in the Lua API should return a table representation of the current path's segments.
+**Description:** The `CopyPath` function previously always returned an empty slice. This has been fixed to properly track and return all path segments.
 
-**Actual Behavior:** Returns an empty slice/table regardless of path content.
+**Resolution:** 
+- Added `pathSegments` field to CairoRenderer struct to track all path operations
+- Updated MoveTo, LineTo, CurveTo, ClosePath, Arc, ArcNegative, Rectangle, RelMoveTo, RelLineTo, and RelCurveTo to append segments
+- Added PathArc and PathArcNegative segment types for arc operations
+- Updated NewPath to reset segment tracking
+- CopyPath now returns a copy of the tracked segments
+- AppendPath now supports Arc and ArcNegative segment types
+- Added comprehensive test coverage for CopyPath functionality
 
-**Impact:** Lua scripts that need to introspect or duplicate path data will receive empty results. This is a compatibility gap with original Cairo behavior.
+**Expected Behavior:** `cairo_copy_path()` in the Lua API returns a table representation of the current path's segments.
 
-**Reproduction:** Call `cairo_copy_path()` after building a path with `cairo_move_to`, `cairo_line_to`, etc.
-
-**Code Reference:**
-```go
-// CopyPath returns a simplified representation of the current path.
-// Note: This returns a basic representation - full path iteration is not supported.
-func (cr *CairoRenderer) CopyPath() []PathSegment {
-    cr.mu.Lock()
-    defer cr.mu.Unlock()
-    // Return empty slice - full path iteration not implemented
-    return []PathSegment{}
-}
-```
+**Actual Behavior:** Now returns proper path segments including MoveTo, LineTo, CurveTo, ClosePath, Arc, and ArcNegative operations.
 
 ---
 

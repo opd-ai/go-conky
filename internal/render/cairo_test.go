@@ -2357,10 +2357,129 @@ func TestCairoRenderer_CopyPath(t *testing.T) {
 	cr.MoveTo(0, 0)
 	cr.LineTo(100, 100)
 
-	// CopyPath returns empty for now (stub implementation)
+	// CopyPath should return the segments
 	segments := cr.CopyPath()
 	if segments == nil {
 		t.Error("CopyPath should return non-nil slice")
+	}
+	if len(segments) != 2 {
+		t.Errorf("CopyPath should return 2 segments, got %d", len(segments))
+	}
+
+	// Verify the first segment is a MoveTo
+	if segments[0].Type != PathMoveTo {
+		t.Errorf("First segment should be PathMoveTo, got %v", segments[0].Type)
+	}
+	if segments[0].X != 0 || segments[0].Y != 0 {
+		t.Errorf("First segment should be at (0,0), got (%f,%f)", segments[0].X, segments[0].Y)
+	}
+
+	// Verify the second segment is a LineTo
+	if segments[1].Type != PathLineTo {
+		t.Errorf("Second segment should be PathLineTo, got %v", segments[1].Type)
+	}
+	if segments[1].X != 100 || segments[1].Y != 100 {
+		t.Errorf("Second segment should be at (100,100), got (%f,%f)", segments[1].X, segments[1].Y)
+	}
+}
+
+func TestCairoRenderer_CopyPath_Complex(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create a more complex path
+	cr.MoveTo(10, 20)
+	cr.LineTo(30, 40)
+	cr.CurveTo(50, 60, 70, 80, 90, 100)
+	cr.ClosePath()
+
+	segments := cr.CopyPath()
+	if len(segments) != 4 {
+		t.Errorf("CopyPath should return 4 segments, got %d", len(segments))
+	}
+
+	// Verify MoveTo
+	if segments[0].Type != PathMoveTo || segments[0].X != 10 || segments[0].Y != 20 {
+		t.Errorf("First segment incorrect: %+v", segments[0])
+	}
+
+	// Verify LineTo
+	if segments[1].Type != PathLineTo || segments[1].X != 30 || segments[1].Y != 40 {
+		t.Errorf("Second segment incorrect: %+v", segments[1])
+	}
+
+	// Verify CurveTo
+	if segments[2].Type != PathCurveTo || segments[2].X != 90 || segments[2].Y != 100 {
+		t.Errorf("Third segment endpoint incorrect: %+v", segments[2])
+	}
+	if segments[2].X1 != 50 || segments[2].Y1 != 60 || segments[2].X2 != 70 || segments[2].Y2 != 80 {
+		t.Errorf("Third segment control points incorrect: %+v", segments[2])
+	}
+
+	// Verify ClosePath
+	if segments[3].Type != PathClose {
+		t.Errorf("Fourth segment should be PathClose, got %v", segments[3].Type)
+	}
+}
+
+func TestCairoRenderer_CopyPath_Rectangle(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Rectangle should create 5 segments: MoveTo, 3 LineTo, Close
+	cr.Rectangle(10, 20, 100, 50)
+
+	segments := cr.CopyPath()
+	if len(segments) != 5 {
+		t.Errorf("Rectangle should create 5 segments, got %d", len(segments))
+	}
+
+	// Verify sequence: MoveTo, LineTo, LineTo, LineTo, Close
+	expectedTypes := []PathSegmentType{PathMoveTo, PathLineTo, PathLineTo, PathLineTo, PathClose}
+	for i, expected := range expectedTypes {
+		if segments[i].Type != expected {
+			t.Errorf("Segment %d: expected %v, got %v", i, expected, segments[i].Type)
+		}
+	}
+}
+
+func TestCairoRenderer_CopyPath_NewPath_Resets(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create a path
+	cr.MoveTo(0, 0)
+	cr.LineTo(100, 100)
+
+	// NewPath should reset the segments
+	cr.NewPath()
+
+	segments := cr.CopyPath()
+	if len(segments) != 0 {
+		t.Errorf("NewPath should reset segments, but got %d segments", len(segments))
+	}
+}
+
+func TestCairoRenderer_CopyPath_Returns_Copy(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	cr.MoveTo(0, 0)
+	cr.LineTo(100, 100)
+
+	// Get a copy of the path
+	segments1 := cr.CopyPath()
+
+	// Add more segments
+	cr.LineTo(200, 200)
+
+	// Get another copy
+	segments2 := cr.CopyPath()
+
+	// First copy should still have 2 segments
+	if len(segments1) != 2 {
+		t.Errorf("First copy should have 2 segments, got %d", len(segments1))
+	}
+
+	// Second copy should have 3 segments
+	if len(segments2) != 3 {
+		t.Errorf("Second copy should have 3 segments, got %d", len(segments2))
 	}
 }
 
@@ -2381,5 +2500,109 @@ func TestCairoRenderer_AppendPath(t *testing.T) {
 	x1, y1, x2, y2 := cr.FillExtents()
 	if x1 == 0 && y1 == 0 && x2 == 0 && y2 == 0 {
 		t.Error("AppendPath should have built a path with extents")
+	}
+}
+
+func TestCairoRenderer_CopyPath_Arc(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Arc when there's no path should add a MoveTo + Arc
+	cr.Arc(50, 50, 25, 0, 3.14159)
+
+	segments := cr.CopyPath()
+	if len(segments) != 2 {
+		t.Errorf("Arc should create 2 segments (MoveTo + Arc), got %d", len(segments))
+	}
+
+	// First segment should be MoveTo (to arc start)
+	if segments[0].Type != PathMoveTo {
+		t.Errorf("First segment should be PathMoveTo, got %v", segments[0].Type)
+	}
+
+	// Second segment should be Arc
+	if segments[1].Type != PathArc {
+		t.Errorf("Second segment should be PathArc, got %v", segments[1].Type)
+	}
+
+	// Verify arc parameters
+	if segments[1].CenterX != 50 || segments[1].CenterY != 50 {
+		t.Errorf("Arc center incorrect: expected (50,50), got (%f,%f)", segments[1].CenterX, segments[1].CenterY)
+	}
+	if segments[1].Radius != 25 {
+		t.Errorf("Arc radius incorrect: expected 25, got %f", segments[1].Radius)
+	}
+}
+
+func TestCairoRenderer_CopyPath_ArcNegative(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// ArcNegative when there's no path should add a MoveTo + ArcNegative
+	cr.ArcNegative(50, 50, 25, 3.14159, 0)
+
+	segments := cr.CopyPath()
+	if len(segments) != 2 {
+		t.Errorf("ArcNegative should create 2 segments (MoveTo + ArcNegative), got %d", len(segments))
+	}
+
+	// Second segment should be ArcNegative
+	if segments[1].Type != PathArcNegative {
+		t.Errorf("Second segment should be PathArcNegative, got %v", segments[1].Type)
+	}
+}
+
+func TestCairoRenderer_CopyPath_RelativeOperations(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Start with a MoveTo
+	cr.MoveTo(10, 10)
+
+	// Relative operations should be converted to absolute coordinates
+	cr.RelLineTo(20, 30)
+	cr.RelMoveTo(5, 5)
+
+	segments := cr.CopyPath()
+	if len(segments) != 3 {
+		t.Errorf("Expected 3 segments, got %d", len(segments))
+	}
+
+	// First segment: MoveTo(10, 10)
+	if segments[0].X != 10 || segments[0].Y != 10 {
+		t.Errorf("First segment should be at (10,10), got (%f,%f)", segments[0].X, segments[0].Y)
+	}
+
+	// Second segment: RelLineTo(20, 30) -> LineTo(30, 40)
+	if segments[1].Type != PathLineTo {
+		t.Errorf("Second segment should be PathLineTo, got %v", segments[1].Type)
+	}
+	if segments[1].X != 30 || segments[1].Y != 40 {
+		t.Errorf("Second segment should be at (30,40), got (%f,%f)", segments[1].X, segments[1].Y)
+	}
+
+	// Third segment: RelMoveTo(5, 5) from (30, 40) -> MoveTo(35, 45)
+	if segments[2].Type != PathMoveTo {
+		t.Errorf("Third segment should be PathMoveTo, got %v", segments[2].Type)
+	}
+	if segments[2].X != 35 || segments[2].Y != 45 {
+		t.Errorf("Third segment should be at (35,45), got (%f,%f)", segments[2].X, segments[2].Y)
+	}
+}
+
+func TestCairoRenderer_AppendPath_WithArc(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Create segments including an arc
+	segments := []PathSegment{
+		{Type: PathMoveTo, X: 10, Y: 10},
+		{Type: PathArc, CenterX: 50, CenterY: 50, Radius: 40, Angle1: 0, Angle2: 1.57},
+		{Type: PathClose},
+	}
+
+	// AppendPath should handle arc segments
+	cr.AppendPath(segments)
+
+	// Verify path was built by copying it back
+	copied := cr.CopyPath()
+	if len(copied) < 3 {
+		t.Errorf("AppendPath with arc should create at least 3 segments, got %d", len(copied))
 	}
 }
