@@ -344,16 +344,17 @@ func (m *CairoMatrix) Rotate(angle float64) {
 // Multiply combines this matrix with another matrix.
 // The result is stored in this matrix.
 //
-// Following Cairo's convention for cairo_matrix_multiply(result, a, b):
-// the effect of the resulting transformation is to first apply 'a' to
-// coordinates, then apply 'b'. For m.Multiply(other), we treat 'm' as 'a'
-// and 'other' as 'b'.
+// Following Cairo's convention: the effect is to first apply the receiver
+// matrix, then apply the argument matrix. Mathematically, this requires
+// computing:
 //
-// Mathematically, to achieve "first m, then other", we compute:
-// result = other * m (standard matrix multiplication order)
+//	result = other * m
+//
+// where transformations are applied in right-to-left order.
 //
 // This ensures that transforming a point p with the result gives:
-// result(p) = other(m(p))
+//
+//	result(p) = other(m(p)).
 func (m *CairoMatrix) Multiply(other *CairoMatrix) {
 	xx := other.XX*m.XX + other.XY*m.YX
 	xy := other.XX*m.XY + other.XY*m.YY
@@ -439,10 +440,9 @@ type CairoRenderer struct {
 	pathCurrentX float32
 	pathCurrentY float32
 	hasPath      bool
-	// pathBoundsInit tracks whether path bounds have been initialized.
-	// This is separate from hasPath because multi-point operations like Rectangle
-	// call expandPathBounds multiple times before setting hasPath = true, and we
-	// need to correctly initialize bounds on the first point then expand on subsequent points.
+	// Tracks whether path bounds have been initialized.
+	// Separate from hasPath to handle multi-point operations (e.g., Rectangle)
+	// that call expandPathBounds multiple times before setting hasPath = true.
 	pathBoundsInit bool
 	// Path bounding box (tracked during path operations)
 	pathMinX float32
