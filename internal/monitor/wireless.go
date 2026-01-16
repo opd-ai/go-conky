@@ -112,7 +112,9 @@ func (r *wirelessReader) GetWirelessInfo(iface string) (WirelessInfo, bool) {
 // parseProcWireless parses /proc/net/wireless for wireless statistics.
 // Format:
 // Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE
-//  face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22
+//
+//	face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22
+//
 // wlan0: 0000  70.  -40.  -95.       0      0      0     0      0        0
 func (r *wirelessReader) parseProcWireless() (map[string]WirelessInfo, error) {
 	file, err := os.Open(r.procWirelessPath)
@@ -167,7 +169,7 @@ func (r *wirelessReader) parseProcWirelessLine(line string) (WirelessInfo, strin
 
 	info := WirelessInfo{
 		IsWireless:     true,
-		LinkQualityMax: 100, // Standard max
+		LinkQualityMax: 100,       // Standard max
 		Mode:           "Managed", // Default mode
 	}
 
@@ -201,7 +203,7 @@ func (r *wirelessReader) enhanceWithSysInfo(iface string, info WirelessInfo) Wir
 	// Try to read ESSID from /sys/class/net/<iface>/wireless directory
 	// Note: On modern systems, this may not be directly available in /sys
 	// and requires iw or nl80211 for full info.
-	
+
 	// Check if wireless directory exists
 	wirelessDir := filepath.Join(r.sysNetPath, iface, "wireless")
 	if _, err := os.Stat(wirelessDir); err != nil {

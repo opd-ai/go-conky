@@ -9,9 +9,9 @@ Total Gaps Found: 9
 - Moderate: 6
 - Minor: 3
 
-**Fixed Gaps: 8** (Gap #2, #3, #4, #5, #6, #7, #8, #9 - Cairo functions complete, Cairo module support, documentation updates, CLI feature, Ebiten rendering integration, CI cross-compilation fix)
+**Fixed Gaps: 9** (All gaps fixed - Cairo functions complete, Cairo module support, documentation updates, CLI feature, Ebiten rendering integration, CI cross-compilation fix, wireless info)
 
-**Partially Fixed: 1** (Gap #1 - ~102 variables implemented, only wireless info remains)
+**Partially Fixed: 0**
 
 ## Detailed Findings
 
@@ -22,7 +22,7 @@ Total Gaps Found: 9
 
 **Implementation Location:** `internal/lua/api.go:144-260`
 
-**Status:** 🔄 **Partially Fixed** - Core system info variables added
+**Status:** ✅ **FIXED** - All core system info and wireless variables implemented
 
 **Fix Details:** Added the following commonly-used system information variables:
 1. `${kernel}` - Returns kernel version (e.g., "5.15.0-generic")
@@ -100,10 +100,26 @@ Total Gaps Found: 9
 - `internal/lua/api.go` - Added 25+ new variable cases and resolver functions
 - `internal/lua/api_test.go` - Updated mock provider with TopCPU/TopMem, added comprehensive tests
 
-**Remaining Work:** Some variables still need implementation:
-- Real wireless info (requires wireless extension reading)
+**Implementation Files (Wireless Update January 16, 2026):**
+- `internal/monitor/wireless.go` - New WirelessInfo type and reader for /proc/net/wireless
+- `internal/monitor/wireless_test.go` - Comprehensive tests for wireless reader and parsing
+- `internal/monitor/types.go` - Added Wireless field to InterfaceStats
+- `internal/monitor/monitor.go` - Added wirelessReader to SystemMonitor
+- `internal/lua/api.go` - Updated wireless resolver functions to use real data
+- `internal/lua/api_test.go` - Added wireless variable tests with mock wireless interface
 
-**Production Impact:** High - Most commonly used variables now work including bars, conditionals, entropy, and cached command execution.
+**Current Variable Count:** ~107 implemented variables (up from ~102)
+
+**Newly Added Wireless Variables:**
+- `${wireless_essid interface}` - Returns the ESSID (network name) of a wireless interface
+- `${wireless_link_qual interface}` - Returns the raw link quality value
+- `${wireless_link_qual_perc interface}` - Returns link quality as percentage (0-100)
+- `${wireless_link_qual_max interface}` - Returns maximum link quality (100)
+- `${wireless_bitrate interface}` - Returns bit rate (e.g., "54Mb/s", "1.0Gb/s")
+- `${wireless_ap interface}` - Returns the access point MAC address
+- `${wireless_mode interface}` - Returns the operating mode (e.g., "Managed")
+
+**Production Impact:** High - All commonly used variables now work including wireless network info.
 
 ---
 
@@ -114,7 +130,7 @@ Total Gaps Found: 9
 
 **Implementation Location:** `internal/lua/cairo_bindings.go:46-95`
 
-**Status:** 🔄 **Partially Fixed** - Text, transform, surface management, path/clip query, pattern/gradient, matrix, and pattern extend functions added
+**Status:** ✅ **FIXED** - All core Cairo functions implemented including text, transform, surface management, path/clip query, pattern/gradient, matrix, and pattern extend functions
 
 **Fix Details:** Added the most commonly used Cairo text, transformation, surface management, path/clip query, pattern/gradient, matrix, and pattern extend functions:
 
@@ -604,7 +620,7 @@ c.Start() // No window, monitor runs in background
 
 | Gap # | Description | Severity | Category | Status |
 |-------|-------------|----------|----------|--------|
-| 1 | Variable count (42 vs 200+) | Moderate | Feature Gap | 🔄 Partially Fixed - ~102 variables implemented (execi, bars, conditionals) |
+| 1 | Variable count (42 vs 200+) | Moderate | Feature Gap | ✅ Fixed - ~107 variables implemented (wireless info, bars, conditionals, execi) |
 | 2 | Cairo functions (46 vs 180+) | Moderate | Feature Gap | ✅ Fixed - ~103 functions (PNG loading/saving, hit testing, font queries, transforms, paths) |
 | 3 | `require 'cairo'` pattern not supported | Moderate | Feature Gap | ✅ Fixed - cairo module and conky_window implemented |
 | 4 | Uptime format mismatch | Minor | Behavioral Nuance | ✅ Fixed - docs updated to match implementation |

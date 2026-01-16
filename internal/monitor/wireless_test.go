@@ -126,7 +126,7 @@ wlan0: 0000   70.  -40.  -95.        0      0      0     0      0        0
 wlan1: 0000   50.  -55.  -92.        0      0      0     0      0        0
 `
 	procPath := filepath.Join(tmpDir, "wireless")
-	if err := os.WriteFile(procPath, []byte(procWirelessContent), 0644); err != nil {
+	if err := os.WriteFile(procPath, []byte(procWirelessContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock file: %v", err)
 	}
 
@@ -290,7 +290,7 @@ func TestGetWirelessInfo(t *testing.T) {
 wlan0: 0000   70.  -40.  -95.        0      0      0     0      0        0
 `
 	procPath := filepath.Join(tmpDir, "wireless")
-	if err := os.WriteFile(procPath, []byte(procWirelessContent), 0644); err != nil {
+	if err := os.WriteFile(procPath, []byte(procWirelessContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock file: %v", err)
 	}
 
@@ -330,13 +330,13 @@ func TestIsWirelessInterface(t *testing.T) {
 wlan0: 0000   70.  -40.  -95.        0      0      0     0      0        0
 `
 	procPath := filepath.Join(tmpDir, "wireless")
-	if err := os.WriteFile(procPath, []byte(procWirelessContent), 0644); err != nil {
+	if err := os.WriteFile(procPath, []byte(procWirelessContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock file: %v", err)
 	}
 
 	// Create mock /sys/class/net/<iface>/wireless directory
 	wirelessDir := filepath.Join(tmpDir, "wlan0", "wireless")
-	if err := os.MkdirAll(wirelessDir, 0755); err != nil {
+	if err := os.MkdirAll(wirelessDir, 0o755); err != nil {
 		t.Fatalf("failed to create mock wireless dir: %v", err)
 	}
 

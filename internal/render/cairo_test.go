@@ -1220,7 +1220,7 @@ func TestNewCairoSurfaceFromPNG_InvalidPNG(t *testing.T) {
 	invalidPath := tmpDir + "/invalid.png"
 
 	// Write non-PNG data
-	err := os.WriteFile(invalidPath, []byte("not a png file"), 0644)
+	err := os.WriteFile(invalidPath, []byte("not a png file"), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}

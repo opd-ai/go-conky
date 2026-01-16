@@ -80,6 +80,26 @@ func newMockProvider() *mockSystemDataProvider {
 					IPv4Addrs: []string{"127.0.0.1"},
 					IPv6Addrs: []string{"::1"},
 				},
+				"wlan0": {
+					Name:          "wlan0",
+					RxBytes:       1024 * 1024 * 200, // 200 MiB
+					TxBytes:       1024 * 1024 * 100, // 100 MiB
+					RxBytesPerSec: 1024 * 500,        // 500 KiB/s
+					TxBytesPerSec: 1024 * 200,        // 200 KiB/s
+					IPv4Addrs:     []string{"192.168.1.101"},
+					IPv6Addrs:     []string{"fe80::2"},
+					Wireless: &monitor.WirelessInfo{
+						ESSID:          "MyHomeNetwork",
+						AccessPoint:    "AA:BB:CC:DD:EE:FF",
+						LinkQuality:    70,
+						LinkQualityMax: 100,
+						SignalLevel:    -40,
+						NoiseLevel:     -95,
+						BitRate:        300.0,
+						Mode:           "Managed",
+						IsWireless:     true,
+					},
+				},
 			},
 			TotalRxBytes:       1024 * 1024 * 100,
 			TotalTxBytes:       1024 * 1024 * 50,
@@ -1700,5 +1720,111 @@ func TestStippledHR(t *testing.T) {
 	expected := "- - - - "
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
+	}
+}
+
+// TestParseWirelessVariables tests wireless network variable parsing.
+func TestParseWirelessVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "wireless essid",
+			template: "${wireless_essid wlan0}",
+			expected: "MyHomeNetwork",
+		},
+		{
+			name:     "wireless essid non-wireless interface",
+			template: "${wireless_essid eth0}",
+			expected: "",
+		},
+		{
+			name:     "wireless essid no arg",
+			template: "${wireless_essid}",
+			expected: "",
+		},
+		{
+			name:     "wireless link quality",
+			template: "${wireless_link_qual wlan0}",
+			expected: "70",
+		},
+		{
+			name:     "wireless link quality non-wireless",
+			template: "${wireless_link_qual eth0}",
+			expected: "0",
+		},
+		{
+			name:     "wireless link quality percent",
+			template: "${wireless_link_qual_perc wlan0}",
+			expected: "70",
+		},
+		{
+			name:     "wireless link quality percent non-wireless",
+			template: "${wireless_link_qual_perc eth0}",
+			expected: "0",
+		},
+		{
+			name:     "wireless link quality max",
+			template: "${wireless_link_qual_max wlan0}",
+			expected: "100",
+		},
+		{
+			name:     "wireless bitrate",
+			template: "${wireless_bitrate wlan0}",
+			expected: "300Mb/s",
+		},
+		{
+			name:     "wireless bitrate non-wireless",
+			template: "${wireless_bitrate eth0}",
+			expected: "0Mb/s",
+		},
+		{
+			name:     "wireless access point",
+			template: "${wireless_ap wlan0}",
+			expected: "AA:BB:CC:DD:EE:FF",
+		},
+		{
+			name:     "wireless access point non-wireless",
+			template: "${wireless_ap eth0}",
+			expected: "00:00:00:00:00:00",
+		},
+		{
+			name:     "wireless mode",
+			template: "${wireless_mode wlan0}",
+			expected: "Managed",
+		},
+		{
+			name:     "wireless mode non-wireless",
+			template: "${wireless_mode eth0}",
+			expected: "Managed",
+		},
+		{
+			name:     "wireless unknown interface",
+			template: "${wireless_essid unknown}",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
 	}
 }
