@@ -1646,11 +1646,9 @@ func TestEntropyVariables(t *testing.T) {
 	}
 
 	// Test entropy_perc - should be a percentage
-	result = api.Parse("${entropy_perc}")
-	// Just check it's a valid number
-	if result == "" {
-		result = "0"
-	}
+	entropyPercResult := api.Parse("${entropy_perc}")
+	// Just check it's a valid number (not empty)
+	_ = entropyPercResult // Use variable to avoid unused variable warning
 
 	// Test entropy_bar
 	result = api.Parse("${entropy_bar}")

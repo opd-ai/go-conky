@@ -50,25 +50,26 @@ type wirelessReader struct {
 
 // newWirelessReader creates a new wirelessReader with default paths.
 func newWirelessReader() *wirelessReader {
+	const sysNetPathDefault = "/sys/class/net"
 	return &wirelessReader{
 		procWirelessPath:   "/proc/net/wireless",
-		sysNetPath:         "/sys/class/net",
+		sysNetPath:         sysNetPathDefault,
 		wirelessStatsCache: make(map[string]WirelessInfo),
 		operstatePath: func(iface string) string {
-			return filepath.Join("/sys/class/net", iface, "operstate")
+			return sysNetPathDefault + "/" + iface + "/operstate"
 		},
 		wirelessEssidPath: func(iface string) string {
 			// Modern path via iw command output or nl80211
-			return filepath.Join("/sys/class/net", iface, "wireless", "essid")
+			return sysNetPathDefault + "/" + iface + "/wireless/essid"
 		},
 		wirelessApPath: func(iface string) string {
-			return filepath.Join("/sys/class/net", iface, "wireless", "ap")
+			return sysNetPathDefault + "/" + iface + "/wireless/ap"
 		},
 		wirelessBitratePath: func(iface string) string {
-			return filepath.Join("/sys/class/net", iface, "wireless", "bitrate")
+			return sysNetPathDefault + "/" + iface + "/wireless/bitrate"
 		},
 		wirelessModePath: func(iface string) string {
-			return filepath.Join("/sys/class/net", iface, "wireless", "mode")
+			return sysNetPathDefault + "/" + iface + "/wireless/mode"
 		},
 	}
 }

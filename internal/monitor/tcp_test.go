@@ -98,7 +98,7 @@ func TestTCPReaderWithMockFile(t *testing.T) {
    1: 00000000:0016 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 54321 1 0000000000000000 100 0 0 10 0
 `
 	tcpPath := filepath.Join(tmpDir, "tcp")
-	if err := os.WriteFile(tcpPath, []byte(procTCPContent), 0644); err != nil {
+	if err := os.WriteFile(tcpPath, []byte(procTCPContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock file: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestCountInRange(t *testing.T) {
    2: 0100007F:01BB 0100007F:D000 01 00000000:00000000 00:00000000 00000000  1000        0 12346 1 0000000000000000 100 0 0 10 0
 `
 	tcpPath := filepath.Join(tmpDir, "tcp")
-	if err := os.WriteFile(tcpPath, []byte(procTCPContent), 0644); err != nil {
+	if err := os.WriteFile(tcpPath, []byte(procTCPContent), 0o644); err != nil {
 		t.Fatalf("failed to write mock file: %v", err)
 	}
 

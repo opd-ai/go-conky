@@ -1903,14 +1903,14 @@ func TestCairoMatrix_InvertSingular(t *testing.T) {
 
 func TestCairoMatrix_Copy(t *testing.T) {
 	m := NewTranslateMatrix(10, 20)
-	copy := m.Copy()
+	matrixCopy := m.Copy()
 
 	// Modify original
 	m.Translate(5, 5)
 
 	// Copy should be unchanged
-	if copy.X0 != 10 || copy.Y0 != 20 {
-		t.Errorf("Expected copy to be (10, 20), got (%f, %f)", copy.X0, copy.Y0)
+	if matrixCopy.X0 != 10 || matrixCopy.Y0 != 20 {
+		t.Errorf("Expected copy to be (10, 20), got (%f, %f)", matrixCopy.X0, matrixCopy.Y0)
 	}
 }
 
