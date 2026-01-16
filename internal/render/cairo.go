@@ -993,7 +993,8 @@ func (cr *CairoRenderer) ArcNegative(xc, yc, radius, angle1, angle2 float64) {
 
 // CurveTo adds a cubic Bézier curve to the path.
 // This is equivalent to cairo_curve_to.
-// If there is no current point, it starts from (0,0) as per Cairo convention.
+// If there is no current point, it starts from (0,0). Note: this differs from
+// the C Cairo API, which reports an error when there is no current point.
 func (cr *CairoRenderer) CurveTo(x1, y1, x2, y2, x3, y3 float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
@@ -1052,7 +1053,8 @@ func (cr *CairoRenderer) Rectangle(x, y, width, height float64) {
 
 // RelMoveTo moves the current point by a relative offset.
 // This is equivalent to cairo_rel_move_to.
-// If there is no current point, it starts from (0,0) as per Cairo convention.
+// If there is no current point, it starts from (0,0). Note: this differs from
+// the C Cairo API, which reports an error when there is no current point.
 func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
@@ -1072,7 +1074,8 @@ func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
 
 // RelLineTo draws a line from the current point by a relative offset.
 // This is equivalent to cairo_rel_line_to.
-// If there is no current point, it starts from (0,0) as per Cairo convention.
+// If there is no current point, it starts from (0,0). Note: this differs from
+// the C Cairo API, which reports an error when there is no current point.
 func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
@@ -1090,7 +1093,8 @@ func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
 
 // RelCurveTo adds a cubic Bézier curve relative to the current point.
 // This is equivalent to cairo_rel_curve_to.
-// If there is no current point, it starts from (0,0) as per Cairo convention.
+// If there is no current point, it starts from (0,0). Note: this differs from
+// the C Cairo API, which reports an error when there is no current point.
 func (cr *CairoRenderer) RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
