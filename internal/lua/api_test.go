@@ -23,6 +23,8 @@ type mockSystemDataProvider struct {
 	battery    monitor.BatteryStats
 	audio      monitor.AudioStats
 	sysInfo    monitor.SystemInfo
+	tcp        monitor.TCPStats
+	gpu        monitor.GPUStats
 }
 
 func (m *mockSystemDataProvider) CPU() monitor.CPUStats               { return m.cpu }
@@ -36,6 +38,29 @@ func (m *mockSystemDataProvider) Process() monitor.ProcessStats       { return m
 func (m *mockSystemDataProvider) Battery() monitor.BatteryStats       { return m.battery }
 func (m *mockSystemDataProvider) Audio() monitor.AudioStats           { return m.audio }
 func (m *mockSystemDataProvider) SysInfo() monitor.SystemInfo         { return m.sysInfo }
+func (m *mockSystemDataProvider) TCP() monitor.TCPStats               { return m.tcp }
+func (m *mockSystemDataProvider) TCPCountInRange(minPort, maxPort int) int {
+	count := 0
+	for _, c := range m.tcp.Connections {
+		if c.LocalPort >= minPort && c.LocalPort <= maxPort {
+			count++
+		}
+	}
+	return count
+}
+func (m *mockSystemDataProvider) TCPConnectionByIndex(minPort, maxPort, index int) *monitor.TCPConnection {
+	var matching []monitor.TCPConnection
+	for _, c := range m.tcp.Connections {
+		if c.LocalPort >= minPort && c.LocalPort <= maxPort {
+			matching = append(matching, c)
+		}
+	}
+	if index >= 0 && index < len(matching) {
+		return &matching[index]
+	}
+	return nil
+}
+func (m *mockSystemDataProvider) GPU() monitor.GPUStats { return m.gpu }
 
 func newMockProvider() *mockSystemDataProvider {
 	return &mockSystemDataProvider{

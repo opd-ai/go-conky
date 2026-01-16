@@ -26,6 +26,8 @@ type SystemMonitor struct {
 	batteryReader     *batteryReader
 	audioReader       *audioReader
 	sysInfoReader     *sysInfoReader
+	tcpReader         *tcpReader
+	gpuReader         *gpuReader
 	ctx               context.Context
 	cancel            context.CancelFunc
 	wg                sync.WaitGroup
@@ -53,6 +55,8 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		batteryReader:     newBatteryReader(),
 		audioReader:       newAudioReader(),
 		sysInfoReader:     newSysInfoReader(),
+		tcpReader:         newTCPReader(),
+		gpuReader:         newGPUReader(),
 		ctx:               ctx,
 		cancel:            cancel,
 	}
@@ -294,6 +298,28 @@ func (sm *SystemMonitor) Audio() AudioStats {
 // SysInfo returns the current system information.
 func (sm *SystemMonitor) SysInfo() SystemInfo {
 	return sm.data.GetSysInfo()
+}
+
+// TCP returns the current TCP connection statistics.
+func (sm *SystemMonitor) TCP() TCPStats {
+	stats, _ := sm.tcpReader.ReadStats()
+	return stats
+}
+
+// TCPCountInRange counts TCP connections in the given port range.
+func (sm *SystemMonitor) TCPCountInRange(minPort, maxPort int) int {
+	return sm.tcpReader.CountInRange(minPort, maxPort)
+}
+
+// TCPConnectionByIndex returns a specific connection in the port range.
+func (sm *SystemMonitor) TCPConnectionByIndex(minPort, maxPort, index int) *TCPConnection {
+	return sm.tcpReader.GetConnectionByIndex(minPort, maxPort, index)
+}
+
+// GPU returns the current NVIDIA GPU statistics.
+func (sm *SystemMonitor) GPU() GPUStats {
+	stats, _ := sm.gpuReader.ReadStats()
+	return stats
 }
 
 // augmentNetworkStats adds IP address, gateway, nameserver, and wireless information to network stats.
