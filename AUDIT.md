@@ -15,7 +15,7 @@ This audit compares the documented functionality in README.md and supporting doc
 |----------|-------|
 | **CRITICAL BUG** | 0 |
 | **FUNCTIONAL MISMATCH** | 4 |
-| **MISSING FEATURE** | 5 |
+| **MISSING FEATURE** | 4 |
 | **EDGE CASE BUG** | 3 |
 | **PERFORMANCE ISSUE** | 1 |
 
