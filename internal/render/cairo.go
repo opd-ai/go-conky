@@ -1044,13 +1044,20 @@ func (cr *CairoRenderer) Rectangle(x, y, width, height float64) {
 
 // RelMoveTo moves the current point by a relative offset.
 // This is equivalent to cairo_rel_move_to.
-// If there is no current point, this function does nothing.
+// If there is no current point, it starts from (0,0) as per Cairo convention.
 func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// Cairo requires a current point for relative moves
-		return
+		// For consistency with CurveTo, start from (0,0) if no current point exists
+		cr.expandPathBounds(0, 0)
+		cr.path.MoveTo(0, 0)
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
+		cr.pathStartX = 0
+		cr.pathStartY = 0
+		cr.pathCurrentX = 0
+		cr.pathCurrentY = 0
+		cr.hasPath = true
 	}
 	newX := float64(cr.pathCurrentX) + dx
 	newY := float64(cr.pathCurrentY) + dy
@@ -1065,13 +1072,20 @@ func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
 
 // RelLineTo draws a line from the current point by a relative offset.
 // This is equivalent to cairo_rel_line_to.
-// If there is no current point, this function does nothing.
+// If there is no current point, it starts from (0,0) as per Cairo convention.
 func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// Cairo requires a current point for relative line
-		return
+		// For consistency with CurveTo, start from (0,0) if no current point exists
+		cr.expandPathBounds(0, 0)
+		cr.path.MoveTo(0, 0)
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
+		cr.pathStartX = 0
+		cr.pathStartY = 0
+		cr.pathCurrentX = 0
+		cr.pathCurrentY = 0
+		cr.hasPath = true
 	}
 	newX := float64(cr.pathCurrentX) + dx
 	newY := float64(cr.pathCurrentY) + dy
@@ -1084,13 +1098,20 @@ func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
 
 // RelCurveTo adds a cubic Bézier curve relative to the current point.
 // This is equivalent to cairo_rel_curve_to.
-// If there is no current point, this function does nothing.
+// If there is no current point, it starts from (0,0) as per Cairo convention.
 func (cr *CairoRenderer) RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// Cairo requires a current point for relative curves
-		return
+		// For consistency with CurveTo, start from (0,0) if no current point exists
+		cr.expandPathBounds(0, 0)
+		cr.path.MoveTo(0, 0)
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
+		cr.pathStartX = 0
+		cr.pathStartY = 0
+		cr.pathCurrentX = 0
+		cr.pathCurrentY = 0
+		cr.hasPath = true
 	}
 	curX := float64(cr.pathCurrentX)
 	curY := float64(cr.pathCurrentY)

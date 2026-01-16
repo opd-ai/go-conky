@@ -1391,13 +1391,16 @@ func TestCairoRenderer_RelMoveTo(t *testing.T) {
 func TestCairoRenderer_RelMoveToNoPath(t *testing.T) {
 	cr := NewCairoRenderer()
 
-	// Relative move without a current point should do nothing
+	// Relative move without a current point should start from (0,0) and apply offset
 	cr.RelMoveTo(50, 25)
 
-	// Verify no current point
-	_, _, hasPoint := cr.GetCurrentPoint()
-	if hasPoint {
-		t.Error("Expected no current point after RelMoveTo without initial point")
+	// Verify current point is at (50, 25) - relative offset from (0, 0)
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after RelMoveTo without initial point (now starts from 0,0)")
+	}
+	if x != 50 || y != 25 {
+		t.Errorf("Expected position (50, 25) after RelMoveTo from (0,0), got (%f, %f)", x, y)
 	}
 }
 
@@ -1423,13 +1426,16 @@ func TestCairoRenderer_RelLineTo(t *testing.T) {
 func TestCairoRenderer_RelLineToNoPath(t *testing.T) {
 	cr := NewCairoRenderer()
 
-	// Relative line without a current point should do nothing
+	// Relative line without a current point should start from (0,0) and apply offset
 	cr.RelLineTo(50, 25)
 
-	// Verify no current point
-	_, _, hasPoint := cr.GetCurrentPoint()
-	if hasPoint {
-		t.Error("Expected no current point after RelLineTo without initial point")
+	// Verify current point is at (50, 25) - relative offset from (0, 0)
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after RelLineTo without initial point (now starts from 0,0)")
+	}
+	if x != 50 || y != 25 {
+		t.Errorf("Expected position (50, 25) after RelLineTo from (0,0), got (%f, %f)", x, y)
 	}
 }
 
@@ -1456,13 +1462,16 @@ func TestCairoRenderer_RelCurveTo(t *testing.T) {
 func TestCairoRenderer_RelCurveToNoPath(t *testing.T) {
 	cr := NewCairoRenderer()
 
-	// Relative curve without a current point should do nothing
+	// Relative curve without a current point should start from (0,0) and apply offset
 	cr.RelCurveTo(10, 20, 30, 40, 50, 60)
 
-	// Verify no current point
-	_, _, hasPoint := cr.GetCurrentPoint()
-	if hasPoint {
-		t.Error("Expected no current point after RelCurveTo without initial point")
+	// Verify current point is at (50, 60) - end point relative to (0, 0)
+	x, y, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Fatal("Expected current point after RelCurveTo without initial point (now starts from 0,0)")
+	}
+	if x != 50 || y != 60 {
+		t.Errorf("Expected position (50, 60) after RelCurveTo from (0,0), got (%f, %f)", x, y)
 	}
 }
 
