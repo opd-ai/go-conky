@@ -1993,27 +1993,27 @@ func TestParseNvidiaVariables(t *testing.T) {
 		{
 			name:     "nvidia temp",
 			template: "${nvidia temp}",
-			expected: "65",
+			expected: "65°C",
 		},
 		{
 			name:     "nvidia gpuutil",
 			template: "${nvidia gpuutil}",
-			expected: "45",
+			expected: "45%",
 		},
 		{
 			name:     "nvidia memutil",
 			template: "${nvidia memutil}",
-			expected: "40",
+			expected: "40%",
 		},
 		{
 			name:     "nvidia fan",
 			template: "${nvidia fan}",
-			expected: "55",
+			expected: "55%",
 		},
 		{
 			name:     "nvidia power",
 			template: "${nvidia power}",
-			expected: "180.50",
+			expected: "180.5W",
 		},
 		{
 			name:     "nvidia driver",
@@ -2028,37 +2028,37 @@ func TestParseNvidiaVariables(t *testing.T) {
 		{
 			name:     "nvidia memused",
 			template: "${nvidia memused}",
-			expected: "4.00 GiB",
+			expected: "4.0GiB",
 		},
 		{
 			name:     "nvidia memtotal",
 			template: "${nvidia memtotal}",
-			expected: "10.00 GiB",
+			expected: "10.0GiB",
 		},
 		{
 			name:     "nvidia memfree",
 			template: "${nvidia memfree}",
-			expected: "6.00 GiB",
+			expected: "6.0GiB",
 		},
 		{
 			name:     "nvidia memperc",
 			template: "${nvidia memperc}",
-			expected: "40",
+			expected: "40.0%",
 		},
 		{
 			name:     "nvidia_temp direct variable",
 			template: "${nvidia_temp}",
-			expected: "65",
+			expected: "65°C",
 		},
 		{
 			name:     "nvidia_gpu direct variable",
 			template: "${nvidia_gpu}",
-			expected: "45",
+			expected: "45%",
 		},
 		{
 			name:     "nvidia_fan direct variable",
 			template: "${nvidia_fan}",
-			expected: "55",
+			expected: "55%",
 		},
 		{
 			name:     "nvidia unknown field",
