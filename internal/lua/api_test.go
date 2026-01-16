@@ -1347,8 +1347,8 @@ func TestParseInvalidNetworkInterface(t *testing.T) {
 		t.Fatalf("failed to create API: %v", err)
 	}
 
-	// Non-existent interface
-	result := api.Parse("${downspeed wlan0}")
+	// Non-existent interface - use wlan99 which doesn't exist in mock data
+	result := api.Parse("${downspeed wlan99}")
 	expected := "0B"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
