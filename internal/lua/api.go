@@ -122,10 +122,14 @@ var variablePattern = regexp.MustCompile(`\$\{([^}]+)\}`)
 //   - ${variable} - simple variable
 //   - ${variable arg} - variable with argument
 //   - ${variable arg1 arg2} - variable with multiple arguments
+//
+// Thread safety: This function does not hold locks during parsing to avoid
+// deadlocks when resolving variables that need to acquire locks (e.g., execi
+// with cache). The sysProvider is accessed via resolveVariable which does a
+// brief RLock to read the pointer. The provider's methods are expected to be
+// thread-safe. SetSystemDataProvider should not be called concurrently with
+// Parse in production; it's intended for initialization and testing.
 func (api *ConkyAPI) Parse(template string) string {
-	api.mu.RLock()
-	defer api.mu.RUnlock()
-
 	return variablePattern.ReplaceAllStringFunc(template, func(match string) string {
 		// Extract variable name and arguments from ${variable args...}
 		inner := match[2 : len(match)-1] // Remove ${ and }
@@ -150,9 +154,18 @@ func formatUnknownVariable(name string, args []string) string {
 }
 
 // resolveVariable resolves a single Conky variable to its value.
+// Thread safety: Reads sysProvider with a brief RLock. The individual provider
+// methods (CPU(), Memory(), etc.) are expected to be thread-safe. The brief
+// lock protects against the provider pointer changing during nil check.
 func (api *ConkyAPI) resolveVariable(name string, args []string) string {
+	// Read sysProvider with read lock for safe concurrent access.
+	// We only lock briefly to get the pointer; provider methods are thread-safe.
+	api.mu.RLock()
+	provider := api.sysProvider
+	api.mu.RUnlock()
+
 	// Handle case where there's no system data provider
-	if api.sysProvider == nil {
+	if provider == nil {
 		return formatUnknownVariable(name, args)
 	}
 
