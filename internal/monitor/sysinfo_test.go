@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"os"
+	"runtime"
 	"testing"
 )
 
@@ -12,9 +13,10 @@ func TestSysInfoReaderReadSystemInfo(t *testing.T) {
 		t.Fatalf("ReadSystemInfo failed: %v", err)
 	}
 
-	// Sysname should always be "Linux"
-	if info.Sysname != "Linux" {
-		t.Errorf("expected Sysname to be 'Linux', got %q", info.Sysname)
+	// Sysname should match the current platform
+	expectedSysname := getSysname()
+	if info.Sysname != expectedSysname {
+		t.Errorf("expected Sysname to be %q, got %q", expectedSysname, info.Sysname)
 	}
 
 	// Kernel version should not be empty
@@ -148,5 +150,34 @@ func TestSysInfoReaderHostnameWithoutDot(t *testing.T) {
 	// For a hostname without a dot, short name should be the same
 	if info.HostnameShort != "simplehost" {
 		t.Errorf("expected HostnameShort to be 'simplehost', got %q", info.HostnameShort)
+	}
+}
+
+func TestGetSysname(t *testing.T) {
+	// Test that getSysname returns a non-empty string
+	sysname := getSysname()
+	if sysname == "" {
+		t.Error("getSysname() returned empty string")
+	}
+
+	// On Linux, getSysname should return "Linux"
+	if runtime.GOOS == "linux" {
+		if sysname != "Linux" {
+			t.Errorf("expected 'Linux' on Linux platform, got %q", sysname)
+		}
+	}
+
+	// On Darwin, getSysname should return "Darwin"
+	if runtime.GOOS == "darwin" {
+		if sysname != "Darwin" {
+			t.Errorf("expected 'Darwin' on macOS platform, got %q", sysname)
+		}
+	}
+
+	// On Windows, getSysname should return "Windows"
+	if runtime.GOOS == "windows" {
+		if sysname != "Windows" {
+			t.Errorf("expected 'Windows' on Windows platform, got %q", sysname)
+		}
 	}
 }

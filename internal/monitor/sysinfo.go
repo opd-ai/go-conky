@@ -51,7 +51,7 @@ func newSysInfoReader() *sysInfoReader {
 // ReadSystemInfo reads all system information.
 func (r *sysInfoReader) ReadSystemInfo() (SystemInfo, error) {
 	info := SystemInfo{
-		Sysname: "Linux", // Always Linux for this implementation
+		Sysname: getSysname(),
 		Machine: r.getMachine(),
 	}
 
@@ -160,5 +160,39 @@ func (r *sysInfoReader) getMachine() string {
 		return "armv7l"
 	default:
 		return runtime.GOARCH
+	}
+}
+
+// getSysname returns the system name (OS name) based on runtime.GOOS.
+// This maps Go's OS identifiers to conventional system names matching
+// what uname -s would return on POSIX systems.
+func getSysname() string {
+	switch runtime.GOOS {
+	case "linux":
+		return "Linux"
+	case "darwin":
+		return "Darwin"
+	case "windows":
+		return "Windows"
+	case "freebsd":
+		return "FreeBSD"
+	case "openbsd":
+		return "OpenBSD"
+	case "netbsd":
+		return "NetBSD"
+	case "dragonfly":
+		return "DragonFly"
+	case "android":
+		// Android uses Linux kernel, so return Linux for compatibility
+		return "Linux"
+	case "solaris", "illumos":
+		return "SunOS"
+	default:
+		// For unknown platforms, capitalize the first letter
+		if len(runtime.GOOS) > 0 {
+			goos := runtime.GOOS
+			return string(goos[0]-32) + goos[1:]
+		}
+		return runtime.GOOS
 	}
 }

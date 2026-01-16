@@ -14,7 +14,7 @@ This audit compares the documented functionality in README.md and supporting doc
 | Category | Count | Resolved |
 |----------|-------|----------|
 | **CRITICAL BUG** | 0 | 0 |
-| **FUNCTIONAL MISMATCH** | 4 | 1 (docs added) |
+| **FUNCTIONAL MISMATCH** | 4 | 2 |
 | **DOCUMENTATION ISSUE** | 1 | 1 |
 | **MISSING FEATURE** | 4 | 0 |
 | **EDGE CASE BUG** | 3 | 2 |
@@ -26,6 +26,7 @@ This audit compares the documented functionality in README.md and supporting doc
 - ✅ Documented clipping limitations in docs/migration.md
 - ✅ Fixed `--convert` flag documentation (removed "future feature" label)
 - ✅ Fixed `expandPathBoundsUnlocked` to use `hasPath` flag instead of zero-checks
+- ✅ Fixed `Sysname` to use `runtime.GOOS` for platform-aware OS name detection
 
 ---
 
@@ -126,30 +127,19 @@ func (cr *CairoRenderer) SetOperator(_ int) {
 
 ---
 
-### FUNCTIONAL MISMATCH: Sysname Always Returns "Linux"
+### ~~FUNCTIONAL MISMATCH: Sysname Always Returns "Linux"~~ [RESOLVED]
 
 **File:** internal/monitor/sysinfo.go:51-57  
 **Severity:** Low  
-**Description:** The `ReadSystemInfo` function hardcodes `Sysname` to "Linux" regardless of the actual platform. While the platform package supports Windows, macOS, and Android, this monitor code assumes Linux.
+**Status:** ✅ RESOLVED - Sysname now uses `runtime.GOOS` for platform detection.
+
+**Description:** The `ReadSystemInfo` function previously hardcoded `Sysname` to "Linux" regardless of the actual platform. While the platform package supports Windows, macOS, and Android, this monitor code assumed Linux.
+
+**Resolution:** Added `getSysname()` helper function that uses `runtime.GOOS` to return the correct OS name (Linux, Darwin, Windows, FreeBSD, etc.) matching what `uname -s` would return on POSIX systems.
 
 **Expected Behavior:** The `${sysname}` variable should return the actual OS name based on the platform.
 
-**Actual Behavior:** Always returns "Linux" even when running on other platforms.
-
-**Impact:** On cross-platform builds (Windows, macOS, Android), the `${sysname}` variable returns incorrect data.
-
-**Reproduction:** Run the application on Windows or macOS and check the `${sysname}` variable output.
-
-**Code Reference:**
-```go
-func (r *sysInfoReader) ReadSystemInfo() (SystemInfo, error) {
-    info := SystemInfo{
-        Sysname: "Linux", // Always Linux for this implementation
-        Machine: r.getMachine(),
-    }
-    // ...
-}
-```
+**Actual Behavior:** Now returns the correct platform name based on `runtime.GOOS`.
 
 ---
 
@@ -407,7 +397,7 @@ func (cr *CairoRenderer) DrawLine(x1, y1, x2, y2 float64) {
 
 3. ~~**Low Priority:** Implement the `--convert` flag or remove reference from documentation.~~ ✅ RESOLVED - Documentation updated; flag was already implemented.
 
-4. **Low Priority:** Make `Sysname` platform-aware by using `runtime.GOOS`.
+4. ~~**Low Priority:** Make `Sysname` platform-aware by using `runtime.GOOS`.~~ ✅ RESOLVED - Added `getSysname()` helper function using `runtime.GOOS`.
 
 5. **Future Consideration:** Implement atomic versions of convenience drawing functions for thread-critical applications.
 
