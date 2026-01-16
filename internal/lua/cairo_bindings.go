@@ -1377,11 +1377,19 @@ func (cb *CairoBindings) setSource(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) 
 
 // getRendererFromArgs extracts a renderer from the args if present, otherwise returns default.
 // Returns the renderer and the offset to use for remaining arguments.
+// Supports *render.CairoRenderer, *render.CairoContext, and *sharedContext types.
 func (cb *CairoBindings) getRendererFromArgs(args []rt.Value) (*render.CairoRenderer, int) {
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
-			if r, ok := ud.Value().(*render.CairoRenderer); ok {
-				return r, 1
+			switch v := ud.Value().(type) {
+			case *render.CairoRenderer:
+				return v, 1
+			case *render.CairoContext:
+				if r := v.Renderer(); r != nil {
+					return r, 1
+				}
+			case *sharedContext:
+				return v.renderer, 1
 			}
 		}
 	}
@@ -1789,18 +1797,8 @@ func getMatrixArg(args []rt.Value, idx int) (*render.CairoMatrix, error) {
 
 // setDash handles cairo_set_dash(dashes, offset)
 func (cb *CairoBindings) setDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
 	args := getAllArgs(c)
-	offset := 0
-	renderer := cb.renderer
-	// Check if first arg is a context
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-				offset = 1
-			}
-		}
-	}
 	// Get dashes table
 	if offset >= len(args) {
 		return c.Next(), nil
@@ -1835,15 +1833,7 @@ func (cb *CairoBindings) setDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 
 // getDash handles cairo_get_dash() -> returns dashes table, offset
 func (cb *CairoBindings) getDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := getAllArgs(c)
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-			}
-		}
-	}
+	renderer, _ := cb.getRendererFromContext(c)
 	dashes, offset := renderer.GetDash()
 	// Create Lua table for dashes
 	dashTable := rt.NewTable()
@@ -1855,32 +1845,15 @@ func (cb *CairoBindings) getDash(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 
 // getDashCount handles cairo_get_dash_count()
 func (cb *CairoBindings) getDashCount(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := getAllArgs(c)
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-			}
-		}
-	}
+	renderer, _ := cb.getRendererFromContext(c)
 	count := renderer.GetDashCount()
 	return c.PushingNext1(t.Runtime, rt.IntValue(int64(count))), nil
 }
 
 // setMiterLimit handles cairo_set_miter_limit(limit)
 func (cb *CairoBindings) setMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
 	args := getAllArgs(c)
-	offset := 0
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-				offset = 1
-			}
-		}
-	}
 	limit, _ := getFloatArg(args, offset)
 	renderer.SetMiterLimit(limit)
 	return c.Next(), nil
@@ -1888,15 +1861,7 @@ func (cb *CairoBindings) setMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, err
 
 // getMiterLimit handles cairo_get_miter_limit()
 func (cb *CairoBindings) getMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := getAllArgs(c)
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-			}
-		}
-	}
+	renderer, _ := cb.getRendererFromContext(c)
 	limit := renderer.GetMiterLimit()
 	return c.PushingNext1(t.Runtime, rt.FloatValue(limit)), nil
 }
@@ -1973,60 +1938,28 @@ func (cb *CairoBindings) getOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 
 // getLineWidth handles cairo_get_line_width()
 func (cb *CairoBindings) getLineWidth(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := getAllArgs(c)
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-			}
-		}
-	}
+	renderer, _ := cb.getRendererFromContext(c)
 	width := renderer.GetLineWidth()
 	return c.PushingNext1(t.Runtime, rt.FloatValue(width)), nil
 }
 
 // getLineCap handles cairo_get_line_cap()
 func (cb *CairoBindings) getLineCap(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := getAllArgs(c)
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-			}
-		}
-	}
+	renderer, _ := cb.getRendererFromContext(c)
 	cap := renderer.GetLineCap()
 	return c.PushingNext1(t.Runtime, rt.IntValue(int64(cap))), nil
 }
 
 // getLineJoin handles cairo_get_line_join()
 func (cb *CairoBindings) getLineJoin(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := getAllArgs(c)
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-			}
-		}
-	}
+	renderer, _ := cb.getRendererFromContext(c)
 	join := renderer.GetLineJoin()
 	return c.PushingNext1(t.Runtime, rt.IntValue(int64(join))), nil
 }
 
 // getAntialias handles cairo_get_antialias()
 func (cb *CairoBindings) getAntialias(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := getAllArgs(c)
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-			}
-		}
-	}
+	renderer, _ := cb.getRendererFromContext(c)
 	aa := renderer.GetAntialias()
 	if aa {
 		return c.PushingNext1(t.Runtime, rt.IntValue(1)), nil // CAIRO_ANTIALIAS_DEFAULT

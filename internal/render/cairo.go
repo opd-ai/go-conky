@@ -343,14 +343,17 @@ func (m *CairoMatrix) Rotate(angle float64) {
 
 // Multiply multiplies this matrix by another matrix.
 // The result is stored in this matrix.
-// This computes: this = this * other
+// Following Cairo's convention: the effect of the resulting transformation
+// is to first apply this matrix to coordinates, then apply other.
+// Mathematically: this = other * this (so that applying this is equivalent
+// to first applying original this, then applying other)
 func (m *CairoMatrix) Multiply(other *CairoMatrix) {
-	xx := m.XX*other.XX + m.XY*other.YX
-	xy := m.XX*other.XY + m.XY*other.YY
-	yx := m.YX*other.XX + m.YY*other.YX
-	yy := m.YX*other.XY + m.YY*other.YY
-	x0 := m.XX*other.X0 + m.XY*other.Y0 + m.X0
-	y0 := m.YX*other.X0 + m.YY*other.Y0 + m.Y0
+	xx := other.XX*m.XX + other.XY*m.YX
+	xy := other.XX*m.XY + other.XY*m.YY
+	yx := other.YX*m.XX + other.YY*m.YX
+	yy := other.YX*m.XY + other.YY*m.YY
+	x0 := other.XX*m.X0 + other.XY*m.Y0 + other.X0
+	y0 := other.YX*m.X0 + other.YY*m.Y0 + other.Y0
 	m.XX = xx
 	m.XY = xy
 	m.YX = yx
@@ -414,21 +417,22 @@ func (m *CairoMatrix) Copy() *CairoMatrix {
 // It maintains drawing state similar to Cairo's context and translates
 // Cairo drawing commands to Ebiten vector operations.
 type CairoRenderer struct {
-	screen       *ebiten.Image
-	currentColor color.RGBA
-	lineWidth    float32
-	lineCap      LineCap
-	lineJoin     LineJoin
-	antialias    bool
-	dashPattern  []float64
-	dashOffset   float64
-	miterLimit   float64
-	path         *vector.Path
-	pathStartX   float32
-	pathStartY   float32
-	pathCurrentX float32
-	pathCurrentY float32
-	hasPath      bool
+	screen         *ebiten.Image
+	currentColor   color.RGBA
+	lineWidth      float32
+	lineCap        LineCap
+	lineJoin       LineJoin
+	antialias      bool
+	dashPattern    []float64
+	dashOffset     float64
+	miterLimit     float64
+	path           *vector.Path
+	pathStartX     float32
+	pathStartY     float32
+	pathCurrentX   float32
+	pathCurrentY   float32
+	hasPath        bool
+	pathBoundsInit bool // Whether path bounds have been initialized (separate from hasPath)
 	// Path bounding box (tracked during path operations)
 	pathMinX float32
 	pathMinY float32
@@ -775,12 +779,13 @@ func (cr *CairoRenderer) GetOperator() int {
 // expandPathBounds updates the path bounding box to include the given point.
 // Must be called while holding the mutex.
 func (cr *CairoRenderer) expandPathBounds(x, y float32) {
-	if !cr.hasPath {
+	if !cr.pathBoundsInit {
 		// First point - initialize bounds
 		cr.pathMinX = x
 		cr.pathMinY = y
 		cr.pathMaxX = x
 		cr.pathMaxY = y
+		cr.pathBoundsInit = true
 		return
 	}
 	if x < cr.pathMinX {
@@ -804,6 +809,7 @@ func (cr *CairoRenderer) NewPath() {
 	defer cr.mu.Unlock()
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathBoundsInit = false
 	cr.pathMinX = 0
 	cr.pathMinY = 0
 	cr.pathMaxX = 0
@@ -1056,6 +1062,7 @@ func (cr *CairoRenderer) Stroke() {
 	// Clear the path after stroking
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathBoundsInit = false
 	cr.pathMinX = 0
 	cr.pathMinY = 0
 	cr.pathMaxX = 0
@@ -1081,6 +1088,7 @@ func (cr *CairoRenderer) Fill() {
 	// Clear the path after filling
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathBoundsInit = false
 	cr.pathMinX = 0
 	cr.pathMinY = 0
 	cr.pathMaxX = 0
@@ -1719,6 +1727,7 @@ func (cr *CairoRenderer) Clip() {
 	// Clear the current path (as per Cairo behavior)
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathBoundsInit = false
 	cr.pathMinX = 0
 	cr.pathMinY = 0
 	cr.pathMaxX = 0
