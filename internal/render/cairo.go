@@ -817,6 +817,20 @@ func (cr *CairoRenderer) expandPathBounds(x, y float32) {
 	}
 }
 
+// initPathAtOrigin initializes the path with a starting point at (0,0).
+// Must be called while holding the mutex.
+// This is used when path operations require a current point but none exists.
+func (cr *CairoRenderer) initPathAtOrigin() {
+	cr.expandPathBounds(0, 0)
+	cr.path.MoveTo(0, 0)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
+	cr.pathStartX = 0
+	cr.pathStartY = 0
+	cr.pathCurrentX = 0
+	cr.pathCurrentY = 0
+	cr.hasPath = true
+}
+
 // NewPath clears the current path and starts a new one.
 // This is equivalent to cairo_new_path.
 func (cr *CairoRenderer) NewPath() {
@@ -984,13 +998,7 @@ func (cr *CairoRenderer) CurveTo(x1, y1, x2, y2, x3, y3 float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// Cairo starts from (0,0) if no current point exists
-		cr.expandPathBounds(0, 0)
-		cr.path.MoveTo(0, 0)
-		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
-		cr.pathStartX = 0
-		cr.pathStartY = 0
-		cr.hasPath = true
+		cr.initPathAtOrigin()
 	}
 	// Expand bounds to include all control points and end point
 	cr.expandPathBounds(float32(x1), float32(y1))
@@ -1049,15 +1057,7 @@ func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// For consistency with CurveTo, start from (0,0) if no current point exists
-		cr.expandPathBounds(0, 0)
-		cr.path.MoveTo(0, 0)
-		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
-		cr.pathStartX = 0
-		cr.pathStartY = 0
-		cr.pathCurrentX = 0
-		cr.pathCurrentY = 0
-		cr.hasPath = true
+		cr.initPathAtOrigin()
 	}
 	newX := float64(cr.pathCurrentX) + dx
 	newY := float64(cr.pathCurrentY) + dy
@@ -1077,15 +1077,7 @@ func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// For consistency with CurveTo, start from (0,0) if no current point exists
-		cr.expandPathBounds(0, 0)
-		cr.path.MoveTo(0, 0)
-		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
-		cr.pathStartX = 0
-		cr.pathStartY = 0
-		cr.pathCurrentX = 0
-		cr.pathCurrentY = 0
-		cr.hasPath = true
+		cr.initPathAtOrigin()
 	}
 	newX := float64(cr.pathCurrentX) + dx
 	newY := float64(cr.pathCurrentY) + dy
@@ -1103,15 +1095,7 @@ func (cr *CairoRenderer) RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// For consistency with CurveTo, start from (0,0) if no current point exists
-		cr.expandPathBounds(0, 0)
-		cr.path.MoveTo(0, 0)
-		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
-		cr.pathStartX = 0
-		cr.pathStartY = 0
-		cr.pathCurrentX = 0
-		cr.pathCurrentY = 0
-		cr.hasPath = true
+		cr.initPathAtOrigin()
 	}
 	curX := float64(cr.pathCurrentX)
 	curY := float64(cr.pathCurrentY)
