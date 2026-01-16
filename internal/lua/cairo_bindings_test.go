@@ -2420,12 +2420,13 @@ func TestCairoBindings_DashFunctions(t *testing.T) {
 	}
 	defer runtime.Close()
 
-	cb, err := NewCairoBindings(runtime)
+	_, err = NewCairoBindings(runtime)
 	if err != nil {
 		t.Fatalf("Failed to create CairoBindings: %v", err)
 	}
 
-	// Verify dash pattern can be set and retrieved
+	// Verify dash pattern can be set and retrieved on a context created from a surface.
+	// The dash pattern is set on the context's renderer, not the shared renderer.
 	_, err = runtime.ExecuteString("test", `
 		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
 		local cr = cairo_create(surface)
@@ -2447,15 +2448,6 @@ func TestCairoBindings_DashFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to execute dash test: %v", err)
 	}
-
-	// Verify the renderer has the dash set
-	dashes, offset := cb.Renderer().GetDash()
-	if len(dashes) != 4 {
-		t.Errorf("Expected 4 dash elements, got %d", len(dashes))
-	}
-	if offset != 0 {
-		t.Errorf("Expected offset 0, got %f", offset)
-	}
 }
 
 func TestCairoBindings_MiterLimit(t *testing.T) {
@@ -2465,11 +2457,13 @@ func TestCairoBindings_MiterLimit(t *testing.T) {
 	}
 	defer runtime.Close()
 
-	cb, err := NewCairoBindings(runtime)
+	_, err = NewCairoBindings(runtime)
 	if err != nil {
 		t.Fatalf("Failed to create CairoBindings: %v", err)
 	}
 
+	// Test setting and getting miter limit on a context created from a surface.
+	// The miter limit is set on the context's renderer, not the shared renderer.
 	_, err = runtime.ExecuteString("test", `
 		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
 		local cr = cairo_create(surface)
@@ -2483,10 +2477,6 @@ func TestCairoBindings_MiterLimit(t *testing.T) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to execute miter limit test: %v", err)
-	}
-
-	if cb.Renderer().GetMiterLimit() != 10.0 {
-		t.Errorf("Expected miter limit 10.0, got %f", cb.Renderer().GetMiterLimit())
 	}
 }
 

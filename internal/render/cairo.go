@@ -341,16 +341,27 @@ func (m *CairoMatrix) Rotate(angle float64) {
 	m.YY = newYY
 }
 
-// Multiply multiplies this matrix by another matrix.
+// Multiply combines this matrix with another matrix.
 // The result is stored in this matrix.
-// This computes: this = this * other
+//
+// Following Cairo's convention: the effect is to first apply the receiver
+// matrix, then apply the argument matrix. Mathematically, this requires
+// computing:
+//
+//	result = other * m
+//
+// where transformations are applied in right-to-left order.
+//
+// This ensures that transforming a point p with the result gives:
+//
+//	result(p) = other(m(p)).
 func (m *CairoMatrix) Multiply(other *CairoMatrix) {
-	xx := m.XX*other.XX + m.XY*other.YX
-	xy := m.XX*other.XY + m.XY*other.YY
-	yx := m.YX*other.XX + m.YY*other.YX
-	yy := m.YX*other.XY + m.YY*other.YY
-	x0 := m.XX*other.X0 + m.XY*other.Y0 + m.X0
-	y0 := m.YX*other.X0 + m.YY*other.Y0 + m.Y0
+	xx := other.XX*m.XX + other.XY*m.YX
+	xy := other.XX*m.XY + other.XY*m.YY
+	yx := other.YX*m.XX + other.YY*m.YX
+	yy := other.YX*m.XY + other.YY*m.YY
+	x0 := other.XX*m.X0 + other.XY*m.Y0 + other.X0
+	y0 := other.YX*m.X0 + other.YY*m.Y0 + other.Y0
 	m.XX = xx
 	m.XY = xy
 	m.YX = yx
@@ -429,6 +440,10 @@ type CairoRenderer struct {
 	pathCurrentX float32
 	pathCurrentY float32
 	hasPath      bool
+	// Tracks whether path bounds have been initialized.
+	// Separate from hasPath to handle multi-point operations (e.g., Rectangle)
+	// that call expandPathBounds multiple times before setting hasPath = true.
+	pathBoundsInit bool
 	// Path bounding box (tracked during path operations)
 	pathMinX float32
 	pathMinY float32
@@ -775,12 +790,13 @@ func (cr *CairoRenderer) GetOperator() int {
 // expandPathBounds updates the path bounding box to include the given point.
 // Must be called while holding the mutex.
 func (cr *CairoRenderer) expandPathBounds(x, y float32) {
-	if !cr.hasPath {
+	if !cr.pathBoundsInit {
 		// First point - initialize bounds
 		cr.pathMinX = x
 		cr.pathMinY = y
 		cr.pathMaxX = x
 		cr.pathMaxY = y
+		cr.pathBoundsInit = true
 		return
 	}
 	if x < cr.pathMinX {
@@ -804,6 +820,7 @@ func (cr *CairoRenderer) NewPath() {
 	defer cr.mu.Unlock()
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathBoundsInit = false
 	cr.pathMinX = 0
 	cr.pathMinY = 0
 	cr.pathMaxX = 0
@@ -1056,6 +1073,7 @@ func (cr *CairoRenderer) Stroke() {
 	// Clear the path after stroking
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathBoundsInit = false
 	cr.pathMinX = 0
 	cr.pathMinY = 0
 	cr.pathMaxX = 0
@@ -1081,6 +1099,7 @@ func (cr *CairoRenderer) Fill() {
 	// Clear the path after filling
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathBoundsInit = false
 	cr.pathMinX = 0
 	cr.pathMinY = 0
 	cr.pathMaxX = 0
@@ -1719,6 +1738,7 @@ func (cr *CairoRenderer) Clip() {
 	// Clear the current path (as per Cairo behavior)
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathBoundsInit = false
 	cr.pathMinX = 0
 	cr.pathMinY = 0
 	cr.pathMaxX = 0
