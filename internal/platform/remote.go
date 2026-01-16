@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // sshPlatform implements Platform for remote systems via SSH.
@@ -175,18 +178,69 @@ func (p *sshPlatform) buildSSHConfig() (*ssh.ClientConfig, error) {
 		return nil, fmt.Errorf("unsupported auth method type: %T", auth)
 	}
 
+	// Build host key callback based on configuration
+	hostKeyCallback, err := p.buildHostKeyCallback()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build host key callback: %w", err)
+	}
+
 	return &ssh.ClientConfig{
-		User: p.config.User,
-		Auth: authMethods,
-		// TODO: SECURITY - Replace InsecureIgnoreHostKey with proper host key verification
-		// Options for production use:
-		// 1. Use ssh.FixedHostKey(knownHostKey) with a known host key
-		// 2. Use knownhosts.New("/path/to/known_hosts") to read from known_hosts file
-		// 3. Implement custom HostKeyCallback for CA-based verification
-		// Current implementation is VULNERABLE to man-in-the-middle attacks
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		User:            p.config.User,
+		Auth:            authMethods,
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}, nil
+}
+
+// buildHostKeyCallback creates the appropriate host key verification callback
+// based on the RemoteConfig settings.
+//
+// Priority order:
+// 1. Custom HostKeyCallback (if set)
+// 2. InsecureIgnoreHostKey (if true, with warning)
+// 3. KnownHostsPath (explicit path to known_hosts file)
+// 4. Default known_hosts file (~/.ssh/known_hosts)
+func (p *sshPlatform) buildHostKeyCallback() (ssh.HostKeyCallback, error) {
+	// Priority 1: Use custom callback if provided
+	if p.config.HostKeyCallback != nil {
+		return p.config.HostKeyCallback, nil
+	}
+
+	// Priority 2: Use insecure mode if explicitly requested
+	if p.config.InsecureIgnoreHostKey {
+		log.Printf("WARNING: SSH host key verification is disabled for %s. " +
+			"This makes the connection vulnerable to man-in-the-middle attacks. " +
+			"Set InsecureIgnoreHostKey=false and use known_hosts for production.",
+			p.config.Host)
+		return ssh.InsecureIgnoreHostKey(), nil
+	}
+
+	// Priority 3 & 4: Use known_hosts file
+	knownHostsPath := p.config.KnownHostsPath
+	if knownHostsPath == "" {
+		// Default to ~/.ssh/known_hosts
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get home directory: %w", err)
+		}
+		knownHostsPath = filepath.Join(homeDir, ".ssh", "known_hosts")
+	}
+
+	// Check if the known_hosts file exists
+	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("known_hosts file not found at %s. "+
+			"Either add the host key to known_hosts, specify a custom path with KnownHostsPath, "+
+			"provide a custom HostKeyCallback, or set InsecureIgnoreHostKey=true (not recommended)",
+			knownHostsPath)
+	}
+
+	// Create callback from known_hosts file
+	callback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read known_hosts file %s: %w", knownHostsPath, err)
+	}
+
+	return callback, nil
 }
 
 func (p *sshPlatform) detectOS() (string, error) {
