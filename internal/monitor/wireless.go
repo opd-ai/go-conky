@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -56,20 +57,20 @@ func newWirelessReader() *wirelessReader {
 		sysNetPath:         sysNetPathDefault,
 		wirelessStatsCache: make(map[string]WirelessInfo),
 		operstatePath: func(iface string) string {
-			return sysNetPathDefault + "/" + iface + "/operstate"
+			return path.Join(sysNetPathDefault, iface, "operstate")
 		},
 		wirelessEssidPath: func(iface string) string {
 			// Modern path via iw command output or nl80211
-			return sysNetPathDefault + "/" + iface + "/wireless/essid"
+			return path.Join(sysNetPathDefault, iface, "wireless", "essid")
 		},
 		wirelessApPath: func(iface string) string {
-			return sysNetPathDefault + "/" + iface + "/wireless/ap"
+			return path.Join(sysNetPathDefault, iface, "wireless", "ap")
 		},
 		wirelessBitratePath: func(iface string) string {
-			return sysNetPathDefault + "/" + iface + "/wireless/bitrate"
+			return path.Join(sysNetPathDefault, iface, "wireless", "bitrate")
 		},
 		wirelessModePath: func(iface string) string {
-			return sysNetPathDefault + "/" + iface + "/wireless/mode"
+			return path.Join(sysNetPathDefault, iface, "wireless", "mode")
 		},
 	}
 }
