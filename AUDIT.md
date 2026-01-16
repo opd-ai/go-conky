@@ -270,31 +270,32 @@ case "stockquote":
 
 ---
 
-### EDGE CASE BUG: InFill Check Uses Zero-Initialized Bounds
+### EDGE CASE BUG: `expandPathBoundsUnlocked` Uses Zero-Initialized Bounds
 
-**File:** internal/render/cairo.go:2080-2090  
+**File:** internal/render/cairo.go:2208-2228  
 **Severity:** Low  
-**Description:** The `InFill` and `InStroke` functions check if path bounds are all zero to detect an empty path, but this fails for valid paths that happen to include the origin point (0,0).
+**Description:** The helper `expandPathBoundsUnlocked` uses zero-initialized bounds (`pathMinX == 0 && pathMinY == 0 && pathMaxX == 0 && pathMaxY == 0`) as a sentinel for “no path yet”. This is inaccurate for valid paths that legitimately include the origin point (0,0). The primary `expandPathBounds` function instead uses `if !cr.hasPath` to detect first-point initialization and is not affected by this issue.
 
-**Expected Behavior:** `InFill` should correctly identify points inside paths that pass through or near the origin.
+**Expected Behavior:** Path-bounds expansion should rely on an explicit flag (such as `cr.hasPath`) to detect whether bounds have been initialized, so that paths passing through or near the origin are handled correctly.
 
-**Actual Behavior:** A path containing (0,0) will have `pathMinX=0, pathMinY=0` which triggers the empty-path check, causing `InFill` to incorrectly return `false`.
+**Actual Behavior:** When `expandPathBoundsUnlocked` is used, a path whose only points so far are at or around the origin can leave the bounds in their zero-initialized state. Because zero-valued bounds are treated as “empty”, subsequent logic that relies solely on these bounds may consider the path empty or skip updates, even though a valid path exists.
 
-**Impact:** Hit testing fails for paths near the origin.
+**Impact:** Any caller that depends on bounds computed via `expandPathBoundsUnlocked` (without also consulting `cr.hasPath`) can misclassify non-empty paths that include the origin as empty, leading to incorrect hit-testing or culling near (0,0).
 
-**Reproduction:** Create a rectangle path from (-10, -10) to (10, 10), then call `InFill(0, 0)`.
+**Reproduction:** Create a path whose first points are at or around (0,0) and ensure bounds are expanded via `expandPathBoundsUnlocked` without first setting `cr.hasPath` or initializing bounds explicitly. Observe that the bounds may remain at zero and be treated as an empty path by downstream logic.
 
 **Code Reference:**
 ```go
-func (cr *CairoRenderer) InFill(x, y float64) bool {
-    cr.mu.Lock()
-    defer cr.mu.Unlock()
-
-    // Check if point is within path bounds
+// Helper used to expand path bounds without taking the lock.
+func (cr *CairoRenderer) expandPathBoundsUnlocked(x, y float64) {
+    // Zero-initialized bounds are (incorrectly) used as an "empty path" sentinel.
     if cr.pathMinX == 0 && cr.pathMinY == 0 && cr.pathMaxX == 0 && cr.pathMaxY == 0 {
-        return false  // BUG: This falsely triggers for paths at origin
+        // BUG: This falsely treats a path that happens to include (0,0) as uninitialized.
+        cr.pathMinX, cr.pathMinY = x, y
+        cr.pathMaxX, cr.pathMaxY = x, y
+        return
     }
-    // ...
+    // ... further min/max expansion logic ...
 }
 ```
 
