@@ -143,23 +143,24 @@ func (r *sysInfoReader) ReadSystemInfo() (SystemInfo, error) {
 
 ---
 
-### MISSING FEATURE: Configuration Hot-Reloading Not Implemented
+### MISSING FEATURE: Seamless (In-Place) Configuration Hot-Reloading
 
 **File:** pkg/conky/conky.go (entire file)  
 **Severity:** Medium  
-**Description:** README.md mentions "Configuration hot-reloading is planned" and the Event system includes `EventConfigReloaded`, but there is no implementation for reloading configuration at runtime. The `Restart()` method provides a workaround but requires full restart.
+**Description:** README.md mentions "Configuration hot-reloading is planned" and the Event system includes `EventConfigReloaded`. The current implementation provides configuration reload via the `Restart()` method, which stops the instance, reloads configuration via the `configLoader`, emits `EventConfigReloaded`, and then restarts. However, true in-place hot-reloading without a restart cycle is not yet implemented.
 
-**Expected Behavior:** Ability to reload configuration changes without restarting the application.
+**Expected Behavior:** Ability to apply configuration changes at runtime without a full stop/start cycle (i.e., reload configuration in-place while keeping the Conky instance running).
 
-**Actual Behavior:** Configuration can only be changed by stopping and restarting the Conky instance.
+**Actual Behavior:** Configuration changes are applied by invoking `Restart()`, which stops the running instance, reloads the configuration, emits `EventConfigReloaded`, and starts a new instance. There is no mechanism to reload configuration entirely in-place without restarting.
 
-**Impact:** Users must restart the application to apply configuration changes, reducing usability.
+**Impact:** Users experience a brief interruption when applying configuration changes because the Conky instance must be restarted as part of the reload process, rather than being updated seamlessly in-place.
 
-**Reproduction:** Modify configuration file while application is running; changes will not take effect until restart.
+**Reproduction:** Modify the configuration file while the application is running and trigger a `Restart()` (or equivalent). The new configuration will take effect only after the restart cycle completes; there is no API to apply the change without restarting.
 
 **Code Reference:**
 ```go
-// status.go defines EventConfigReloaded but it's never emitted in the codebase
+// status.go defines EventConfigReloaded, which is emitted by Restart() when
+// configuration has been reloaded as part of the stop/reload/start cycle.
 const (
     // ...
     // EventConfigReloaded is emitted when configuration is reloaded.
