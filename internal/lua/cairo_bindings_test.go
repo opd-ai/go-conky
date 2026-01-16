@@ -2552,12 +2552,20 @@ func TestCairoBindings_FillRuleOperator(t *testing.T) {
 		-- Test fill rule
 		cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD)
 		local rule = cairo_get_fill_rule(cr)
-		-- fill rule is a no-op so always returns winding (0)
+		assert(rule == CAIRO_FILL_RULE_EVEN_ODD, "Fill rule should be EVEN_ODD, got " .. tostring(rule))
+		
+		cairo_set_fill_rule(cr, CAIRO_FILL_RULE_WINDING)
+		rule = cairo_get_fill_rule(cr)
+		assert(rule == CAIRO_FILL_RULE_WINDING, "Fill rule should be WINDING, got " .. tostring(rule))
 		
 		-- Test operator
 		cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE)
 		local op = cairo_get_operator(cr)
-		-- operator is a no-op so always returns OVER (2)
+		assert(op == CAIRO_OPERATOR_SOURCE, "Operator should be SOURCE, got " .. tostring(op))
+		
+		cairo_set_operator(cr, CAIRO_OPERATOR_OVER)
+		op = cairo_get_operator(cr)
+		assert(op == CAIRO_OPERATOR_OVER, "Operator should be OVER, got " .. tostring(op))
 		
 		cairo_destroy(cr)
 		cairo_surface_destroy(surface)

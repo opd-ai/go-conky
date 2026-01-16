@@ -1874,17 +1874,8 @@ func (cb *CairoBindings) getMiterLimit(t *rt.Thread, c *rt.GoCont) (rt.Cont, err
 
 // setFillRule handles cairo_set_fill_rule(rule)
 func (cb *CairoBindings) setFillRule(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
 	args := getAllArgs(c)
-	offset := 0
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-				offset = 1
-			}
-		}
-	}
 	rule, _ := getIntArg(args, offset)
 	renderer.SetFillRule(int(rule))
 	return c.Next(), nil
@@ -1892,32 +1883,15 @@ func (cb *CairoBindings) setFillRule(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 
 // getFillRule handles cairo_get_fill_rule()
 func (cb *CairoBindings) getFillRule(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := getAllArgs(c)
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-			}
-		}
-	}
+	renderer, _ := cb.getRendererFromContext(c)
 	rule := renderer.GetFillRule()
 	return c.PushingNext1(t.Runtime, rt.IntValue(int64(rule))), nil
 }
 
 // setOperator handles cairo_set_operator(op)
 func (cb *CairoBindings) setOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
 	args := getAllArgs(c)
-	offset := 0
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-				offset = 1
-			}
-		}
-	}
 	op, _ := getIntArg(args, offset)
 	renderer.SetOperator(int(op))
 	return c.Next(), nil
@@ -1925,15 +1899,7 @@ func (cb *CairoBindings) setOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 
 // getOperator handles cairo_get_operator()
 func (cb *CairoBindings) getOperator(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
-	args := getAllArgs(c)
-	renderer := cb.renderer
-	if len(args) > 0 {
-		if ud, ok := args[0].TryUserData(); ok {
-			if ctx, ok := ud.Value().(*sharedContext); ok {
-				renderer = ctx.renderer
-			}
-		}
-	}
+	renderer, _ := cb.getRendererFromContext(c)
 	op := renderer.GetOperator()
 	return c.PushingNext1(t.Runtime, rt.IntValue(int64(op))), nil
 }

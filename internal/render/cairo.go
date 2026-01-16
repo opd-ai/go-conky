@@ -478,7 +478,11 @@ type CairoRenderer struct {
 	clipMaxY float32
 	// State stack for save/restore
 	stateStack []cairoState
-	mu         sync.Mutex
+	// Fill rule for fill operations (0=WINDING, 1=EVEN_ODD)
+	fillRule int
+	// Compositing operator (0-12 Cairo operators)
+	operator int
+	mu       sync.Mutex
 }
 
 // cairoState holds a snapshot of the drawing state for save/restore.
@@ -509,6 +513,10 @@ type cairoState struct {
 	clipMinY float32
 	clipMaxX float32
 	clipMaxY float32
+	// Fill rule for fill operations (0=WINDING, 1=EVEN_ODD)
+	fillRule int
+	// Compositing operator (0-12 Cairo operators)
+	operator int
 }
 
 // FontSlant represents Cairo font slant styles.
@@ -591,6 +599,8 @@ func NewCairoRenderer() *CairoRenderer {
 		scaleY:       1.0,
 		matrix:       NewIdentityMatrix(),
 		stateStack:   make([]cairoState, 0),
+		fillRule:     0, // CAIRO_FILL_RULE_WINDING (default)
+		operator:     2, // CAIRO_OPERATOR_OVER (default)
 	}
 }
 
@@ -768,25 +778,60 @@ func (cr *CairoRenderer) GetMiterLimit() float64 {
 }
 
 // SetFillRule sets the fill rule for fill operations.
-// This is a no-op placeholder for Cairo compatibility.
-func (cr *CairoRenderer) SetFillRule(_ int) {
-	// Ebiten's vector package uses even-odd fill rule by default
+// rule: 0 = CAIRO_FILL_RULE_WINDING (maps to ebiten.FillRuleNonZero)
+// rule: 1 = CAIRO_FILL_RULE_EVEN_ODD (maps to ebiten.FillRuleEvenOdd)
+func (cr *CairoRenderer) SetFillRule(rule int) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	// Clamp to valid values (0 or 1)
+	if rule < 0 {
+		rule = 0
+	} else if rule > 1 {
+		rule = 1
+	}
+	cr.fillRule = rule
 }
 
 // GetFillRule returns the current fill rule.
+// 0 = CAIRO_FILL_RULE_WINDING, 1 = CAIRO_FILL_RULE_EVEN_ODD
 func (cr *CairoRenderer) GetFillRule() int {
-	return 0 // CAIRO_FILL_RULE_WINDING
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.fillRule
 }
 
 // SetOperator sets the compositing operator.
-// This is a no-op placeholder for Cairo compatibility.
-func (cr *CairoRenderer) SetOperator(_ int) {
-	// Ebiten uses its own blend modes
+// Common values:
+// 0 = CAIRO_OPERATOR_CLEAR
+// 1 = CAIRO_OPERATOR_SOURCE (maps to ebiten.BlendCopy)
+// 2 = CAIRO_OPERATOR_OVER (maps to ebiten.BlendSourceOver, default)
+// 3 = CAIRO_OPERATOR_IN (maps to ebiten.BlendSourceIn)
+// 4 = CAIRO_OPERATOR_OUT (maps to ebiten.BlendSourceOut)
+// 5 = CAIRO_OPERATOR_ATOP (maps to ebiten.BlendSourceAtop)
+// 6 = CAIRO_OPERATOR_DEST (maps to ebiten.BlendDestination)
+// 7 = CAIRO_OPERATOR_DEST_OVER (maps to ebiten.BlendDestinationOver)
+// 8 = CAIRO_OPERATOR_DEST_IN (maps to ebiten.BlendDestinationIn)
+// 9 = CAIRO_OPERATOR_DEST_OUT (maps to ebiten.BlendDestinationOut)
+// 10 = CAIRO_OPERATOR_DEST_ATOP (maps to ebiten.BlendDestinationAtop)
+// 11 = CAIRO_OPERATOR_XOR (maps to ebiten.BlendXor)
+// 12 = CAIRO_OPERATOR_ADD (maps to ebiten.BlendLighter)
+func (cr *CairoRenderer) SetOperator(op int) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	// Clamp to valid range (0-12)
+	if op < 0 {
+		op = 0
+	} else if op > 12 {
+		op = 12
+	}
+	cr.operator = op
 }
 
 // GetOperator returns the current operator.
 func (cr *CairoRenderer) GetOperator() int {
-	return 2 // CAIRO_OPERATOR_OVER (default)
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.operator
 }
 
 // --- Path Building Functions ---
@@ -1142,6 +1187,7 @@ func (cr *CairoRenderer) Stroke() {
 	cr.setVertexColors(vertices)
 	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
+		Blend:     cr.getEbitenBlend(),
 	})
 
 	// Clear the path after stroking
@@ -1168,6 +1214,8 @@ func (cr *CairoRenderer) Fill() {
 	cr.setVertexColors(vertices)
 	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
+		FillRule:  cr.getEbitenFillRule(),
+		Blend:     cr.getEbitenBlend(),
 	})
 
 	// Clear the path after filling
@@ -1194,6 +1242,8 @@ func (cr *CairoRenderer) FillPreserve() {
 	cr.setVertexColors(vertices)
 	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
+		FillRule:  cr.getEbitenFillRule(),
+		Blend:     cr.getEbitenBlend(),
 	})
 }
 
@@ -1212,6 +1262,7 @@ func (cr *CairoRenderer) StrokePreserve() {
 	cr.setVertexColors(vertices)
 	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
+		Blend:     cr.getEbitenBlend(),
 	})
 }
 
@@ -1331,6 +1382,61 @@ func (cr *CairoRenderer) buildStrokeOptions() *vector.StrokeOptions {
 		opts.LineJoin = vector.LineJoinBevel
 	}
 	return opts
+}
+
+// getEbitenFillRule converts Cairo fill rule to Ebiten FillRule.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) getEbitenFillRule() ebiten.FillRule {
+	switch cr.fillRule {
+	case 0: // CAIRO_FILL_RULE_WINDING
+		return ebiten.FillRuleNonZero
+	case 1: // CAIRO_FILL_RULE_EVEN_ODD
+		return ebiten.FillRuleEvenOdd
+	default:
+		return ebiten.FillRuleNonZero
+	}
+}
+
+// getEbitenBlend converts Cairo operator to Ebiten Blend mode.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) getEbitenBlend() ebiten.Blend {
+	switch cr.operator {
+	case 0: // CAIRO_OPERATOR_CLEAR - Clear destination where source is drawn
+		return ebiten.Blend{
+			BlendFactorSourceRGB:        ebiten.BlendFactorZero,
+			BlendFactorSourceAlpha:      ebiten.BlendFactorZero,
+			BlendFactorDestinationRGB:   ebiten.BlendFactorZero,
+			BlendFactorDestinationAlpha: ebiten.BlendFactorZero,
+			BlendOperationRGB:           ebiten.BlendOperationAdd,
+			BlendOperationAlpha:         ebiten.BlendOperationAdd,
+		}
+	case 1: // CAIRO_OPERATOR_SOURCE
+		return ebiten.BlendCopy
+	case 2: // CAIRO_OPERATOR_OVER (default)
+		return ebiten.BlendSourceOver
+	case 3: // CAIRO_OPERATOR_IN
+		return ebiten.BlendSourceIn
+	case 4: // CAIRO_OPERATOR_OUT
+		return ebiten.BlendSourceOut
+	case 5: // CAIRO_OPERATOR_ATOP
+		return ebiten.BlendSourceAtop
+	case 6: // CAIRO_OPERATOR_DEST
+		return ebiten.BlendDestination
+	case 7: // CAIRO_OPERATOR_DEST_OVER
+		return ebiten.BlendDestinationOver
+	case 8: // CAIRO_OPERATOR_DEST_IN
+		return ebiten.BlendDestinationIn
+	case 9: // CAIRO_OPERATOR_DEST_OUT
+		return ebiten.BlendDestinationOut
+	case 10: // CAIRO_OPERATOR_DEST_ATOP
+		return ebiten.BlendDestinationAtop
+	case 11: // CAIRO_OPERATOR_XOR
+		return ebiten.BlendXor
+	case 12: // CAIRO_OPERATOR_ADD
+		return ebiten.BlendLighter
+	default:
+		return ebiten.BlendSourceOver
+	}
 }
 
 // setVertexColors sets the current color on all vertices.
@@ -1629,6 +1735,8 @@ func (cr *CairoRenderer) Save() {
 		clipMinY:      cr.clipMinY,
 		clipMaxX:      cr.clipMaxX,
 		clipMaxY:      cr.clipMaxY,
+		fillRule:      cr.fillRule,
+		operator:      cr.operator,
 	}
 	cr.stateStack = append(cr.stateStack, state)
 }
@@ -1675,6 +1783,8 @@ func (cr *CairoRenderer) Restore() {
 	cr.clipMinY = state.clipMinY
 	cr.clipMaxX = state.clipMaxX
 	cr.clipMaxY = state.clipMaxY
+	cr.fillRule = state.fillRule
+	cr.operator = state.operator
 
 	// Update text renderer to match restored state
 	cr.textRenderer.SetFontSize(state.fontSize)

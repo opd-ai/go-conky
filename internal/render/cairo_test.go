@@ -2157,32 +2157,120 @@ func TestCairoRenderer_MiterLimitSaveRestore(t *testing.T) {
 func TestCairoRenderer_FillRule(t *testing.T) {
 	cr := NewCairoRenderer()
 
-	// These are no-ops but should not panic
-	cr.SetFillRule(0) // WINDING
+	// Default fill rule should be WINDING (0)
 	if cr.GetFillRule() != 0 {
-		t.Errorf("Expected fill rule 0, got %d", cr.GetFillRule())
+		t.Errorf("Expected default fill rule 0 (WINDING), got %d", cr.GetFillRule())
 	}
 
-	cr.SetFillRule(1) // EVEN_ODD
-	// Still returns 0 as it's a no-op
+	// Set to EVEN_ODD (1)
+	cr.SetFillRule(1)
+	if cr.GetFillRule() != 1 {
+		t.Errorf("Expected fill rule 1 (EVEN_ODD), got %d", cr.GetFillRule())
+	}
+
+	// Set back to WINDING (0)
+	cr.SetFillRule(0)
 	if cr.GetFillRule() != 0 {
-		t.Errorf("Expected fill rule 0 (no-op), got %d", cr.GetFillRule())
+		t.Errorf("Expected fill rule 0 (WINDING), got %d", cr.GetFillRule())
+	}
+
+	// Test clamping - values less than 0 should be clamped to 0
+	cr.SetFillRule(-5)
+	if cr.GetFillRule() != 0 {
+		t.Errorf("Expected fill rule 0 (clamped from -5), got %d", cr.GetFillRule())
+	}
+
+	// Test clamping - values greater than 1 should be clamped to 1
+	cr.SetFillRule(10)
+	if cr.GetFillRule() != 1 {
+		t.Errorf("Expected fill rule 1 (clamped from 10), got %d", cr.GetFillRule())
 	}
 }
 
 func TestCairoRenderer_Operator(t *testing.T) {
 	cr := NewCairoRenderer()
 
-	// These are no-ops but should not panic
-	cr.SetOperator(1) // SOURCE
+	// Default operator should be OVER (2)
 	if cr.GetOperator() != 2 {
-		t.Errorf("Expected operator 2 (OVER default), got %d", cr.GetOperator())
+		t.Errorf("Expected default operator 2 (OVER), got %d", cr.GetOperator())
 	}
 
-	cr.SetOperator(0) // CLEAR
-	// Still returns 2 as it's a no-op
+	// Set to SOURCE (1)
+	cr.SetOperator(1)
+	if cr.GetOperator() != 1 {
+		t.Errorf("Expected operator 1 (SOURCE), got %d", cr.GetOperator())
+	}
+
+	// Set to CLEAR (0)
+	cr.SetOperator(0)
+	if cr.GetOperator() != 0 {
+		t.Errorf("Expected operator 0 (CLEAR), got %d", cr.GetOperator())
+	}
+
+	// Set back to OVER (2)
+	cr.SetOperator(2)
 	if cr.GetOperator() != 2 {
-		t.Errorf("Expected operator 2 (no-op), got %d", cr.GetOperator())
+		t.Errorf("Expected operator 2 (OVER), got %d", cr.GetOperator())
+	}
+
+	// Test ADD (12)
+	cr.SetOperator(12)
+	if cr.GetOperator() != 12 {
+		t.Errorf("Expected operator 12 (ADD), got %d", cr.GetOperator())
+	}
+
+	// Test clamping - values less than 0 should be clamped to 0
+	cr.SetOperator(-5)
+	if cr.GetOperator() != 0 {
+		t.Errorf("Expected operator 0 (clamped from -5), got %d", cr.GetOperator())
+	}
+
+	// Test clamping - values greater than 12 should be clamped to 12
+	cr.SetOperator(20)
+	if cr.GetOperator() != 12 {
+		t.Errorf("Expected operator 12 (clamped from 20), got %d", cr.GetOperator())
+	}
+}
+
+func TestCairoRenderer_FillRuleOperatorSaveRestore(t *testing.T) {
+	cr := NewCairoRenderer()
+
+	// Set initial fill rule and operator
+	cr.SetFillRule(1)    // EVEN_ODD
+	cr.SetOperator(1)    // SOURCE
+	cr.SetLineWidth(5.0) // Also test with another field
+
+	// Save the state
+	cr.Save()
+
+	// Modify fill rule and operator
+	cr.SetFillRule(0)  // WINDING
+	cr.SetOperator(12) // ADD
+	cr.SetLineWidth(10.0)
+
+	// Verify the modified state
+	if cr.GetFillRule() != 0 {
+		t.Errorf("Expected modified fill rule 0 (WINDING), got %d", cr.GetFillRule())
+	}
+	if cr.GetOperator() != 12 {
+		t.Errorf("Expected modified operator 12 (ADD), got %d", cr.GetOperator())
+	}
+	if cr.GetLineWidth() != 10.0 {
+		t.Errorf("Expected modified line width 10.0, got %f", cr.GetLineWidth())
+	}
+
+	// Restore the state
+	cr.Restore()
+
+	// Verify the restored state
+	if cr.GetFillRule() != 1 {
+		t.Errorf("Expected restored fill rule 1 (EVEN_ODD), got %d", cr.GetFillRule())
+	}
+	if cr.GetOperator() != 1 {
+		t.Errorf("Expected restored operator 1 (SOURCE), got %d", cr.GetOperator())
+	}
+	if cr.GetLineWidth() != 5.0 {
+		t.Errorf("Expected restored line width 5.0, got %f", cr.GetLineWidth())
 	}
 }
 
