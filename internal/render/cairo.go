@@ -341,12 +341,19 @@ func (m *CairoMatrix) Rotate(angle float64) {
 	m.YY = newYY
 }
 
-// Multiply multiplies this matrix by another matrix.
+// Multiply combines this matrix with another matrix.
 // The result is stored in this matrix.
-// Following Cairo's convention: the effect of the resulting transformation
-// is to first apply this matrix to coordinates, then apply other.
-// Mathematically: this = other * this (so that applying this is equivalent
-// to first applying original this, then applying other)
+//
+// Following Cairo's convention for cairo_matrix_multiply(result, a, b):
+// the effect of the resulting transformation is to first apply 'a' to
+// coordinates, then apply 'b'. For m.Multiply(other), we treat 'm' as 'a'
+// and 'other' as 'b'.
+//
+// Mathematically, to achieve "first m, then other", we compute:
+// result = other * m (standard matrix multiplication order)
+//
+// This ensures that transforming a point p with the result gives:
+// result(p) = other(m(p))
 func (m *CairoMatrix) Multiply(other *CairoMatrix) {
 	xx := other.XX*m.XX + other.XY*m.YX
 	xy := other.XX*m.XY + other.XY*m.YY
@@ -417,22 +424,26 @@ func (m *CairoMatrix) Copy() *CairoMatrix {
 // It maintains drawing state similar to Cairo's context and translates
 // Cairo drawing commands to Ebiten vector operations.
 type CairoRenderer struct {
-	screen         *ebiten.Image
-	currentColor   color.RGBA
-	lineWidth      float32
-	lineCap        LineCap
-	lineJoin       LineJoin
-	antialias      bool
-	dashPattern    []float64
-	dashOffset     float64
-	miterLimit     float64
-	path           *vector.Path
-	pathStartX     float32
-	pathStartY     float32
-	pathCurrentX   float32
-	pathCurrentY   float32
-	hasPath        bool
-	pathBoundsInit bool // Whether path bounds have been initialized (separate from hasPath)
+	screen       *ebiten.Image
+	currentColor color.RGBA
+	lineWidth    float32
+	lineCap      LineCap
+	lineJoin     LineJoin
+	antialias    bool
+	dashPattern  []float64
+	dashOffset   float64
+	miterLimit   float64
+	path         *vector.Path
+	pathStartX   float32
+	pathStartY   float32
+	pathCurrentX float32
+	pathCurrentY float32
+	hasPath      bool
+	// pathBoundsInit tracks whether path bounds have been initialized.
+	// This is separate from hasPath because multi-point operations like Rectangle
+	// call expandPathBounds multiple times before setting hasPath = true, and we
+	// need to correctly initialize bounds on the first point then expand on subsequent points.
+	pathBoundsInit bool
 	// Path bounding box (tracked during path operations)
 	pathMinX float32
 	pathMinY float32

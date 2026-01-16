@@ -1377,7 +1377,8 @@ func (cb *CairoBindings) setSource(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) 
 
 // getRendererFromArgs extracts a renderer from the args if present, otherwise returns default.
 // Returns the renderer and the offset to use for remaining arguments.
-// Supports *render.CairoRenderer, *render.CairoContext, and *sharedContext types.
+// The first argument's userdata value can be *render.CairoRenderer, *render.CairoContext,
+// or *sharedContext. If none match, returns the default shared renderer with offset 0.
 func (cb *CairoBindings) getRendererFromArgs(args []rt.Value) (*render.CairoRenderer, int) {
 	if len(args) > 0 {
 		if ud, ok := args[0].TryUserData(); ok {
