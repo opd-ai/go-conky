@@ -99,7 +99,7 @@ ${color0}Uptime:$color ${uptime}
 Conky-Go includes a migration tool to convert legacy configurations to Lua format:
 
 ```bash
-# Convert a legacy config to Lua (future feature)
+# Convert a legacy config to Lua format
 ./conky-go --convert ~/.conkyrc > ~/.config/conky/conky.conf
 ```
 
@@ -290,6 +290,16 @@ function conky_main()
     cairo_surface_destroy(cs)
 end
 ```
+
+### Clipping Limitations
+
+**Important:** Cairo clipping functions (`cairo_clip`, `cairo_clip_preserve`, `cairo_reset_clip`) are implemented for API compatibility, but clipping is **not currently enforced** during drawing operations. This means:
+
+- Calling `cairo_clip()` will record the clip region without errors
+- Subsequent drawing operations will **not be restricted** to the clip area
+- Scripts using clipping will execute successfully but may produce incorrect visual output
+
+If your Conky scripts rely on clipping for complex drawings or masking effects, the visual results may differ from the original Conky behavior. This is a known limitation of the Ebiten-based rendering engine.
 
 ### Resource Limits
 

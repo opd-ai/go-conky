@@ -2205,25 +2205,28 @@ func (cr *CairoRenderer) AppendPath(segments []PathSegment) {
 
 // expandPathBoundsUnlocked expands path bounds without acquiring the lock.
 // Caller must hold the lock.
+// Uses hasPath flag instead of zero-checks to correctly handle paths that
+// legitimately start at or include the origin point (0,0).
 func (cr *CairoRenderer) expandPathBoundsUnlocked(x, y float32) {
-	if cr.pathMinX == 0 && cr.pathMaxX == 0 {
+	if !cr.hasPath {
+		// First point - initialize bounds
 		cr.pathMinX = x
-		cr.pathMaxX = x
 		cr.pathMinY = y
+		cr.pathMaxX = x
 		cr.pathMaxY = y
-	} else {
-		if x < cr.pathMinX {
-			cr.pathMinX = x
-		}
-		if x > cr.pathMaxX {
-			cr.pathMaxX = x
-		}
-		if y < cr.pathMinY {
-			cr.pathMinY = y
-		}
-		if y > cr.pathMaxY {
-			cr.pathMaxY = y
-		}
+		return
+	}
+	if x < cr.pathMinX {
+		cr.pathMinX = x
+	}
+	if x > cr.pathMaxX {
+		cr.pathMaxX = x
+	}
+	if y < cr.pathMinY {
+		cr.pathMinY = y
+	}
+	if y > cr.pathMaxY {
+		cr.pathMaxY = y
 	}
 }
 

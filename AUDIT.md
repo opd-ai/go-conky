@@ -11,15 +11,21 @@
 
 This audit compares the documented functionality in README.md and supporting documentation against the actual implementation. The codebase demonstrates a well-structured Go project with comprehensive system monitoring capabilities and Cairo-compatible rendering.
 
-| Category | Count |
-|----------|-------|
-| **CRITICAL BUG** | 0 |
-| **FUNCTIONAL MISMATCH** | 4 |
-| **MISSING FEATURE** | 4 |
-| **EDGE CASE BUG** | 3 |
-| **PERFORMANCE ISSUE** | 1 |
+| Category | Count | Resolved |
+|----------|-------|----------|
+| **CRITICAL BUG** | 0 | 0 |
+| **FUNCTIONAL MISMATCH** | 4 | 1 (docs added) |
+| **DOCUMENTATION ISSUE** | 1 | 1 |
+| **MISSING FEATURE** | 4 | 0 |
+| **EDGE CASE BUG** | 3 | 2 |
+| **PERFORMANCE ISSUE** | 1 | 0 |
 
 **Overall Assessment:** The codebase is well-implemented with proper concurrency safety, error handling, and modular architecture. Most discrepancies are partial implementations or documentation clarifications rather than critical bugs.
+
+**Resolved This Session:**
+- ✅ Documented clipping limitations in docs/migration.md
+- ✅ Fixed `--convert` flag documentation (removed "future feature" label)
+- ✅ Fixed `expandPathBoundsUnlocked` to use `hasPath` flag instead of zero-checks
 
 ---
 
@@ -27,11 +33,15 @@ This audit compares the documented functionality in README.md and supporting doc
 
 ---
 
-### FUNCTIONAL MISMATCH: Clipping Not Enforced During Drawing Operations
+### ~~FUNCTIONAL MISMATCH: Clipping Not Enforced During Drawing Operations~~ [DOCUMENTATION ADDED]
 
 **File:** internal/render/cairo.go:1679-1788  
 **Severity:** Medium  
+**Status:** ✅ DOCUMENTATION ADDED - Clipping limitations now documented in docs/migration.md.
+
 **Description:** The Cairo clipping functions (`Clip`, `ClipPreserve`, `ResetClip`) are implemented but only track the clip region without actually enforcing it during drawing operations. The code explicitly documents this as a limitation but the documentation (docs/api.md, docs/migration.md) does not mention this behavior.
+
+**Resolution:** Added "Clipping Limitations" section to docs/migration.md to inform users that clipping is not enforced during drawing operations.
 
 **Expected Behavior:** Per Cairo API and documentation in docs/api.md, `cairo_clip()` should restrict subsequent drawing operations to within the clip region.
 
@@ -171,25 +181,15 @@ const (
 
 ---
 
-### DOCUMENTATION ISSUE: --convert CLI Flag for Legacy Config Conversion
+### ~~DOCUMENTATION ISSUE: --convert CLI Flag for Legacy Config Conversion~~ [RESOLVED]
 
 **File:** cmd/conky-go/main.go, internal/config/migration.go, docs/migration.md:99-104  
 **Severity:** Low  
+**Status:** ✅ RESOLVED - Documentation updated to remove "future feature" label.
+
 **Description:** The `--convert` flag for converting legacy configurations to Lua format is implemented and wired to `config.MigrateLegacyFile`, but the migration documentation still describes it as a "future feature."
 
-**Expected Behavior:** Documentation should accurately describe `--convert` as an implemented flag and provide correct usage examples for converting legacy configs to Lua.
-
-**Actual Behavior:** The binary exposes a working `--convert` flag, while the docs present it as a future feature, creating a mismatch between implementation and documentation.
-
-**Impact:** Users may assume the feature is unavailable and avoid using a working conversion flag, leading to unnecessary manual conversion or external tooling.
-
-**Reproduction:** Run `./conky-go --help` (or inspect `cmd/conky-go/main.go` and `internal/config/migration.go`) to confirm `--convert` is implemented, then compare with the snippet in `docs/migration.md` that labels it as a "future feature."
-
-**Code Reference (docs/migration.md):**
-```
-# Convert a legacy config to Lua (future feature)
-./conky-go --convert ~/.conkyrc > ~/.config/conky/conky.conf
-```
+**Resolution:** Updated docs/migration.md to correctly describe `--convert` as an implemented feature by removing the "future feature" comment.
 
 ---
 
@@ -270,11 +270,11 @@ case "stockquote":
 
 ---
 
-### EDGE CASE BUG: `expandPathBoundsUnlocked` Uses Zero-Initialized Bounds
+### ~~EDGE CASE BUG: `expandPathBoundsUnlocked` Uses Zero-Initialized Bounds~~ [RESOLVED]
 
 **File:** internal/render/cairo.go:2208-2228  
 **Severity:** Low  
-**Description:** The helper `expandPathBoundsUnlocked` uses zero-initialized bounds (`pathMinX == 0 && pathMinY == 0 && pathMaxX == 0 && pathMaxY == 0`) as a sentinel for “no path yet”. This is inaccurate for valid paths that legitimately include the origin point (0,0). The primary `expandPathBounds` function instead uses `if !cr.hasPath` to detect first-point initialization and is not affected by this issue.
+**Status:** ✅ RESOLVED - Function fixed to use `hasPath` flag instead of zero-checks.
 
 **Expected Behavior:** Path-bounds expansion should rely on an explicit flag (such as `cr.hasPath`) to detect whether bounds have been initialized, so that paths passing through or near the origin are handled correctly.
 
@@ -301,31 +301,15 @@ func (cr *CairoRenderer) expandPathBoundsUnlocked(x, y float64) {
 
 ---
 
-### EDGE CASE BUG: expandPathBoundsUnlocked Has Same Zero-Check Issue
+### ~~EDGE CASE BUG: expandPathBoundsUnlocked Has Same Zero-Check Issue~~ [RESOLVED]
 
 **File:** internal/render/cairo.go:2208-2228  
 **Severity:** Low  
+**Status:** ✅ RESOLVED - Duplicate of previous issue; both fixed together.
+
 **Description:** The `expandPathBoundsUnlocked` function uses zero-checks for all bounds to detect initialization state, but this fails for paths that start at or cross the origin.
 
-**Expected Behavior:** Path bounds should be correctly tracked regardless of coordinate values.
-
-**Actual Behavior:** A path starting at (0, 0) will have its bounds incorrectly re-initialized when subsequent points are added.
-
-**Impact:** Path bounding boxes may be incorrect for paths near the origin, affecting `PathExtents`, `ClipExtents`, and hit testing.
-
-**Code Reference:**
-```go
-func (cr *CairoRenderer) expandPathBoundsUnlocked(x, y float32) {
-    if cr.pathMinX == 0 && cr.pathMaxX == 0 {  // BUG: Fails for origin paths
-        cr.pathMinX = x
-        cr.pathMaxX = x
-        cr.pathMinY = y
-        cr.pathMaxY = y
-    } else {
-        // ... update bounds ...
-    }
-}
-```
+**Resolution:** See resolution for "EDGE CASE BUG: `expandPathBoundsUnlocked` Uses Zero-Initialized Bounds" above.
 
 ---
 
@@ -417,11 +401,11 @@ func (cr *CairoRenderer) DrawLine(x1, y1, x2, y2 float64) {
 
 ## RECOMMENDATIONS
 
-1. **High Priority:** Document clipping limitations in docs/migration.md to set user expectations.
+1. ~~**High Priority:** Document clipping limitations in docs/migration.md to set user expectations.~~ ✅ RESOLVED
 
-2. **Medium Priority:** Consider using a `pathBoundsInitialized` boolean flag instead of zero-checks for path bounds tracking.
+2. ~~**Medium Priority:** Consider using a `pathBoundsInitialized` boolean flag instead of zero-checks for path bounds tracking.~~ ✅ RESOLVED - Fixed `expandPathBoundsUnlocked` to use `hasPath` flag.
 
-3. **Low Priority:** Implement the `--convert` flag or remove reference from documentation.
+3. ~~**Low Priority:** Implement the `--convert` flag or remove reference from documentation.~~ ✅ RESOLVED - Documentation updated; flag was already implemented.
 
 4. **Low Priority:** Make `Sysname` platform-aware by using `runtime.GOOS`.
 
