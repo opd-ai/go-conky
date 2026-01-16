@@ -1,6 +1,7 @@
 package lua
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1645,11 +1646,15 @@ func TestEntropyVariables(t *testing.T) {
 		t.Errorf("expected '4096', got %q", result)
 	}
 
-	// Test entropy_perc - should be a percentage
-	result = api.Parse("${entropy_perc}")
-	// Just check it's a valid number
-	if result == "" {
-		result = "0"
+	// Test entropy_perc - should be a percentage (0-100)
+	entropyPercResult := api.Parse("${entropy_perc}")
+	if entropyPercResult != "" {
+		// Parse and validate it's a valid percentage
+		if percVal, err := strconv.Atoi(entropyPercResult); err != nil {
+			t.Errorf("entropy_perc should be numeric, got %q", entropyPercResult)
+		} else if percVal < 0 || percVal > 100 {
+			t.Errorf("entropy_perc should be 0-100, got %d", percVal)
+		}
 	}
 
 	// Test entropy_bar

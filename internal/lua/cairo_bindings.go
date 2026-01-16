@@ -1627,7 +1627,7 @@ func (cb *CairoBindings) matrixMultiply(t *rt.Thread, c *rt.GoCont) (rt.Cont, er
 	if err != nil {
 		return nil, fmt.Errorf("cairo_matrix_multiply: b: %w", err)
 	}
-	// result = a * b
+	// Perform matrix multiplication: result = a * b
 	result.XX = a.XX*b.XX + a.XY*b.YX
 	result.XY = a.XX*b.XY + a.XY*b.YY
 	result.YX = a.YX*b.XX + a.YY*b.YX
@@ -1950,8 +1950,8 @@ func (cb *CairoBindings) getLineWidth(t *rt.Thread, c *rt.GoCont) (rt.Cont, erro
 // getLineCap handles cairo_get_line_cap()
 func (cb *CairoBindings) getLineCap(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
 	renderer, _ := cb.getRendererFromContext(c)
-	cap := renderer.GetLineCap()
-	return c.PushingNext1(t.Runtime, rt.IntValue(int64(cap))), nil
+	lineCap := renderer.GetLineCap()
+	return c.PushingNext1(t.Runtime, rt.IntValue(int64(lineCap))), nil
 }
 
 // getLineJoin handles cairo_get_line_join()
