@@ -274,13 +274,6 @@ func TestReadNameserversMissingFile(t *testing.T) {
 	}
 }
 
-// mockInterface simulates a network interface for testing.
-// Used for testing network interface operations.
-var _ = struct { //nolint:unused // Reserved for future interface testing
-	name  string
-	addrs []net.Addr
-}{}
-
 // mockAddr implements net.Addr for testing.
 type mockAddr struct {
 	network string
