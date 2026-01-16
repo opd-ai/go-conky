@@ -18,6 +18,7 @@ type SystemMonitor struct {
 	uptimeReader      *uptimeReader
 	networkReader     *networkReader
 	networkAddrReader *networkAddressReader
+	wirelessReader    *wirelessReader
 	filesystemReader  *filesystemReader
 	diskIOReader      *diskIOReader
 	hwmonReader       *hwmonReader
@@ -44,6 +45,7 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		uptimeReader:      newUptimeReader(),
 		networkReader:     newNetworkReader(),
 		networkAddrReader: newNetworkAddressReader(),
+		wirelessReader:    newWirelessReader(),
 		filesystemReader:  newFilesystemReader(),
 		diskIOReader:      newDiskIOReader(),
 		hwmonReader:       newHwmonReader(),
@@ -294,7 +296,7 @@ func (sm *SystemMonitor) SysInfo() SystemInfo {
 	return sm.data.GetSysInfo()
 }
 
-// augmentNetworkStats adds IP address, gateway, and nameserver information to network stats.
+// augmentNetworkStats adds IP address, gateway, nameserver, and wireless information to network stats.
 func (sm *SystemMonitor) augmentNetworkStats(stats *NetworkStats) {
 	// Read interface addresses
 	ifAddrs, err := sm.networkAddrReader.ReadInterfaceAddresses()
@@ -319,6 +321,18 @@ func (sm *SystemMonitor) augmentNetworkStats(stats *NetworkStats) {
 	nameservers, err := sm.networkAddrReader.ReadNameservers()
 	if err == nil {
 		stats.Nameservers = nameservers
+	}
+
+	// Read wireless info
+	wirelessStats, err := sm.wirelessReader.ReadWirelessStats()
+	if err == nil {
+		for name, wireless := range wirelessStats {
+			if ifStats, ok := stats.Interfaces[name]; ok {
+				w := wireless // Create a copy to take pointer
+				ifStats.Wireless = &w
+				stats.Interfaces[name] = ifStats
+			}
+		}
 	}
 }
 

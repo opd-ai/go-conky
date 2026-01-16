@@ -86,6 +86,9 @@ type InterfaceStats struct {
 	IPv4Addrs []string
 	// IPv6Addrs contains the IPv6 addresses assigned to this interface.
 	IPv6Addrs []string
+	// Wireless contains wireless-specific stats if this is a wireless interface.
+	// Nil for non-wireless interfaces.
+	Wireless *WirelessInfo
 }
 
 // NetworkStats contains network interface statistics.

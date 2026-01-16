@@ -3,6 +3,7 @@ package lua
 
 import (
 	"math"
+	"os"
 	"testing"
 
 	"github.com/opd-ai/go-conky/internal/render"
@@ -2570,5 +2571,219 @@ func TestCairoBindings_FillRuleOperator(t *testing.T) {
 	`)
 	if err != nil {
 		t.Fatalf("Failed to execute fill rule/operator test: %v", err)
+	}
+}
+
+func TestCairoBindings_ImageSurfaceCreateFromPNG(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Create a temp directory for test files
+	tmpDir := t.TempDir()
+
+	// First create a PNG file using the render package directly
+	surface := render.NewCairoSurface(64, 48)
+	ctx := render.NewCairoContext(surface)
+	renderer := ctx.Renderer()
+	renderer.SetSourceRGB(1, 0.5, 0) // Orange
+	renderer.Rectangle(0, 0, 64, 48)
+	renderer.Fill()
+	pngPath := tmpDir + "/test_image.png"
+	err = surface.WriteToPNG(pngPath)
+	if err != nil {
+		t.Fatalf("Failed to create test PNG: %v", err)
+	}
+	ctx.Destroy()
+	surface.Destroy()
+
+	// Now test loading the PNG from Lua
+	result, err := runtime.ExecuteString("test", `
+		local surface = cairo_image_surface_create_from_png("`+pngPath+`")
+		if surface == nil then
+			error("Failed to load PNG surface")
+		end
+		cairo_surface_destroy(surface)
+		return "success"
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_image_surface_create_from_png: %v", err)
+	}
+	if s, ok := result.TryString(); !ok || s != "success" {
+		t.Errorf("Expected 'success', got %v", result)
+	}
+}
+
+func TestCairoBindings_ImageSurfaceCreateFromPNG_NonexistentFile(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test loading a nonexistent file - should return nil
+	result, err := runtime.ExecuteString("test", `
+		local surface, errmsg = cairo_image_surface_create_from_png("/nonexistent/path/image.png")
+		if surface ~= nil then
+			error("Expected nil for nonexistent file")
+		end
+		return "handled_nil"
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute test: %v", err)
+	}
+	if s, ok := result.TryString(); !ok || s != "handled_nil" {
+		t.Errorf("Expected 'handled_nil', got %v", result)
+	}
+}
+
+func TestCairoBindings_SurfaceWriteToPNG(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	pngPath := tmpDir + "/output.png"
+
+	// Create a surface, draw on it, and save it
+	_, err = runtime.ExecuteString("test", `
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 80, 60)
+		local cr = cairo_create(surface)
+		
+		-- Draw something on the surface
+		cairo_set_source_rgb(cr, 0, 0, 1)  -- Blue
+		cairo_rectangle(cr, 0, 0, 80, 60)
+		cairo_fill(cr)
+		
+		-- Save to PNG
+		local status = cairo_surface_write_to_png(surface, "`+pngPath+`")
+		if status ~= 0 then
+			error("Failed to write PNG, status: " .. tostring(status))
+		end
+		
+		cairo_destroy(cr)
+		cairo_surface_destroy(surface)
+		return "saved"
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute cairo_surface_write_to_png: %v", err)
+	}
+
+	// Verify the file exists
+	info, err := os.Stat(pngPath)
+	if err != nil {
+		t.Fatalf("Output PNG file not found: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("Output PNG file is empty")
+	}
+
+	// Verify we can load the file back
+	loadedSurface, err := render.NewCairoSurfaceFromPNG(pngPath)
+	if err != nil {
+		t.Fatalf("Failed to load saved PNG: %v", err)
+	}
+	if loadedSurface.Width() != 80 || loadedSurface.Height() != 60 {
+		t.Errorf("Loaded dimensions mismatch: expected (80,60), got (%d,%d)",
+			loadedSurface.Width(), loadedSurface.Height())
+	}
+	loadedSurface.Destroy()
+}
+
+func TestCairoBindings_SurfaceWriteToPNG_InvalidPath(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Try to write to invalid path - should return non-zero status
+	result, err := runtime.ExecuteString("test", `
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 50, 50)
+		local status = cairo_surface_write_to_png(surface, "/nonexistent/directory/output.png")
+		cairo_surface_destroy(surface)
+		return status
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute test: %v", err)
+	}
+	// Status should be non-zero (error)
+	if status, ok := result.TryInt(); ok && status == 0 {
+		t.Error("Expected non-zero status for invalid path")
+	}
+}
+
+func TestCairoBindings_PNG_RoundTrip(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	pngPath := tmpDir + "/roundtrip.png"
+
+	// Create, save, load, and verify dimensions
+	_, err = runtime.ExecuteString("test", `
+		-- Create and save a surface
+		local surface1 = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 123, 456)
+		local cr = cairo_create(surface1)
+		cairo_set_source_rgb(cr, 1, 0, 0)
+		cairo_paint(cr)
+		cairo_destroy(cr)
+		
+		local status = cairo_surface_write_to_png(surface1, "`+pngPath+`")
+		if status ~= 0 then
+			error("Failed to save PNG")
+		end
+		cairo_surface_destroy(surface1)
+		
+		-- Load the saved surface
+		local surface2 = cairo_image_surface_create_from_png("`+pngPath+`")
+		if surface2 == nil then
+			error("Failed to load PNG")
+		end
+		
+		-- Note: We can't query dimensions in Lua, but the surface should be usable
+		local cr2 = cairo_create(surface2)
+		if cr2 == nil then
+			error("Failed to create context from loaded surface")
+		end
+		cairo_destroy(cr2)
+		cairo_surface_destroy(surface2)
+		
+		return "roundtrip_success"
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute PNG round-trip test: %v", err)
 	}
 }

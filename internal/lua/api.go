@@ -375,7 +375,7 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "wireless_ap":
 		return api.resolveWirelessAP(args)
 	case "wireless_mode":
-		return "Managed" // Most common mode
+		return api.resolveWirelessMode(args)
 
 	// Network packet/error variables
 	case "tcp_portmon":
@@ -1328,38 +1328,88 @@ func (api *ConkyAPI) resolveIfUp(args []string) string {
 // --- Additional Resolver Functions ---
 
 // resolveWirelessESSID returns the ESSID of a wireless interface.
-// For now returns a stub - full implementation requires wireless extensions.
+// Reads wireless info from /proc/net/wireless and /sys/class/net/<iface>/wireless/.
 func (api *ConkyAPI) resolveWirelessESSID(args []string) string {
-	// Check if interface exists
 	if len(args) == 0 {
 		return ""
 	}
 	netStats := api.sysProvider.Network()
-	if _, ok := netStats.Interfaces[args[0]]; ok {
-		// Wireless info would require additional /sys or ioctl calls
-		return ""
+	if ifStats, ok := netStats.Interfaces[args[0]]; ok {
+		if ifStats.Wireless != nil {
+			return ifStats.Wireless.ESSID
+		}
 	}
 	return ""
 }
 
-// resolveWirelessLinkQual returns wireless link quality.
-func (api *ConkyAPI) resolveWirelessLinkQual(_ []string) string {
+// resolveWirelessLinkQual returns wireless link quality (raw value).
+func (api *ConkyAPI) resolveWirelessLinkQual(args []string) string {
+	if len(args) == 0 {
+		return "0"
+	}
+	netStats := api.sysProvider.Network()
+	if ifStats, ok := netStats.Interfaces[args[0]]; ok {
+		if ifStats.Wireless != nil {
+			return strconv.Itoa(ifStats.Wireless.LinkQuality)
+		}
+	}
 	return "0"
 }
 
 // resolveWirelessLinkQualPerc returns wireless link quality as percentage.
-func (api *ConkyAPI) resolveWirelessLinkQualPerc(_ []string) string {
+func (api *ConkyAPI) resolveWirelessLinkQualPerc(args []string) string {
+	if len(args) == 0 {
+		return "0"
+	}
+	netStats := api.sysProvider.Network()
+	if ifStats, ok := netStats.Interfaces[args[0]]; ok {
+		if ifStats.Wireless != nil {
+			return strconv.Itoa(ifStats.Wireless.LinkQualityPercent())
+		}
+	}
 	return "0"
 }
 
-// resolveWirelessBitrate returns wireless bitrate.
-func (api *ConkyAPI) resolveWirelessBitrate(_ []string) string {
+// resolveWirelessBitrate returns wireless bitrate as formatted string.
+func (api *ConkyAPI) resolveWirelessBitrate(args []string) string {
+	if len(args) == 0 {
+		return "0Mb/s"
+	}
+	netStats := api.sysProvider.Network()
+	if ifStats, ok := netStats.Interfaces[args[0]]; ok {
+		if ifStats.Wireless != nil {
+			return ifStats.Wireless.BitRateString()
+		}
+	}
 	return "0Mb/s"
 }
 
-// resolveWirelessAP returns wireless access point MAC.
-func (api *ConkyAPI) resolveWirelessAP(_ []string) string {
+// resolveWirelessAP returns wireless access point MAC address.
+func (api *ConkyAPI) resolveWirelessAP(args []string) string {
+	if len(args) == 0 {
+		return "00:00:00:00:00:00"
+	}
+	netStats := api.sysProvider.Network()
+	if ifStats, ok := netStats.Interfaces[args[0]]; ok {
+		if ifStats.Wireless != nil && ifStats.Wireless.AccessPoint != "" {
+			return ifStats.Wireless.AccessPoint
+		}
+	}
 	return "00:00:00:00:00:00"
+}
+
+// resolveWirelessMode returns the operating mode of a wireless interface.
+func (api *ConkyAPI) resolveWirelessMode(args []string) string {
+	if len(args) == 0 {
+		return "Managed"
+	}
+	netStats := api.sysProvider.Network()
+	if ifStats, ok := netStats.Interfaces[args[0]]; ok {
+		if ifStats.Wireless != nil && ifStats.Wireless.Mode != "" {
+			return ifStats.Wireless.Mode
+		}
+	}
+	return "Managed"
 }
 
 // resolveTCPPortMon monitors TCP connections (stub).
