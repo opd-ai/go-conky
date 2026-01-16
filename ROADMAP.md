@@ -2170,7 +2170,7 @@ system monitoring application.
    - Recommendation: Implement proper host key verification using known_hosts or CA-based verification
 
 2. **Password Authentication Stored in Memory** (MEDIUM)
-   - Location: `internal/platform/factory.go:30-33`
+   - Location: `internal/platform/factory.go:48-51` (PasswordAuth struct definition)
    - Issue: Password strings are stored in plain memory without secure handling
    - Impact: Medium - Memory dumps could expose credentials
    - Recommendation: Consider secure string handling or prefer key-based authentication in documentation
@@ -2184,11 +2184,15 @@ system monitoring application.
 
 ### Reliability Concerns
 
-1. **Panics in Non-Critical Paths** (MEDIUM)
-   - Location: `internal/render/color.go:112`, `internal/platform/*_stub.go`
-   - Issue: `panic()` calls in rendering code can crash the entire application
-   - Impact: Medium - Application crashes on certain error conditions
-   - Recommendation: Replace panics with error returns and graceful degradation
+1. **Panics in Non-Critical Paths** (LOW)
+   - Location: `internal/render/color.go:112` (MustParseColor function)
+   - Issue: `panic()` call in MustParseColor helper function
+   - Impact: Low - MustParseColor follows the common Go Must* pattern for initialization code and is
+     documented to only be used for "known-good color values in initialization code". Currently only
+     used in test files, not production code paths.
+   - Note: Panics in `internal/platform/windows_stub.go` and `internal/platform/darwin_stub.go` are
+     build-tag-protected safety checks for programming errors (calling wrong platform implementation).
+     The factory pattern and build tags prevent these from ever executing in normal operation.
 
 2. **Missing Circuit Breaker for External Operations** (MEDIUM)
    - Location: `internal/platform/remote.go`, `internal/monitor/audio.go`
@@ -2257,9 +2261,12 @@ func (p *sshPlatform) buildSSHConfig() (*ssh.ClientConfig, error) {
 - [ ] Add error logging with context
 
 **Files to Modify**:
-- `internal/render/color.go:112` - Replace panic with error return
-- `internal/platform/windows_stub.go` - Add clear error message for platform mismatch
-- `internal/platform/darwin_stub.go` - Add clear error message for platform mismatch
+- `internal/render/color.go:112` - Replace panic with error return (if used outside tests)
+
+> Note: Panics in build-tag-protected platform stub files such as `internal/platform/windows_stub.go` and
+> `internal/platform/darwin_stub.go` are intentional safety checks for programming errors (calling the wrong
+> platform implementation). The factory pattern and build tags should prevent these from being reached during
+> normal operation, so they do not require changes under this task.
 
 #### Task 1.3: Observability Foundation
 **Acceptance Criteria**:
@@ -2270,7 +2277,7 @@ func (p *sshPlatform) buildSSHConfig() (*ssh.ClientConfig, error) {
 
 **Implementation Pattern**:
 ```go
-// Structured logging with slog (Go 1.21+)
+// Structured logging with slog (Go 1.21 or later)
 import "log/slog"
 
 type ConkyLogger struct {
@@ -2376,7 +2383,7 @@ func (cb *CircuitBreaker) Execute(fn func() error) error {
 
 | Library | Purpose | Justification |
 |---------|---------|---------------|
-| log/slog | Structured logging | Go 1.21+ stdlib, zero dependencies, excellent performance |
+| log/slog | Structured logging | Go 1.21 or later stdlib, zero dependencies, excellent performance |
 | runtime/metrics | Application metrics | Stdlib metrics collection, low overhead |
 | expvar | Metric exposition | Stdlib HTTP endpoint for metrics |
 
@@ -2460,7 +2467,7 @@ func (cb *CircuitBreaker) Execute(fn func() error) error {
 | Memory Usage | <50MB typical | ✓ Achieved (Lua limit: 50MB) |
 | CPU Usage Idle | <1% | ✓ Achieved (by design) |
 | Zero Critical Security Issues | 0 | 1 (SSH host key verification) |
-| Panic-Free Operation | 0 panics in production | 3-4 panic calls to address |
+| Panic-Free Operation | 0 panics in production | 0 panic calls in production (1 in tests, 2 build-tag-protected stubs) |
 
 ### Milestone Definitions
 
