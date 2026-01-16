@@ -170,19 +170,19 @@ const (
 
 ---
 
-### MISSING FEATURE: --convert CLI Flag for Legacy Config Conversion
+### DOCUMENTATION ISSUE: --convert CLI Flag for Legacy Config Conversion
 
-**File:** cmd/conky-go/main.go, docs/migration.md:99-104  
+**File:** cmd/conky-go/main.go, internal/config/migration.go, docs/migration.md:99-104  
 **Severity:** Low  
-**Description:** The migration documentation mentions a `--convert` flag for converting legacy configurations to Lua format, described as a "future feature," but this is not implemented.
+**Description:** The `--convert` flag for converting legacy configurations to Lua format is implemented and wired to `config.MigrateLegacyFile`, but the migration documentation still describes it as a "future feature."
 
-**Expected Behavior:** `./conky-go --convert ~/.conkyrc > ~/.config/conky/conky.conf` should convert legacy format to Lua.
+**Expected Behavior:** Documentation should accurately describe `--convert` as an implemented flag and provide correct usage examples for converting legacy configs to Lua.
 
-**Actual Behavior:** The `--convert` flag does not exist in the CLI.
+**Actual Behavior:** The binary exposes a working `--convert` flag, while the docs present it as a future feature, creating a mismatch between implementation and documentation.
 
-**Impact:** Users must manually convert legacy configurations or find external tools.
+**Impact:** Users may assume the feature is unavailable and avoid using a working conversion flag, leading to unnecessary manual conversion or external tooling.
 
-**Reproduction:** Run `./conky-go --convert ~/.conkyrc` - command will fail with unknown flag error.
+**Reproduction:** Run `./conky-go --help` (or inspect `cmd/conky-go/main.go` and `internal/config/migration.go`) to confirm `--convert` is implemented, then compare with the snippet in `docs/migration.md` that labels it as a "future feature."
 
 **Code Reference (docs/migration.md):**
 ```
