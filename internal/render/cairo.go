@@ -440,6 +440,9 @@ type CairoRenderer struct {
 	pathCurrentX float32
 	pathCurrentY float32
 	hasPath      bool
+	// pathSegments tracks all path segments for CopyPath functionality.
+	// This mirrors the operations performed on the vector.Path.
+	pathSegments []PathSegment
 	// Tracks whether path bounds have been initialized.
 	// Separate from hasPath to handle multi-point operations (e.g., Rectangle)
 	// that call expandPathBounds multiple times before setting hasPath = true.
@@ -574,6 +577,7 @@ func NewCairoRenderer() *CairoRenderer {
 		lineJoin:     LineJoinMiter,
 		antialias:    true,
 		path:         &vector.Path{},
+		pathSegments: make([]PathSegment, 0),
 		hasPath:      false,
 		textRenderer: NewTextRenderer(),
 		fontFamily:   "GoMono",
@@ -819,6 +823,7 @@ func (cr *CairoRenderer) NewPath() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	cr.path = &vector.Path{}
+	cr.pathSegments = make([]PathSegment, 0)
 	cr.hasPath = false
 	cr.pathBoundsInit = false
 	cr.pathMinX = 0
@@ -834,6 +839,7 @@ func (cr *CairoRenderer) MoveTo(x, y float64) {
 	defer cr.mu.Unlock()
 	cr.expandPathBounds(float32(x), float32(y))
 	cr.path.MoveTo(float32(x), float32(y))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
 	cr.pathStartX = float32(x)
 	cr.pathStartY = float32(y)
 	cr.pathCurrentX = float32(x)
@@ -849,11 +855,13 @@ func (cr *CairoRenderer) LineTo(x, y float64) {
 	cr.expandPathBounds(float32(x), float32(y))
 	if !cr.hasPath {
 		cr.path.MoveTo(float32(x), float32(y))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
 		cr.pathStartX = float32(x)
 		cr.pathStartY = float32(y)
 		cr.hasPath = true
 	} else {
 		cr.path.LineTo(float32(x), float32(y))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y})
 	}
 	cr.pathCurrentX = float32(x)
 	cr.pathCurrentY = float32(y)
@@ -866,6 +874,7 @@ func (cr *CairoRenderer) ClosePath() {
 	defer cr.mu.Unlock()
 	if cr.hasPath {
 		cr.path.Close()
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
 	}
 }
 
@@ -889,19 +898,33 @@ func (cr *CairoRenderer) Arc(xc, yc, radius, angle1, angle2 float64) {
 	// Move or line to start point
 	if !cr.hasPath {
 		cr.path.MoveTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: startX, Y: startY})
 		cr.pathStartX = float32(startX)
 		cr.pathStartY = float32(startY)
 		cr.hasPath = true
 	} else {
 		cr.path.LineTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: startX, Y: startY})
 	}
 
 	// Add arc using Ebiten's Arc method
 	cr.path.Arc(float32(xc), float32(yc), float32(radius), float32(angle1), float32(angle2), vector.Clockwise)
 
-	// Update current position
+	// Track arc segment
 	endX := xc + radius*math.Cos(angle2)
 	endY := yc + radius*math.Sin(angle2)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type:    PathArc,
+		X:       endX,
+		Y:       endY,
+		CenterX: xc,
+		CenterY: yc,
+		Radius:  radius,
+		Angle1:  angle1,
+		Angle2:  angle2,
+	})
+
+	// Update current position
 	cr.pathCurrentX = float32(endX)
 	cr.pathCurrentY = float32(endY)
 }
@@ -923,19 +946,33 @@ func (cr *CairoRenderer) ArcNegative(xc, yc, radius, angle1, angle2 float64) {
 	// Move or line to start point
 	if !cr.hasPath {
 		cr.path.MoveTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: startX, Y: startY})
 		cr.pathStartX = float32(startX)
 		cr.pathStartY = float32(startY)
 		cr.hasPath = true
 	} else {
 		cr.path.LineTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: startX, Y: startY})
 	}
 
 	// Add arc in counter-clockwise direction
 	cr.path.Arc(float32(xc), float32(yc), float32(radius), float32(angle1), float32(angle2), vector.CounterClockwise)
 
-	// Update current position
+	// Track arc segment
 	endX := xc + radius*math.Cos(angle2)
 	endY := yc + radius*math.Sin(angle2)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type:    PathArcNegative,
+		X:       endX,
+		Y:       endY,
+		CenterX: xc,
+		CenterY: yc,
+		Radius:  radius,
+		Angle1:  angle1,
+		Angle2:  angle2,
+	})
+
+	// Update current position
 	cr.pathCurrentX = float32(endX)
 	cr.pathCurrentY = float32(endY)
 }
@@ -950,6 +987,7 @@ func (cr *CairoRenderer) CurveTo(x1, y1, x2, y2, x3, y3 float64) {
 		// Cairo starts from (0,0) if no current point exists
 		cr.expandPathBounds(0, 0)
 		cr.path.MoveTo(0, 0)
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
 		cr.pathStartX = 0
 		cr.pathStartY = 0
 		cr.hasPath = true
@@ -959,6 +997,15 @@ func (cr *CairoRenderer) CurveTo(x1, y1, x2, y2, x3, y3 float64) {
 	cr.expandPathBounds(float32(x2), float32(y2))
 	cr.expandPathBounds(float32(x3), float32(y3))
 	cr.path.CubicTo(float32(x1), float32(y1), float32(x2), float32(y2), float32(x3), float32(y3))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type: PathCurveTo,
+		X:    x3,
+		Y:    y3,
+		X1:   x1,
+		Y1:   y1,
+		X2:   x2,
+		Y2:   y2,
+	})
 	cr.pathCurrentX = float32(x3)
 	cr.pathCurrentY = float32(y3)
 }
@@ -978,6 +1025,13 @@ func (cr *CairoRenderer) Rectangle(x, y, width, height float64) {
 	cr.path.LineTo(float32(x+width), float32(y+height))
 	cr.path.LineTo(float32(x), float32(y+height))
 	cr.path.Close()
+
+	// Track all segments
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y + height})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y + height})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
 
 	cr.pathStartX = float32(x)
 	cr.pathStartY = float32(y)
@@ -1002,6 +1056,7 @@ func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
 	newY := float64(cr.pathCurrentY) + dy
 	cr.expandPathBounds(float32(newX), float32(newY))
 	cr.path.MoveTo(float32(newX), float32(newY))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: newX, Y: newY})
 	cr.pathStartX = float32(newX)
 	cr.pathStartY = float32(newY)
 	cr.pathCurrentX = float32(newX)
@@ -1022,6 +1077,7 @@ func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
 	newY := float64(cr.pathCurrentY) + dy
 	cr.expandPathBounds(float32(newX), float32(newY))
 	cr.path.LineTo(float32(newX), float32(newY))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: newX, Y: newY})
 	cr.pathCurrentX = float32(newX)
 	cr.pathCurrentY = float32(newY)
 }
@@ -1047,6 +1103,15 @@ func (cr *CairoRenderer) RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
 		float32(curX+dx2), float32(curY+dy2),
 		float32(curX+dx3), float32(curY+dy3),
 	)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type: PathCurveTo,
+		X:    curX + dx3,
+		Y:    curY + dy3,
+		X1:   curX + dx1,
+		Y1:   curY + dy1,
+		X2:   curX + dx2,
+		Y2:   curY + dy2,
+	})
 	cr.pathCurrentX = float32(curX + dx3)
 	cr.pathCurrentY = float32(curY + dy3)
 }
@@ -2188,6 +2253,10 @@ const (
 	PathCurveTo
 	// PathClose is a close-path segment.
 	PathClose
+	// PathArc is an arc segment (clockwise direction).
+	PathArc
+	// PathArcNegative is an arc segment (counter-clockwise direction).
+	PathArcNegative
 )
 
 // PathSegment represents a segment of a path.
@@ -2196,15 +2265,26 @@ type PathSegment struct {
 	X, Y float64
 	// For curves: control points
 	X1, Y1, X2, Y2 float64
+	// For arcs: center coordinates, radius, and angles
+	CenterX, CenterY float64
+	Radius           float64
+	Angle1, Angle2   float64
 }
 
-// CopyPath returns a simplified representation of the current path.
-// Note: This returns a basic representation - full path iteration is not supported.
+// CopyPath returns a representation of the current path.
+// The returned slice contains all path segments that have been added since the
+// last NewPath call. This includes MoveTo, LineTo, CurveTo, ClosePath, Arc,
+// and ArcNegative operations.
 func (cr *CairoRenderer) CopyPath() []PathSegment {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	// Return empty slice - full path iteration not implemented
-	return []PathSegment{}
+	// Return a copy of the segments to avoid mutation
+	if len(cr.pathSegments) == 0 {
+		return []PathSegment{}
+	}
+	result := make([]PathSegment, len(cr.pathSegments))
+	copy(result, cr.pathSegments)
+	return result
 }
 
 // AppendPath appends the given path segments to the current path.
@@ -2219,6 +2299,10 @@ func (cr *CairoRenderer) AppendPath(segments []PathSegment) {
 			cr.CurveTo(seg.X1, seg.Y1, seg.X2, seg.Y2, seg.X, seg.Y)
 		case PathClose:
 			cr.ClosePath()
+		case PathArc:
+			cr.Arc(seg.CenterX, seg.CenterY, seg.Radius, seg.Angle1, seg.Angle2)
+		case PathArcNegative:
+			cr.ArcNegative(seg.CenterX, seg.CenterY, seg.Radius, seg.Angle1, seg.Angle2)
 		}
 	}
 }
