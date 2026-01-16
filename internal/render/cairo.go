@@ -28,6 +28,52 @@ const (
 	PatternTypeRadial
 )
 
+// CairoFillRule represents the fill rule for fill operations.
+type CairoFillRule int
+
+const (
+	// CairoFillRuleWinding is the non-zero winding rule.
+	// A point is inside the shape if a ray from the point to infinity
+	// crosses a non-zero sum of signed edge crossings.
+	CairoFillRuleWinding CairoFillRule = 0
+	// CairoFillRuleEvenOdd is the even-odd fill rule.
+	// A point is inside the shape if a ray from the point to infinity
+	// crosses an odd number of edges.
+	CairoFillRuleEvenOdd CairoFillRule = 1
+)
+
+// CairoOperator represents the compositing operator.
+type CairoOperator int
+
+const (
+	// CairoOperatorClear clears destination where source is drawn.
+	CairoOperatorClear CairoOperator = 0
+	// CairoOperatorSource replaces destination with source.
+	CairoOperatorSource CairoOperator = 1
+	// CairoOperatorOver draws source over destination (default).
+	CairoOperatorOver CairoOperator = 2
+	// CairoOperatorIn draws source where destination is opaque.
+	CairoOperatorIn CairoOperator = 3
+	// CairoOperatorOut draws source where destination is transparent.
+	CairoOperatorOut CairoOperator = 4
+	// CairoOperatorAtop draws source atop destination.
+	CairoOperatorAtop CairoOperator = 5
+	// CairoOperatorDest ignores source.
+	CairoOperatorDest CairoOperator = 6
+	// CairoOperatorDestOver draws destination over source.
+	CairoOperatorDestOver CairoOperator = 7
+	// CairoOperatorDestIn draws destination where source is opaque.
+	CairoOperatorDestIn CairoOperator = 8
+	// CairoOperatorDestOut draws destination where source is transparent.
+	CairoOperatorDestOut CairoOperator = 9
+	// CairoOperatorDestAtop draws destination atop source.
+	CairoOperatorDestAtop CairoOperator = 10
+	// CairoOperatorXor XORs source and destination.
+	CairoOperatorXor CairoOperator = 11
+	// CairoOperatorAdd adds source and destination.
+	CairoOperatorAdd CairoOperator = 12
+)
+
 // ColorStop represents a color stop in a gradient.
 type ColorStop struct {
 	Offset float64
@@ -478,10 +524,10 @@ type CairoRenderer struct {
 	clipMaxY float32
 	// State stack for save/restore
 	stateStack []cairoState
-	// Fill rule for fill operations (0=WINDING, 1=EVEN_ODD)
-	fillRule int
-	// Compositing operator (0-12 Cairo operators)
-	operator int
+	// Fill rule for fill operations
+	fillRule CairoFillRule
+	// Compositing operator
+	operator CairoOperator
 	mu       sync.Mutex
 }
 
@@ -513,10 +559,10 @@ type cairoState struct {
 	clipMinY float32
 	clipMaxX float32
 	clipMaxY float32
-	// Fill rule for fill operations (0=WINDING, 1=EVEN_ODD)
-	fillRule int
-	// Compositing operator (0-12 Cairo operators)
-	operator int
+	// Fill rule for fill operations
+	fillRule CairoFillRule
+	// Compositing operator
+	operator CairoOperator
 }
 
 // FontSlant represents Cairo font slant styles.
@@ -599,8 +645,8 @@ func NewCairoRenderer() *CairoRenderer {
 		scaleY:       1.0,
 		matrix:       NewIdentityMatrix(),
 		stateStack:   make([]cairoState, 0),
-		fillRule:     0, // CAIRO_FILL_RULE_WINDING (default)
-		operator:     2, // CAIRO_OPERATOR_OVER (default)
+		fillRule:     CairoFillRuleWinding,
+		operator:     CairoOperatorOver,
 	}
 }
 
@@ -783,55 +829,47 @@ func (cr *CairoRenderer) GetMiterLimit() float64 {
 func (cr *CairoRenderer) SetFillRule(rule int) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	// Clamp to valid values (0 or 1)
-	if rule < 0 {
-		rule = 0
-	} else if rule > 1 {
-		rule = 1
+	// Clamp to valid values
+	if rule < int(CairoFillRuleWinding) {
+		rule = int(CairoFillRuleWinding)
+	} else if rule > int(CairoFillRuleEvenOdd) {
+		rule = int(CairoFillRuleEvenOdd)
 	}
-	cr.fillRule = rule
+	cr.fillRule = CairoFillRule(rule)
 }
 
 // GetFillRule returns the current fill rule.
-// 0 = CAIRO_FILL_RULE_WINDING, 1 = CAIRO_FILL_RULE_EVEN_ODD
+// Returns CairoFillRuleWinding (0) or CairoFillRuleEvenOdd (1).
 func (cr *CairoRenderer) GetFillRule() int {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	return cr.fillRule
+	return int(cr.fillRule)
 }
 
 // SetOperator sets the compositing operator.
-// Common values:
-// 0 = CAIRO_OPERATOR_CLEAR
-// 1 = CAIRO_OPERATOR_SOURCE (maps to ebiten.BlendCopy)
-// 2 = CAIRO_OPERATOR_OVER (maps to ebiten.BlendSourceOver, default)
-// 3 = CAIRO_OPERATOR_IN (maps to ebiten.BlendSourceIn)
-// 4 = CAIRO_OPERATOR_OUT (maps to ebiten.BlendSourceOut)
-// 5 = CAIRO_OPERATOR_ATOP (maps to ebiten.BlendSourceAtop)
-// 6 = CAIRO_OPERATOR_DEST (maps to ebiten.BlendDestination)
-// 7 = CAIRO_OPERATOR_DEST_OVER (maps to ebiten.BlendDestinationOver)
-// 8 = CAIRO_OPERATOR_DEST_IN (maps to ebiten.BlendDestinationIn)
-// 9 = CAIRO_OPERATOR_DEST_OUT (maps to ebiten.BlendDestinationOut)
-// 10 = CAIRO_OPERATOR_DEST_ATOP (maps to ebiten.BlendDestinationAtop)
-// 11 = CAIRO_OPERATOR_XOR (maps to ebiten.BlendXor)
-// 12 = CAIRO_OPERATOR_ADD (maps to ebiten.BlendLighter)
+// See CairoOperator* constants for valid values (0-12).
+// Common operators:
+// - CairoOperatorClear: clears destination
+// - CairoOperatorSource: replaces destination
+// - CairoOperatorOver: draws source over destination (default)
 func (cr *CairoRenderer) SetOperator(op int) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	// Clamp to valid range (0-12)
-	if op < 0 {
-		op = 0
-	} else if op > 12 {
-		op = 12
+	// Clamp to valid range
+	if op < int(CairoOperatorClear) {
+		op = int(CairoOperatorClear)
+	} else if op > int(CairoOperatorAdd) {
+		op = int(CairoOperatorAdd)
 	}
-	cr.operator = op
+	cr.operator = CairoOperator(op)
 }
 
 // GetOperator returns the current operator.
+// Returns a CairoOperator value (0-12).
 func (cr *CairoRenderer) GetOperator() int {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	return cr.operator
+	return int(cr.operator)
 }
 
 // --- Path Building Functions ---
@@ -1388,9 +1426,9 @@ func (cr *CairoRenderer) buildStrokeOptions() *vector.StrokeOptions {
 // This must be called while holding the mutex.
 func (cr *CairoRenderer) getEbitenFillRule() ebiten.FillRule {
 	switch cr.fillRule {
-	case 0: // CAIRO_FILL_RULE_WINDING
+	case CairoFillRuleWinding:
 		return ebiten.FillRuleNonZero
-	case 1: // CAIRO_FILL_RULE_EVEN_ODD
+	case CairoFillRuleEvenOdd:
 		return ebiten.FillRuleEvenOdd
 	default:
 		return ebiten.FillRuleNonZero
@@ -1401,7 +1439,10 @@ func (cr *CairoRenderer) getEbitenFillRule() ebiten.FillRule {
 // This must be called while holding the mutex.
 func (cr *CairoRenderer) getEbitenBlend() ebiten.Blend {
 	switch cr.operator {
-	case 0: // CAIRO_OPERATOR_CLEAR - Clear destination where source is drawn
+	case CairoOperatorClear:
+		// CAIRO_OPERATOR_CLEAR sets all blend factors to zero and uses Add operation.
+		// This effectively clears (sets to transparent black) wherever the source
+		// would be drawn, because: result = 0*src + 0*dst = 0
 		return ebiten.Blend{
 			BlendFactorSourceRGB:        ebiten.BlendFactorZero,
 			BlendFactorSourceAlpha:      ebiten.BlendFactorZero,
@@ -1410,29 +1451,29 @@ func (cr *CairoRenderer) getEbitenBlend() ebiten.Blend {
 			BlendOperationRGB:           ebiten.BlendOperationAdd,
 			BlendOperationAlpha:         ebiten.BlendOperationAdd,
 		}
-	case 1: // CAIRO_OPERATOR_SOURCE
+	case CairoOperatorSource:
 		return ebiten.BlendCopy
-	case 2: // CAIRO_OPERATOR_OVER (default)
+	case CairoOperatorOver:
 		return ebiten.BlendSourceOver
-	case 3: // CAIRO_OPERATOR_IN
+	case CairoOperatorIn:
 		return ebiten.BlendSourceIn
-	case 4: // CAIRO_OPERATOR_OUT
+	case CairoOperatorOut:
 		return ebiten.BlendSourceOut
-	case 5: // CAIRO_OPERATOR_ATOP
+	case CairoOperatorAtop:
 		return ebiten.BlendSourceAtop
-	case 6: // CAIRO_OPERATOR_DEST
+	case CairoOperatorDest:
 		return ebiten.BlendDestination
-	case 7: // CAIRO_OPERATOR_DEST_OVER
+	case CairoOperatorDestOver:
 		return ebiten.BlendDestinationOver
-	case 8: // CAIRO_OPERATOR_DEST_IN
+	case CairoOperatorDestIn:
 		return ebiten.BlendDestinationIn
-	case 9: // CAIRO_OPERATOR_DEST_OUT
+	case CairoOperatorDestOut:
 		return ebiten.BlendDestinationOut
-	case 10: // CAIRO_OPERATOR_DEST_ATOP
+	case CairoOperatorDestAtop:
 		return ebiten.BlendDestinationAtop
-	case 11: // CAIRO_OPERATOR_XOR
+	case CairoOperatorXor:
 		return ebiten.BlendXor
-	case 12: // CAIRO_OPERATOR_ADD
+	case CairoOperatorAdd:
 		return ebiten.BlendLighter
 	default:
 		return ebiten.BlendSourceOver
