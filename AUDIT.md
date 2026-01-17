@@ -2,10 +2,10 @@
 
 ## Summary
 - **Date**: 2026-01-17 (Updated)
-- **Tests**: 1014+ total, all passed, 0 failed
+- **Tests**: 1021 total, all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
-- **Bugs Found**: 0 critical, 0 high (2 fixed), 5 medium, 4 low
-- **Implemented Compatibility**: ~88% (of implemented features work correctly)
+- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (1 fixed), 4 low
+- **Implemented Compatibility**: ~89% (of implemented features work correctly)
 - **Overall Feature Coverage**: ~50%
 
 ## Overview
@@ -150,7 +150,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | ${battery_short} | ✅ PASS | Short battery status |
 | ${battery} | ✅ PASS | Full battery status |
 | ${battery_bar} | ✅ PASS | Battery bar |
-| ${battery_time} | ⚠️ PARTIAL | Returns "Unknown" or "AC" |
+| ${battery_time} | ✅ PASS | Returns H:MM format or "AC" |
 | ${hwmon} | ✅ PASS | Temperature sensors |
 | ${acpitemp} | ✅ PASS | ACPI temperature |
 | ${acpifan} | ✅ PASS | Fan status |
@@ -350,14 +350,16 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 - **Location**: internal/lua/api.go:1559
 - **Fix**: Implement scroll state tracking and animation
 
-**BUG-006: ${battery_time} incomplete**
+**BUG-006: ${battery_time} incomplete** ✅ FIXED
 - **Severity**: Medium
 - **Feature**: ${battery_time}
-- **Reproduce**: Use ${battery_time}
-- **Expected**: Time remaining estimate
-- **Actual**: Returns "Unknown" or "AC"
-- **Location**: internal/lua/api.go:1323
-- **Fix**: Calculate from power_now/energy_now in battery sysfs
+- **Status**: FIXED - Now calculates and formats time remaining using TimeToEmpty/TimeToFull
+- **Solution**: Implemented proper time calculation in resolveBatteryTime() that uses battery's
+  TimeToEmpty (for discharging) and TimeToFull (for charging) values from /sys/class/power_supply.
+  Returns time in "H:MM" format (e.g., "2:30"), "AC" when fully charged, or "Unknown" when
+  time cannot be calculated.
+- **Tests**: Added comprehensive TestBatteryTimeScenarios covering all battery states
+- **Location**: internal/lua/api.go
 
 **BUG-007: Limited config directives**
 - **Severity**: Medium
@@ -415,12 +417,12 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | Config Directives | 150 | 25 | 0 | 125 | 17% |
 | Cairo Functions | 180 | 102 | 0 | 78 | 57% |
 | Lua Integration | 10 | 8 | 0 | 2 | 80% |
-| Display Objects | 200 | 120 | 5 | 75 | 58% |
+| Display Objects | 200 | 121 | 4 | 75 | 59% |
 | Window Management | 20 | 10 | 2 | 8 | 50% |
 | System Monitoring | 30 | 28 | 0 | 2 | 93% |
-| **Overall** | **590** | **293** | **7** | **290** | **50%** |
+| **Overall** | **590** | **294** | **6** | **290** | **50%** |
 
-**Functional Compatibility Score: 88%** (of implemented features work correctly)
+**Functional Compatibility Score: 89%** (of implemented features work correctly)
 
 ---
 
@@ -449,7 +451,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | internal/render | 87.3% | ✅ Very Good |
 | pkg/conky | 71.9% | Good |
 
-**Total Tests: 1010 passing, 0 failing**
+**Total Tests: 1021 passing, 0 failing**
 
 ---
 
@@ -463,7 +465,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 ### Should Fix
 1. **BUG-003**: ARGB transparency (8h) - platform dependent
 2. **BUG-005**: Scroll animation (4h)
-3. **BUG-006**: Battery time calculation (2h)
+3. ~~**BUG-006**: Battery time calculation~~ ✅ FIXED
 4. **BUG-007**: Additional config directives (16h ongoing)
 
 ### Can Defer
@@ -618,6 +620,12 @@ The Go Conky implementation demonstrates solid architecture and good test covera
 **Expected**: Capacity, status, AC online status
 **Result**: ✅ PASS - Battery monitoring works
 **Evidence**: TestLinuxBatteryCollector passes
+
+### TEST: Battery Time Calculation
+**Action**: Parse ${battery_time} with various battery states
+**Expected**: Returns "H:MM" format for charging/discharging, "AC" when full
+**Result**: ✅ PASS - Time calculation from TimeToEmpty/TimeToFull works
+**Evidence**: TestBatteryTimeScenarios passes with 9 test cases covering all states
 
 ### TEST: Filesystem Stats
 **Action**: Query filesystem with statfs

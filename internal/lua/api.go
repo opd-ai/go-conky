@@ -1319,13 +1319,65 @@ func (api *ConkyAPI) resolveBatteryBar(args []string) string {
 }
 
 // resolveBatteryTime returns estimated battery time remaining.
-func (api *ConkyAPI) resolveBatteryTime(_ []string) string {
+// Returns time in "H:MM" format for discharging/charging, "AC" when fully charged on AC,
+// or "Unknown" when time cannot be calculated.
+func (api *ConkyAPI) resolveBatteryTime(args []string) string {
 	batStats := api.sysProvider.Battery()
-	if !batStats.IsDischarging {
-		return "AC"
+
+	// Determine which battery to query (default: first found or specified)
+	batteryName := ""
+	if len(args) > 0 {
+		batteryName = args[0]
 	}
-	// Placeholder - actual time calculation requires power rate info
-	return "Unknown"
+
+	// Find the target battery
+	var targetBattery *monitor.BatteryInfo
+	if batteryName != "" {
+		if bat, ok := batStats.Batteries[batteryName]; ok {
+			targetBattery = &bat
+		}
+	} else {
+		// Use first battery found
+		for _, bat := range batStats.Batteries {
+			b := bat // Create a copy to take address of
+			targetBattery = &b
+			break
+		}
+	}
+
+	// No battery found
+	if targetBattery == nil {
+		if batStats.ACOnline {
+			return "AC"
+		}
+		return "Unknown"
+	}
+
+	// Calculate and format time based on charging status
+	var timeSeconds float64
+	switch targetBattery.Status {
+	case "Discharging":
+		timeSeconds = targetBattery.TimeToEmpty
+	case "Charging":
+		timeSeconds = targetBattery.TimeToFull
+	case "Full", "Not charging":
+		return "AC"
+	default:
+		if batStats.ACOnline {
+			return "AC"
+		}
+		return "Unknown"
+	}
+
+	// If no time estimate available
+	if timeSeconds <= 0 {
+		return "Unknown"
+	}
+
+	// Format as "H:MM"
+	hours := int(timeSeconds / 3600)
+	minutes := int((timeSeconds - float64(hours)*3600) / 60)
+	return fmt.Sprintf("%d:%02d", hours, minutes)
 }
 
 // resolveNetworkSpeedF returns network speed as a float value.

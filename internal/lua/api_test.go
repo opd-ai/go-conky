@@ -245,8 +245,9 @@ func newMockProvider() *mockSystemDataProvider {
 		battery: monitor.BatteryStats{
 			Batteries: map[string]monitor.BatteryInfo{
 				"BAT0": {
-					Capacity: 85,
-					Status:   "Discharging",
+					Capacity:    85,
+					Status:      "Discharging",
+					TimeToEmpty: 9000, // 2 hours 30 minutes in seconds
 				},
 			},
 			TotalCapacity: 85.0,
@@ -970,14 +971,149 @@ func TestParseBatteryVariables(t *testing.T) {
 			expected: "########--",
 		},
 		{
-			name:     "battery time",
+			name:     "battery time discharging",
 			template: "${battery_time}",
-			expected: "Unknown",
+			expected: "2:30",
+		},
+		{
+			name:     "battery time with battery name",
+			template: "${battery_time BAT0}",
+			expected: "2:30",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestBatteryTimeScenarios tests battery_time with various battery states.
+func TestBatteryTimeScenarios(t *testing.T) {
+	tests := []struct {
+		name     string
+		battery  monitor.BatteryStats
+		template string
+		expected string
+	}{
+		{
+			name: "discharging with time",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Discharging", TimeToEmpty: 5400}, // 1:30
+				},
+				IsDischarging: true,
+			},
+			template: "${battery_time}",
+			expected: "1:30",
+		},
+		{
+			name: "charging with time",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Charging", TimeToFull: 3660}, // 1:01
+				},
+				IsCharging: true,
+			},
+			template: "${battery_time}",
+			expected: "1:01",
+		},
+		{
+			name: "full battery on AC",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Full"},
+				},
+				ACOnline: true,
+			},
+			template: "${battery_time}",
+			expected: "AC",
+		},
+		{
+			name: "not charging on AC",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Not charging"},
+				},
+				ACOnline: true,
+			},
+			template: "${battery_time}",
+			expected: "AC",
+		},
+		{
+			name: "discharging no time available",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Discharging", TimeToEmpty: 0},
+				},
+				IsDischarging: true,
+			},
+			template: "${battery_time}",
+			expected: "Unknown",
+		},
+		{
+			name: "no battery AC online",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{},
+				ACOnline:  true,
+			},
+			template: "${battery_time}",
+			expected: "AC",
+		},
+		{
+			name: "no battery AC offline",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{},
+				ACOnline:  false,
+			},
+			template: "${battery_time}",
+			expected: "Unknown",
+		},
+		{
+			name: "specific battery name",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Discharging", TimeToEmpty: 7200}, // 2:00
+					"BAT1": {Status: "Discharging", TimeToEmpty: 3600}, // 1:00
+				},
+				IsDischarging: true,
+			},
+			template: "${battery_time BAT1}",
+			expected: "1:00",
+		},
+		{
+			name: "long discharge time",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Discharging", TimeToEmpty: 36000}, // 10:00
+				},
+				IsDischarging: true,
+			},
+			template: "${battery_time}",
+			expected: "10:00",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtime, err := New(DefaultConfig())
+			if err != nil {
+				t.Fatalf("failed to create runtime: %v", err)
+			}
+			defer runtime.Close()
+
+			provider := newMockProvider()
+			provider.battery = tt.battery
+
+			api, err := NewConkyAPI(runtime, provider)
+			if err != nil {
+				t.Fatalf("failed to create API: %v", err)
+			}
+
 			result := api.Parse(tt.template)
 			if result != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, result)
