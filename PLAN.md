@@ -37,7 +37,7 @@ The go-conky project uses **Ebitengine v2** (`github.com/hajimehoshi/ebiten/v2`)
 5. Add unit tests for transparency state propagation
 
 **Dependencies:**
-- `github.com/hajimehoshi/ebiten/v2` v2.6+ (already in use)
+- `github.com/hajimehoshi/ebiten/v2` v2.8+ (go.mod currently uses v2.8.8)
 
 **Estimated Complexity:** Low
 
