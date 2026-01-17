@@ -3,6 +3,7 @@ package render
 
 import (
 	"image/color"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -15,6 +16,22 @@ const (
 	BackgroundModeSolid BackgroundMode = iota
 	// BackgroundModeNone draws no background (fully transparent).
 	BackgroundModeNone
+	// BackgroundModeGradient draws a gradient background.
+	BackgroundModeGradient
+)
+
+// GradientDirection specifies the direction of a gradient.
+type GradientDirection int
+
+const (
+	// GradientDirectionVertical renders gradient from top to bottom.
+	GradientDirectionVertical GradientDirection = iota
+	// GradientDirectionHorizontal renders gradient from left to right.
+	GradientDirectionHorizontal
+	// GradientDirectionDiagonal renders gradient from top-left to bottom-right.
+	GradientDirectionDiagonal
+	// GradientDirectionRadial renders gradient from center outward.
+	GradientDirectionRadial
 )
 
 // BackgroundRenderer is an interface for rendering window backgrounds.
@@ -93,6 +110,147 @@ func (nb *NoneBackground) Mode() BackgroundMode {
 	return BackgroundModeNone
 }
 
+// GradientBackground renders a gradient color background.
+type GradientBackground struct {
+	startColor color.RGBA
+	endColor   color.RGBA
+	direction  GradientDirection
+	argbValue  int  // Alpha value override (0-255) when ARGB is enabled
+	argbOn     bool // Whether ARGB visual is enabled
+}
+
+// NewGradientBackground creates a new gradient background renderer.
+func NewGradientBackground(startColor, endColor color.RGBA, direction GradientDirection) *GradientBackground {
+	return &GradientBackground{
+		startColor: startColor,
+		endColor:   endColor,
+		direction:  direction,
+		argbValue:  255,
+		argbOn:     false,
+	}
+}
+
+// WithARGB configures ARGB visual settings for the gradient background.
+// When enabled, the argbValue overrides both colors' alpha channel.
+func (gb *GradientBackground) WithARGB(enabled bool, value int) *GradientBackground {
+	gb.argbOn = enabled
+	// Clamp ARGB value to valid range
+	if value < 0 {
+		value = 0
+	} else if value > 255 {
+		value = 255
+	}
+	gb.argbValue = value
+	return gb
+}
+
+// Draw renders the gradient background to the screen.
+func (gb *GradientBackground) Draw(screen *ebiten.Image) {
+	bounds := screen.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+
+	if w == 0 || h == 0 {
+		return
+	}
+
+	// Create a pixel buffer for the gradient
+	pixels := make([]byte, w*h*4)
+
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			t := gb.interpolationFactor(x, y, w, h)
+			c := gb.lerpColor(t)
+
+			idx := (y*w + x) * 4
+			pixels[idx] = c.R
+			pixels[idx+1] = c.G
+			pixels[idx+2] = c.B
+			pixels[idx+3] = c.A
+		}
+	}
+
+	screen.WritePixels(pixels)
+}
+
+// interpolationFactor calculates the gradient interpolation factor (0.0 to 1.0)
+// based on position and direction.
+func (gb *GradientBackground) interpolationFactor(x, y, w, h int) float64 {
+	switch gb.direction {
+	case GradientDirectionHorizontal:
+		return float64(x) / float64(w-1)
+	case GradientDirectionDiagonal:
+		// Diagonal from top-left to bottom-right
+		return (float64(x)/float64(w-1) + float64(y)/float64(h-1)) / 2.0
+	case GradientDirectionRadial:
+		// Radial from center outward
+		cx := float64(w) / 2.0
+		cy := float64(h) / 2.0
+		dx := float64(x) - cx
+		dy := float64(y) - cy
+		// Max distance is to corner
+		maxDist := math.Sqrt(cx*cx + cy*cy)
+		dist := math.Sqrt(dx*dx + dy*dy)
+		return math.Min(dist/maxDist, 1.0)
+	default: // GradientDirectionVertical
+		return float64(y) / float64(h-1)
+	}
+}
+
+// lerpColor linearly interpolates between start and end colors.
+func (gb *GradientBackground) lerpColor(t float64) color.RGBA {
+	// Clamp t to [0, 1]
+	if t < 0 {
+		t = 0
+	} else if t > 1 {
+		t = 1
+	}
+
+	startR := float64(gb.startColor.R)
+	startG := float64(gb.startColor.G)
+	startB := float64(gb.startColor.B)
+	startA := float64(gb.startColor.A)
+
+	endR := float64(gb.endColor.R)
+	endG := float64(gb.endColor.G)
+	endB := float64(gb.endColor.B)
+	endA := float64(gb.endColor.A)
+
+	c := color.RGBA{
+		R: uint8(startR + t*(endR-startR)),
+		G: uint8(startG + t*(endG-startG)),
+		B: uint8(startB + t*(endB-startB)),
+		A: uint8(startA + t*(endA-startA)),
+	}
+
+	// Override alpha if ARGB is enabled
+	if gb.argbOn {
+		c.A = uint8(gb.argbValue)
+	}
+
+	return c
+}
+
+// Mode returns BackgroundModeGradient.
+func (gb *GradientBackground) Mode() BackgroundMode {
+	return BackgroundModeGradient
+}
+
+// StartColor returns the gradient start color.
+func (gb *GradientBackground) StartColor() color.RGBA {
+	return gb.startColor
+}
+
+// EndColor returns the gradient end color.
+func (gb *GradientBackground) EndColor() color.RGBA {
+	return gb.endColor
+}
+
+// Direction returns the gradient direction.
+func (gb *GradientBackground) Direction() GradientDirection {
+	return gb.direction
+}
+
 // NewBackgroundRenderer creates a BackgroundRenderer based on the mode and color.
 // For BackgroundModeNone, the color is ignored.
 // For BackgroundModeSolid, a SolidBackground is created with the given color.
@@ -103,4 +261,10 @@ func NewBackgroundRenderer(mode BackgroundMode, bgColor color.RGBA, argbVisual b
 	default:
 		return NewSolidBackground(bgColor).WithARGB(argbVisual, argbValue)
 	}
+}
+
+// NewGradientBackgroundRenderer creates a BackgroundRenderer for gradient mode.
+// This is a convenience function that creates a GradientBackground with ARGB settings.
+func NewGradientBackgroundRenderer(startColor, endColor color.RGBA, direction GradientDirection, argbVisual bool, argbValue int) BackgroundRenderer {
+	return NewGradientBackground(startColor, endColor, direction).WithARGB(argbVisual, argbValue)
 }

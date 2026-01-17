@@ -57,6 +57,9 @@ type WindowConfig struct {
 	// This corresponds to the own_window_colour Conky setting.
 	// If not set (zero value), uses the default semi-transparent black.
 	BackgroundColour color.RGBA
+	// Gradient contains gradient configuration when BackgroundMode is gradient.
+	// Only used when BackgroundMode is BackgroundModeGradient.
+	Gradient GradientConfig
 }
 
 // DisplayConfig holds display and rendering settings.
@@ -319,6 +322,9 @@ const (
 	// BackgroundModeTransparent is an alias for BackgroundModeNone.
 	// It indicates the window should be fully transparent.
 	BackgroundModeTransparent
+	// BackgroundModeGradient draws a gradient background.
+	// Uses GradientColours for start/end colors and GradientDirection for direction.
+	BackgroundModeGradient
 )
 
 // String returns the string representation of a BackgroundMode.
@@ -330,6 +336,8 @@ func (bm BackgroundMode) String() string {
 		return "none"
 	case BackgroundModeTransparent:
 		return "transparent"
+	case BackgroundModeGradient:
+		return "gradient"
 	default:
 		return "unknown"
 	}
@@ -344,7 +352,65 @@ func ParseBackgroundMode(s string) (BackgroundMode, error) {
 		return BackgroundModeNone, nil
 	case "transparent":
 		return BackgroundModeTransparent, nil
+	case "gradient":
+		return BackgroundModeGradient, nil
 	default:
 		return BackgroundModeSolid, fmt.Errorf("unknown background mode: %s", s)
 	}
+}
+
+// GradientDirection specifies the direction of a gradient.
+type GradientDirection int
+
+const (
+	// GradientDirectionVertical renders gradient from top to bottom.
+	GradientDirectionVertical GradientDirection = iota
+	// GradientDirectionHorizontal renders gradient from left to right.
+	GradientDirectionHorizontal
+	// GradientDirectionDiagonal renders gradient from top-left to bottom-right.
+	GradientDirectionDiagonal
+	// GradientDirectionRadial renders gradient from center outward.
+	GradientDirectionRadial
+)
+
+// String returns the string representation of a GradientDirection.
+func (gd GradientDirection) String() string {
+	switch gd {
+	case GradientDirectionVertical:
+		return "vertical"
+	case GradientDirectionHorizontal:
+		return "horizontal"
+	case GradientDirectionDiagonal:
+		return "diagonal"
+	case GradientDirectionRadial:
+		return "radial"
+	default:
+		return "unknown"
+	}
+}
+
+// ParseGradientDirection parses a string into a GradientDirection.
+func ParseGradientDirection(s string) (GradientDirection, error) {
+	switch strings.ToLower(s) {
+	case "vertical", "v", "":
+		return GradientDirectionVertical, nil
+	case "horizontal", "h":
+		return GradientDirectionHorizontal, nil
+	case "diagonal", "d":
+		return GradientDirectionDiagonal, nil
+	case "radial", "r":
+		return GradientDirectionRadial, nil
+	default:
+		return GradientDirectionVertical, fmt.Errorf("unknown gradient direction: %s", s)
+	}
+}
+
+// GradientConfig holds configuration for gradient backgrounds.
+type GradientConfig struct {
+	// StartColor is the beginning color of the gradient.
+	StartColor color.RGBA
+	// EndColor is the ending color of the gradient.
+	EndColor color.RGBA
+	// Direction specifies how the gradient is oriented.
+	Direction GradientDirection
 }
