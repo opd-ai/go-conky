@@ -1493,7 +1493,7 @@ func (cr *CairoRenderer) setVertexColors(vertices []ebiten.Vertex) {
 // This must be called while holding the mutex.
 func (cr *CairoRenderer) newPathUnlocked() {
 	cr.path = &vector.Path{}
-	cr.pathSegments = make([]PathSegment, 0)
+	cr.pathSegments = nil
 	cr.hasPath = false
 	cr.pathBoundsInit = false
 	cr.pathMinX = 0
@@ -1618,6 +1618,7 @@ func (cr *CairoRenderer) closePathUnlocked() {
 // This must be called while holding the mutex.
 func (cr *CairoRenderer) clearPathUnlocked() {
 	cr.path = &vector.Path{}
+	cr.pathSegments = nil
 	cr.hasPath = false
 	cr.pathBoundsInit = false
 	cr.pathMinX = 0
