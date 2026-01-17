@@ -18,6 +18,8 @@ const (
 	BackgroundModeNone
 	// BackgroundModeGradient draws a gradient background.
 	BackgroundModeGradient
+	// BackgroundModePseudo uses a cached screenshot of the desktop as the background.
+	BackgroundModePseudo
 )
 
 // GradientDirection specifies the direction of a gradient.
@@ -251,6 +253,136 @@ func (gb *GradientBackground) Direction() GradientDirection {
 	return gb.direction
 }
 
+// PseudoBackground renders a cached screenshot of the desktop as the background.
+// This provides fake transparency when a compositor is not available.
+// The screenshot is captured from the root window at the window's position.
+type PseudoBackground struct {
+	// cachedImage holds the cached screenshot as an Ebiten image
+	cachedImage *ebiten.Image
+	// fallbackColor is used when screenshot capture fails
+	fallbackColor color.RGBA
+	// windowX, windowY are the window position for capturing the correct region
+	windowX, windowY int
+	// width, height are the dimensions to capture
+	width, height int
+	// imageProvider is a function that captures the desktop region
+	// It returns an image.Image of the desktop at the specified position and size
+	imageProvider ScreenshotProvider
+	// needsRefresh indicates the cached image should be refreshed
+	needsRefresh bool
+}
+
+// ScreenshotProvider is a function type for capturing desktop screenshots.
+// It takes the position (x, y) and dimensions (width, height) of the region to capture.
+// Returns an image.Image of the captured region or an error.
+type ScreenshotProvider func(x, y, width, height int) (*ebiten.Image, error)
+
+// NewPseudoBackground creates a new pseudo-transparency background renderer.
+// It requires the window position and dimensions for capturing the correct desktop region.
+// The fallbackColor is used if screenshot capture fails.
+func NewPseudoBackground(x, y, width, height int, fallbackColor color.RGBA) *PseudoBackground {
+	return &PseudoBackground{
+		fallbackColor: fallbackColor,
+		windowX:       x,
+		windowY:       y,
+		width:         width,
+		height:        height,
+		needsRefresh:  true,
+	}
+}
+
+// SetScreenshotProvider sets the function used to capture desktop screenshots.
+// This allows for platform-specific implementations and easier testing.
+func (pb *PseudoBackground) SetScreenshotProvider(provider ScreenshotProvider) {
+	pb.imageProvider = provider
+	pb.needsRefresh = true
+}
+
+// Refresh marks the cached screenshot as needing refresh.
+// The actual capture will happen on the next Draw call.
+func (pb *PseudoBackground) Refresh() {
+	pb.needsRefresh = true
+}
+
+// SetPosition updates the window position for screenshot capture.
+// Call Refresh() after changing position to update the cached image.
+func (pb *PseudoBackground) SetPosition(x, y int) {
+	if pb.windowX != x || pb.windowY != y {
+		pb.windowX = x
+		pb.windowY = y
+		pb.needsRefresh = true
+	}
+}
+
+// Draw renders the pseudo-transparent background to the screen.
+// If the screenshot hasn't been captured yet or needs refresh, it attempts to capture.
+// Falls back to the fallback color if capture fails.
+func (pb *PseudoBackground) Draw(screen *ebiten.Image) {
+	// Check if we need to refresh the cached image
+	if pb.needsRefresh || pb.cachedImage == nil {
+		pb.refreshCache()
+	}
+
+	// Draw the cached image if available
+	if pb.cachedImage != nil {
+		// Draw the cached screenshot as the background
+		op := &ebiten.DrawImageOptions{}
+		screen.DrawImage(pb.cachedImage, op)
+		return
+	}
+
+	// Fallback to solid color if no screenshot available
+	screen.Fill(pb.fallbackColor)
+}
+
+// refreshCache attempts to capture a new screenshot of the desktop.
+func (pb *PseudoBackground) refreshCache() {
+	pb.needsRefresh = false
+
+	// Skip if no provider is set
+	if pb.imageProvider == nil {
+		return
+	}
+
+	// Attempt to capture the desktop region
+	img, err := pb.imageProvider(pb.windowX, pb.windowY, pb.width, pb.height)
+	if err != nil {
+		// Keep using existing cached image or fallback color
+		return
+	}
+
+	// Clean up old cached image
+	if pb.cachedImage != nil {
+		pb.cachedImage.Deallocate()
+	}
+
+	pb.cachedImage = img
+}
+
+// Mode returns BackgroundModePseudo.
+func (pb *PseudoBackground) Mode() BackgroundMode {
+	return BackgroundModePseudo
+}
+
+// FallbackColor returns the fallback background color.
+func (pb *PseudoBackground) FallbackColor() color.RGBA {
+	return pb.fallbackColor
+}
+
+// HasCachedImage returns true if a screenshot has been successfully cached.
+func (pb *PseudoBackground) HasCachedImage() bool {
+	return pb.cachedImage != nil
+}
+
+// Close releases resources held by the PseudoBackground.
+// Should be called when the background is no longer needed.
+func (pb *PseudoBackground) Close() {
+	if pb.cachedImage != nil {
+		pb.cachedImage.Deallocate()
+		pb.cachedImage = nil
+	}
+}
+
 // NewBackgroundRenderer creates a BackgroundRenderer based on the mode and color.
 // For BackgroundModeNone, the color is ignored.
 // For BackgroundModeSolid, a SolidBackground is created with the given color.
@@ -267,4 +399,16 @@ func NewBackgroundRenderer(mode BackgroundMode, bgColor color.RGBA, argbVisual b
 // This is a convenience function that creates a GradientBackground with ARGB settings.
 func NewGradientBackgroundRenderer(startColor, endColor color.RGBA, direction GradientDirection, argbVisual bool, argbValue int) BackgroundRenderer {
 	return NewGradientBackground(startColor, endColor, direction).WithARGB(argbVisual, argbValue)
+}
+
+// NewPseudoBackgroundRenderer creates a BackgroundRenderer for pseudo-transparency mode.
+// This creates a PseudoBackground that captures a screenshot of the desktop at the
+// specified window position to simulate transparency without a compositor.
+// The fallbackColor is used if screenshot capture fails.
+func NewPseudoBackgroundRenderer(x, y, width, height int, fallbackColor color.RGBA, provider ScreenshotProvider) BackgroundRenderer {
+	pb := NewPseudoBackground(x, y, width, height, fallbackColor)
+	if provider != nil {
+		pb.SetScreenshotProvider(provider)
+	}
+	return pb
 }

@@ -1,8 +1,11 @@
 package render
 
 import (
+	"fmt"
 	"image/color"
 	"testing"
+
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 func TestNewSolidBackground(t *testing.T) {
@@ -454,4 +457,161 @@ func absDiffFloat(x float64) float64 {
 	}
 	return x
 }
+
+func TestNewPseudoBackground(t *testing.T) {
+	fallbackColor := color.RGBA{R: 100, G: 150, B: 200, A: 255}
+	pb := NewPseudoBackground(100, 200, 400, 300, fallbackColor)
+
+	if pb.Mode() != BackgroundModePseudo {
+		t.Errorf("Mode() = %v, want BackgroundModePseudo", pb.Mode())
+	}
+	if pb.FallbackColor() != fallbackColor {
+		t.Errorf("FallbackColor() = %v, want %v", pb.FallbackColor(), fallbackColor)
+	}
+	if pb.HasCachedImage() {
+		t.Error("HasCachedImage() should be false before any provider is set")
+	}
+}
+
+func TestPseudoBackgroundWithMockProvider(t *testing.T) {
+	fallbackColor := color.RGBA{R: 0, G: 0, B: 0, A: 255}
+	pb := NewPseudoBackground(0, 0, 100, 100, fallbackColor)
+
+	// Create a mock provider that returns a test image
+	mockProvider := func(x, y, width, height int) (*ebiten.Image, error) {
+		img := ebiten.NewImage(width, height)
+		img.Fill(color.RGBA{R: 255, G: 0, B: 0, A: 255})
+		return img, nil
+	}
+
+	pb.SetScreenshotProvider(mockProvider)
+
+	// After setting provider, needsRefresh should be true
+	// The actual capture happens on Draw()
+	if pb.HasCachedImage() {
+		t.Error("HasCachedImage() should be false before Draw() is called")
+	}
+}
+
+func TestPseudoBackgroundWithFailingProvider(t *testing.T) {
+	fallbackColor := color.RGBA{R: 50, G: 100, B: 150, A: 200}
+	pb := NewPseudoBackground(0, 0, 100, 100, fallbackColor)
+
+	// Create a mock provider that always fails
+	failingProvider := func(x, y, width, height int) (*ebiten.Image, error) {
+		return nil, fmt.Errorf("mock capture failure")
+	}
+
+	pb.SetScreenshotProvider(failingProvider)
+
+	// After a failed capture, should still not have cached image
+	if pb.HasCachedImage() {
+		t.Error("HasCachedImage() should be false after failed capture")
+	}
+}
+
+func TestPseudoBackgroundSetPosition(t *testing.T) {
+	pb := NewPseudoBackground(0, 0, 100, 100, color.RGBA{})
+
+	// Initial position
+	if pb.windowX != 0 || pb.windowY != 0 {
+		t.Errorf("initial position = (%d, %d), want (0, 0)", pb.windowX, pb.windowY)
+	}
+
+	// Set new position
+	pb.SetPosition(50, 75)
+	if pb.windowX != 50 || pb.windowY != 75 {
+		t.Errorf("after SetPosition, position = (%d, %d), want (50, 75)", pb.windowX, pb.windowY)
+	}
+
+	// Setting same position shouldn't trigger refresh (check internal state)
+	pb.needsRefresh = false
+	pb.SetPosition(50, 75)
+	if pb.needsRefresh {
+		t.Error("SetPosition with same coords shouldn't set needsRefresh")
+	}
+
+	// Different position should trigger refresh
+	pb.SetPosition(100, 100)
+	if !pb.needsRefresh {
+		t.Error("SetPosition with different coords should set needsRefresh")
+	}
+}
+
+func TestPseudoBackgroundRefresh(t *testing.T) {
+	pb := NewPseudoBackground(0, 0, 100, 100, color.RGBA{})
+
+	// After creation, needsRefresh should be true
+	if !pb.needsRefresh {
+		t.Error("needsRefresh should be true after creation")
+	}
+
+	// Manually clear and test Refresh()
+	pb.needsRefresh = false
+	pb.Refresh()
+	if !pb.needsRefresh {
+		t.Error("needsRefresh should be true after Refresh()")
+	}
+}
+
+func TestPseudoBackgroundClose(t *testing.T) {
+	pb := NewPseudoBackground(0, 0, 100, 100, color.RGBA{})
+
+	// Set a mock provider that returns an image
+	mockProvider := func(x, y, width, height int) (*ebiten.Image, error) {
+		img := ebiten.NewImage(width, height)
+		return img, nil
+	}
+	pb.SetScreenshotProvider(mockProvider)
+
+	// Close should not panic even if no image is cached
+	pb.Close()
+
+	// After close, should not have cached image
+	if pb.HasCachedImage() {
+		t.Error("HasCachedImage() should be false after Close()")
+	}
+}
+
+func TestPseudoBackgroundModeConstant(t *testing.T) {
+	// Verify the mode constant has expected value
+	if BackgroundModePseudo != 3 {
+		t.Errorf("BackgroundModePseudo = %v, want 3", BackgroundModePseudo)
+	}
+}
+
+func TestNewPseudoBackgroundRenderer(t *testing.T) {
+	fallbackColor := color.RGBA{R: 128, G: 128, B: 128, A: 255}
+
+	// Test without provider
+	renderer := NewPseudoBackgroundRenderer(100, 200, 400, 300, fallbackColor, nil)
+	if renderer.Mode() != BackgroundModePseudo {
+		t.Errorf("Mode() = %v, want BackgroundModePseudo", renderer.Mode())
+	}
+
+	pb, ok := renderer.(*PseudoBackground)
+	if !ok {
+		t.Fatal("expected *PseudoBackground")
+	}
+	if pb.windowX != 100 || pb.windowY != 200 {
+		t.Errorf("position = (%d, %d), want (100, 200)", pb.windowX, pb.windowY)
+	}
+	if pb.width != 400 || pb.height != 300 {
+		t.Errorf("dimensions = %dx%d, want 400x300", pb.width, pb.height)
+	}
+
+	// Test with provider
+	mockProvider := func(x, y, width, height int) (*ebiten.Image, error) {
+		return ebiten.NewImage(width, height), nil
+	}
+	rendererWithProvider := NewPseudoBackgroundRenderer(0, 0, 100, 100, fallbackColor, mockProvider)
+	pbWithProvider, ok := rendererWithProvider.(*PseudoBackground)
+	if !ok {
+		t.Fatal("expected *PseudoBackground")
+	}
+	if pbWithProvider.imageProvider == nil {
+		t.Error("imageProvider should be set when provider is passed")
+	}
+}
+
 

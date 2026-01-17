@@ -361,6 +361,7 @@ func TestBackgroundModeString(t *testing.T) {
 		{BackgroundModeNone, "none"},
 		{BackgroundModeTransparent, "transparent"},
 		{BackgroundModeGradient, "gradient"},
+		{BackgroundModePseudo, "pseudo"},
 		{BackgroundMode(999), "unknown"},
 	}
 
@@ -390,6 +391,11 @@ func TestParseBackgroundMode(t *testing.T) {
 		{"gradient", BackgroundModeGradient, false},
 		{"Gradient", BackgroundModeGradient, false},
 		{"GRADIENT", BackgroundModeGradient, false},
+		{"pseudo", BackgroundModePseudo, false},
+		{"Pseudo", BackgroundModePseudo, false},
+		{"PSEUDO", BackgroundModePseudo, false},
+		{"pseudo-transparent", BackgroundModePseudo, false},
+		{"pseudo_transparent", BackgroundModePseudo, false},
 		{"", BackgroundModeSolid, false}, // Empty defaults to solid
 		{"invalid", BackgroundModeSolid, true},
 	}

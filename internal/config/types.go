@@ -325,6 +325,10 @@ const (
 	// BackgroundModeGradient draws a gradient background.
 	// Uses GradientColours for start/end colors and GradientDirection for direction.
 	BackgroundModeGradient
+	// BackgroundModePseudo uses a cached screenshot of the desktop as the background.
+	// This provides fake transparency when a compositor is not available.
+	// The screenshot is taken at startup and can be refreshed on demand.
+	BackgroundModePseudo
 )
 
 // String returns the string representation of a BackgroundMode.
@@ -338,6 +342,8 @@ func (bm BackgroundMode) String() string {
 		return "transparent"
 	case BackgroundModeGradient:
 		return "gradient"
+	case BackgroundModePseudo:
+		return "pseudo"
 	default:
 		return "unknown"
 	}
@@ -354,6 +360,8 @@ func ParseBackgroundMode(s string) (BackgroundMode, error) {
 		return BackgroundModeTransparent, nil
 	case "gradient":
 		return BackgroundModeGradient, nil
+	case "pseudo", "pseudo-transparent", "pseudo_transparent":
+		return BackgroundModePseudo, nil
 	default:
 		return BackgroundModeSolid, fmt.Errorf("unknown background mode: %s", s)
 	}
