@@ -636,3 +636,105 @@ t.Errorf("Templates[%d] = %q, want %q", tt.index, cfg.Text.Templates[tt.index], 
 })
 }
 }
+
+// TestLegacyParserDisplayDirectives tests parsing of display/rendering directives.
+func TestLegacyParserDisplayDirectives(t *testing.T) {
+	content := []byte(`draw_borders yes
+draw_outline yes
+draw_shades no
+stippled_borders yes
+border_width 3
+border_inner_margin 10
+border_outer_margin 8
+
+TEXT
+Test line
+`)
+
+	parser := NewLegacyParser()
+	cfg, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		got      interface{}
+		expected interface{}
+	}{
+		{"DrawBorders", cfg.Display.DrawBorders, true},
+		{"DrawOutline", cfg.Display.DrawOutline, true},
+		{"DrawShades", cfg.Display.DrawShades, false},
+		{"StippledBorders", cfg.Display.StippledBorders, true},
+		{"BorderWidth", cfg.Display.BorderWidth, 3},
+		{"BorderInnerMargin", cfg.Display.BorderInnerMargin, 10},
+		{"BorderOuterMargin", cfg.Display.BorderOuterMargin, 8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.expected {
+				t.Errorf("%s = %v, want %v", tt.name, tt.got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestLegacyParserDisplayDirectivesDefaults tests default values for display directives.
+func TestLegacyParserDisplayDirectivesDefaults(t *testing.T) {
+	content := []byte(`background no
+
+TEXT
+Test line
+`)
+
+	parser := NewLegacyParser()
+	cfg, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if cfg.Display.DrawBorders != false {
+		t.Errorf("DrawBorders default = %v, want false", cfg.Display.DrawBorders)
+	}
+	if cfg.Display.DrawOutline != false {
+		t.Errorf("DrawOutline default = %v, want false", cfg.Display.DrawOutline)
+	}
+	if cfg.Display.DrawShades != true {
+		t.Errorf("DrawShades default = %v, want true", cfg.Display.DrawShades)
+	}
+	if cfg.Display.StippledBorders != false {
+		t.Errorf("StippledBorders default = %v, want false", cfg.Display.StippledBorders)
+	}
+	if cfg.Display.BorderWidth != 1 {
+		t.Errorf("BorderWidth default = %v, want 1", cfg.Display.BorderWidth)
+	}
+	if cfg.Display.BorderInnerMargin != 5 {
+		t.Errorf("BorderInnerMargin default = %v, want 5", cfg.Display.BorderInnerMargin)
+	}
+	if cfg.Display.BorderOuterMargin != 5 {
+		t.Errorf("BorderOuterMargin default = %v, want 5", cfg.Display.BorderOuterMargin)
+	}
+}
+
+// TestLegacyParserDisplayDirectivesInvalidValues tests error handling for invalid directive values.
+func TestLegacyParserDisplayDirectivesInvalidValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{"invalid border_width", "border_width abc"},
+		{"invalid border_inner_margin", "border_inner_margin xyz"},
+		{"invalid border_outer_margin", "border_outer_margin not_a_number"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewLegacyParser()
+			_, err := parser.Parse([]byte(tt.content))
+			if err == nil {
+				t.Errorf("expected error for %s, got nil", tt.name)
+			}
+		})
+	}
+}

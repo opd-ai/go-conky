@@ -205,6 +205,29 @@ func (p *LuaConfigParser) extractConfigTable(cfg *Config, table *rt.Table) error
 		cfg.Window.Alignment = a
 	}
 
+	// Display/rendering settings
+	if val := getTableBool(table, "draw_borders"); val != nil {
+		cfg.Display.DrawBorders = *val
+	}
+	if val := getTableBool(table, "draw_outline"); val != nil {
+		cfg.Display.DrawOutline = *val
+	}
+	if val := getTableBool(table, "draw_shades"); val != nil {
+		cfg.Display.DrawShades = *val
+	}
+	if val := getTableBool(table, "stippled_borders"); val != nil {
+		cfg.Display.StippledBorders = *val
+	}
+	if val := getTableInt(table, "border_width"); val != nil {
+		cfg.Display.BorderWidth = *val
+	}
+	if val := getTableInt(table, "border_inner_margin"); val != nil {
+		cfg.Display.BorderInnerMargin = *val
+	}
+	if val := getTableInt(table, "border_outer_margin"); val != nil {
+		cfg.Display.BorderOuterMargin = *val
+	}
+
 	// Color settings
 	if err := p.extractColors(cfg, table); err != nil {
 		return err

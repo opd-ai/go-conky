@@ -49,11 +49,18 @@ func defaultWindowConfig() WindowConfig {
 // It is used by DefaultConfig and DefaultDisplayConfig to avoid duplicating logic.
 func defaultDisplayConfig() DisplayConfig {
 	return DisplayConfig{
-		Background:     false,
-		DoubleBuffer:   true,
-		UpdateInterval: DefaultUpdateInterval,
-		Font:           DefaultFont,
-		FontSize:       DefaultFontSize,
+		Background:        false,
+		DoubleBuffer:      true,
+		UpdateInterval:    DefaultUpdateInterval,
+		Font:              DefaultFont,
+		FontSize:          DefaultFontSize,
+		DrawBorders:       false,
+		DrawOutline:       false,
+		DrawShades:        true, // Conky defaults to shades enabled
+		BorderWidth:       1,
+		BorderInnerMargin: 5,
+		BorderOuterMargin: 5,
+		StippledBorders:   false,
 	}
 }
 

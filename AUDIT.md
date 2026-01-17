@@ -4,9 +4,9 @@
 - **Date**: 2026-01-17 (Updated)
 - **Tests**: 2200+ total (including subtests), all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
-- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed), 4 low (4 fixed/documented)
+- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed, 1 partial), 4 low (4 fixed/documented)
 - **Implemented Compatibility**: ~90% (of implemented features work correctly)
-- **Overall Feature Coverage**: ~52%
+- **Overall Feature Coverage**: ~53%
 
 ## Overview
 
@@ -36,19 +36,28 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | default_color | ✅ PASS | Hex color parsing |
 | color0-color9 | ✅ PASS | All 10 color slots work |
 | template0-template9 | ✅ PASS | All 10 template slots work |
+| draw_borders | ✅ PASS | Border drawing option parsed |
+| draw_outline | ✅ PASS | Text outline option parsed |
+| draw_shades | ✅ PASS | Text shadow option parsed |
+| border_width | ✅ PASS | Border thickness parsed |
+| border_inner_margin | ✅ PASS | Inner margin parsed |
+| border_outer_margin | ✅ PASS | Outer margin parsed |
+| stippled_borders | ✅ PASS | Stippled border option parsed |
 
-**Config Directives Implemented: 34 of 150+ (~23%)**
+**Config Directives Implemented: 41 of 150+ (~27%)**
 
 #### Missing Configuration Directives
 | Directive | Priority | Notes |
 |-----------|----------|-------|
 | own_window_argb_visual | HIGH | ARGB transparency not implemented |
 | own_window_argb_value | HIGH | Alpha value for ARGB |
-| draw_borders | MEDIUM | Border drawing |
-| draw_outline | MEDIUM | Text outline |
-| draw_shades | MEDIUM | Text shadow |
-| border_width | MEDIUM | Border thickness |
-| stippled_borders | LOW | Stippled border effect |
+| draw_borders | ✅ DONE | Border drawing - parsing implemented |
+| draw_outline | ✅ DONE | Text outline - parsing implemented |
+| draw_shades | ✅ DONE | Text shadow - parsing implemented |
+| border_width | ✅ DONE | Border thickness - parsing implemented |
+| border_inner_margin | ✅ DONE | Inner margin between border and content |
+| border_outer_margin | ✅ DONE | Outer margin between window edge and border |
+| stippled_borders | ✅ DONE | Stippled border effect - parsing implemented |
 | xftfont | LOW | XFT font specification |
 | use_xft | LOW | XFT font rendering |
 | override_utf8_locale | LOW | UTF-8 locale override |
@@ -378,13 +387,17 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 - **Location**: internal/lua/api.go
 
 **BUG-007: Limited config directives**
+**BUG-007: Limited config directives** ⚠️ PARTIAL
 - **Severity**: Medium
 - **Feature**: Configuration parsing
-- **Reproduce**: Use advanced config options like draw_borders
-- **Expected**: Setting applied
-- **Actual**: Unknown directive silently ignored
-- **Location**: internal/config/legacy.go
-- **Fix**: Add missing config directive handlers
+- **Status**: PARTIALLY ADDRESSED - Added 7 new config directives for border/display settings
+- **Implemented**: draw_borders, draw_outline, draw_shades, border_width, border_inner_margin, 
+  border_outer_margin, stippled_borders
+- **Note**: Directives are parsed and stored in config; rendering behavior requires separate 
+  implementation in the rendering layer.
+- **Remaining**: own_window_argb_visual, own_window_argb_value, xftfont, use_xft, override_utf8_locale
+- **Location**: internal/config/types.go, internal/config/legacy.go, internal/config/lua.go
+- **Tests**: TestLegacyParserDisplayDirectives, TestLuaParserDisplayDirectives
 
 ### Low Priority
 
@@ -440,13 +453,13 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 | Category | Target | Implemented | Broken | Missing | Score |
 |----------|--------|-------------|--------|---------|-------|
-| Config Directives | 150 | 35 | 0 | 115 | 23% |
+| Config Directives | 150 | 42 | 0 | 108 | 28% |
 | Cairo Functions | 180 | 102 | 0 | 78 | 57% |
 | Lua Integration | 10 | 8 | 0 | 2 | 80% |
 | Display Objects | 200 | 121 | 3 | 76 | 59% |
 | Window Management | 20 | 10 | 2 | 8 | 50% |
 | System Monitoring | 30 | 28 | 0 | 2 | 93% |
-| **Overall** | **590** | **304** | **5** | **281** | **52%** |
+| **Overall** | **590** | **311** | **5** | **274** | **53%** |
 
 **Functional Compatibility Score: 90%** (of implemented features work correctly)
 
@@ -510,9 +523,10 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 3. ~~**Fix Cairo clipping**~~ ✅ DONE - Rectangular clipping now enforced via Ebiten SubImage
 
 ### Short-term Improvements
-1. Add remaining common config directives (draw_borders, draw_outline, draw_shades)
+1. ~~Add remaining common config directives (draw_borders, draw_outline, draw_shades)~~ ✅ DONE - Parsing implemented
 2. Implement ${lua} and ${lua_parse} for advanced script integration
 3. Add ${image} support for PNG/SVG display
+4. Implement rendering effects for draw_borders, draw_outline, draw_shades in render layer
 
 ### Architecture Observations
 1. **Strengths**: 

@@ -262,6 +262,34 @@ func (p *LegacyParser) parseDirective(cfg *Config, line string, lineNum int) err
 	case "template9":
 		cfg.Text.Templates[9] = value
 
+	// Display/rendering settings
+	case "draw_borders":
+		cfg.Display.DrawBorders = parseBool(value)
+	case "draw_outline":
+		cfg.Display.DrawOutline = parseBool(value)
+	case "draw_shades":
+		cfg.Display.DrawShades = parseBool(value)
+	case "stippled_borders":
+		cfg.Display.StippledBorders = parseBool(value)
+	case "border_width":
+		width, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid border_width: %w", lineNum, err)
+		}
+		cfg.Display.BorderWidth = width
+	case "border_inner_margin":
+		margin, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid border_inner_margin: %w", lineNum, err)
+		}
+		cfg.Display.BorderInnerMargin = margin
+	case "border_outer_margin":
+		margin, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid border_outer_margin: %w", lineNum, err)
+		}
+		cfg.Display.BorderOuterMargin = margin
+
 	default:
 		// Unknown directives are silently ignored for forward compatibility
 	}

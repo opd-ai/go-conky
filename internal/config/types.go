@@ -56,6 +56,20 @@ type DisplayConfig struct {
 	Font string
 	// FontSize is the default font size in points.
 	FontSize float64
+	// DrawBorders enables drawing borders around the window.
+	DrawBorders bool
+	// DrawOutline enables drawing outline around text.
+	DrawOutline bool
+	// DrawShades enables drawing shades (shadows) behind text.
+	DrawShades bool
+	// BorderWidth is the width of borders in pixels.
+	BorderWidth int
+	// BorderInnerMargin is the inner margin between border and content in pixels.
+	BorderInnerMargin int
+	// BorderOuterMargin is the outer margin between window edge and border in pixels.
+	BorderOuterMargin int
+	// StippledBorders enables stippled (dashed) border effect.
+	StippledBorders bool
 }
 
 // TextConfig holds text template and formatting settings.

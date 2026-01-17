@@ -548,3 +548,95 @@ t.Errorf("Templates[%d] = %q, want %q", tt.index, cfg.Text.Templates[tt.index], 
 })
 }
 }
+
+// TestLuaParserDisplayDirectives tests parsing of display/rendering directives in Lua format.
+func TestLuaParserDisplayDirectives(t *testing.T) {
+	content := []byte(`
+conky.config = {
+    draw_borders = true,
+    draw_outline = true,
+    draw_shades = false,
+    stippled_borders = true,
+    border_width = 3,
+    border_inner_margin = 10,
+    border_outer_margin = 8,
+}
+conky.text = [[Test line]]
+`)
+
+	parser, err := NewLuaConfigParser()
+	if err != nil {
+		t.Fatalf("NewLuaConfigParser failed: %v", err)
+	}
+	defer parser.Close()
+
+	cfg, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		got      interface{}
+		expected interface{}
+	}{
+		{"DrawBorders", cfg.Display.DrawBorders, true},
+		{"DrawOutline", cfg.Display.DrawOutline, true},
+		{"DrawShades", cfg.Display.DrawShades, false},
+		{"StippledBorders", cfg.Display.StippledBorders, true},
+		{"BorderWidth", cfg.Display.BorderWidth, 3},
+		{"BorderInnerMargin", cfg.Display.BorderInnerMargin, 10},
+		{"BorderOuterMargin", cfg.Display.BorderOuterMargin, 8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.expected {
+				t.Errorf("%s = %v, want %v", tt.name, tt.got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestLuaParserDisplayDirectivesDefaults tests default values for display directives.
+func TestLuaParserDisplayDirectivesDefaults(t *testing.T) {
+	content := []byte(`
+conky.config = {
+    background = false,
+}
+conky.text = [[Test line]]
+`)
+
+	parser, err := NewLuaConfigParser()
+	if err != nil {
+		t.Fatalf("NewLuaConfigParser failed: %v", err)
+	}
+	defer parser.Close()
+
+	cfg, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if cfg.Display.DrawBorders != false {
+		t.Errorf("DrawBorders default = %v, want false", cfg.Display.DrawBorders)
+	}
+	if cfg.Display.DrawOutline != false {
+		t.Errorf("DrawOutline default = %v, want false", cfg.Display.DrawOutline)
+	}
+	if cfg.Display.DrawShades != true {
+		t.Errorf("DrawShades default = %v, want true", cfg.Display.DrawShades)
+	}
+	if cfg.Display.StippledBorders != false {
+		t.Errorf("StippledBorders default = %v, want false", cfg.Display.StippledBorders)
+	}
+	if cfg.Display.BorderWidth != 1 {
+		t.Errorf("BorderWidth default = %v, want 1", cfg.Display.BorderWidth)
+	}
+	if cfg.Display.BorderInnerMargin != 5 {
+		t.Errorf("BorderInnerMargin default = %v, want 5", cfg.Display.BorderInnerMargin)
+	}
+	if cfg.Display.BorderOuterMargin != 5 {
+		t.Errorf("BorderOuterMargin default = %v, want 5", cfg.Display.BorderOuterMargin)
+	}
+}
