@@ -179,6 +179,8 @@ All changes are additive and backward compatible. Existing configurations withou
 - [x] Background transparency configurable via `own_window_argb_value` (0-255)
 - [x] `own_window_transparent yes` enables transparent mode
 - [x] `own_window_argb_visual yes` enables 32-bit ARGB visual
+- [x] Window hints (undecorated, above, skip_taskbar, skip_pager) applied via Ebiten
+- [x] Window position configurable via gap_x/gap_y settings
 - [ ] No performance regression on existing functionality (< 5% impact)
 - [ ] Fallback to solid background when compositor unavailable
 - [ ] Documentation covers setup for major compositors
@@ -192,7 +194,7 @@ All changes are additive and backward compatible. Existing configurations withou
 |-------|----------|----------|-------------|--------|
 | Phase 1 | Week 1 | Critical | Core transparency | ✅ COMPLETED |
 | Phase 2 | Week 1-2 | Critical | Alpha value support | ✅ COMPLETED |
-| Phase 3 | Week 2-3 | Important | Window hints | Pending |
+| Phase 3 | Week 2-3 | Important | Window hints | ✅ COMPLETED |
 | Phase 4 | Week 3-4 | Nice-to-have | Background modes | Pending |
 | Phase 5 | Week 4 | Important | Testing/docs | Pending |
 
@@ -204,10 +206,11 @@ All changes are additive and backward compatible. Existing configurations withou
 
 | File | Changes | Status |
 |------|---------|--------|
-| `internal/render/types.go` | Added `Transparent`, `ARGBVisual`, `ARGBValue` fields | ✅ Done |
-| `internal/render/game.go` | Call `SetScreenTransparent()`, apply ARGB alpha in `Draw()` | ✅ Done |
-| `pkg/conky/render.go` | Wire config values to render.Config | ✅ Done |
-| `internal/render/types_test.go` | Added ARGB configuration tests | ✅ Done |
+| `internal/render/types.go` | Added `Transparent`, `ARGBVisual`, `ARGBValue`, `Undecorated`, `Floating`, `WindowX`, `WindowY`, `SkipTaskbar`, `SkipPager` fields | ✅ Done |
+| `internal/render/game.go` | Call `SetScreenTransparent()`, `SetWindowDecorated()`, `SetWindowFloating()`, `SetWindowPosition()`, apply ARGB alpha in `Draw()` | ✅ Done |
+| `pkg/conky/render.go` | Wire config values to render.Config, add `parseWindowHints()` function | ✅ Done |
+| `internal/render/types_test.go` | Added ARGB and window hints configuration tests | ✅ Done |
+| `pkg/conky/render_test.go` | Added `parseWindowHints()` unit tests | ✅ Done |
 | `internal/render/game_test.go` | Added ARGB transparency tests | ✅ Done |
 | `internal/config/validation.go` | ARGBValue range validation | Already exists |
 | `docs/transparency.md` | New documentation file | Pending |
