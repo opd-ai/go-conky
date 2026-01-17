@@ -19,6 +19,17 @@ type Config struct {
 	UpdateInterval time.Duration
 	// BackgroundColor is the window background color.
 	BackgroundColor color.RGBA
+	// Transparent enables window transparency mode.
+	// When enabled, the window background can be transparent if the compositor supports it.
+	Transparent bool
+	// ARGBVisual enables 32-bit ARGB visual for true transparency.
+	// Requires a compositor (e.g., picom, compton) on Linux.
+	// When true, enables Ebiten's screen transparency feature.
+	ARGBVisual bool
+	// ARGBValue sets the alpha value for ARGB transparency (0-255).
+	// 0 is fully transparent, 255 is fully opaque.
+	// Only effective when ARGBVisual is true.
+	ARGBValue int
 	// DrawBorders enables drawing a border around the content area.
 	DrawBorders bool
 	// DrawOutline enables drawing an outline (stroke) around text.
@@ -49,6 +60,9 @@ func DefaultConfig() Config {
 		Title:             "conky-go",
 		UpdateInterval:    time.Second,
 		BackgroundColor:   color.RGBA{R: 0, G: 0, B: 0, A: 200},
+		Transparent:       false,
+		ARGBVisual:        false,
+		ARGBValue:         255, // Fully opaque by default
 		DrawBorders:       false,
 		DrawOutline:       false,
 		DrawShades:        false,

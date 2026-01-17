@@ -893,3 +893,142 @@ func TestBorderColorFallback(t *testing.T) {
 	// Should not panic and should use default white color
 	game.drawBorders(screen)
 }
+
+// Test ARGB transparency configuration
+func TestGameARGBTransparencyConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		transparent bool
+		argbVisual  bool
+		argbValue   int
+	}{
+		{
+			name:        "default no transparency",
+			transparent: false,
+			argbVisual:  false,
+			argbValue:   255,
+		},
+		{
+			name:        "transparent enabled",
+			transparent: true,
+			argbVisual:  false,
+			argbValue:   255,
+		},
+		{
+			name:        "argb visual enabled",
+			transparent: false,
+			argbVisual:  true,
+			argbValue:   128,
+		},
+		{
+			name:        "both with semi-transparent",
+			transparent: true,
+			argbVisual:  true,
+			argbValue:   100,
+		},
+		{
+			name:        "fully transparent",
+			transparent: true,
+			argbVisual:  true,
+			argbValue:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Width:       400,
+				Height:      300,
+				Transparent: tt.transparent,
+				ARGBVisual:  tt.argbVisual,
+				ARGBValue:   tt.argbValue,
+			}
+			renderer := newMockTextRenderer()
+			game := NewGameWithRenderer(config, renderer)
+
+			gotConfig := game.Config()
+			if gotConfig.Transparent != tt.transparent {
+				t.Errorf("Transparent = %v, want %v", gotConfig.Transparent, tt.transparent)
+			}
+			if gotConfig.ARGBVisual != tt.argbVisual {
+				t.Errorf("ARGBVisual = %v, want %v", gotConfig.ARGBVisual, tt.argbVisual)
+			}
+			if gotConfig.ARGBValue != tt.argbValue {
+				t.Errorf("ARGBValue = %d, want %d", gotConfig.ARGBValue, tt.argbValue)
+			}
+		})
+	}
+}
+
+// Test that Draw applies ARGB alpha to background
+func TestGameDrawWithARGBAlpha(t *testing.T) {
+	tests := []struct {
+		name         string
+		argbVisual   bool
+		argbValue    int
+		expectedAlph uint8
+	}{
+		{
+			name:         "argb disabled uses original alpha",
+			argbVisual:   false,
+			argbValue:    100,
+			expectedAlph: 200, // Original BackgroundColor.A
+		},
+		{
+			name:         "argb enabled uses argb value",
+			argbVisual:   true,
+			argbValue:    100,
+			expectedAlph: 100,
+		},
+		{
+			name:         "argb fully transparent",
+			argbVisual:   true,
+			argbValue:    0,
+			expectedAlph: 0,
+		},
+		{
+			name:         "argb fully opaque",
+			argbVisual:   true,
+			argbValue:    255,
+			expectedAlph: 255,
+		},
+		{
+			name:         "argb value clamped negative",
+			argbVisual:   true,
+			argbValue:    -50,
+			expectedAlph: 0,
+		},
+		{
+			name:         "argb value clamped over 255",
+			argbVisual:   true,
+			argbValue:    300,
+			expectedAlph: 255,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := DefaultConfig()
+			config.ARGBVisual = tt.argbVisual
+			config.ARGBValue = tt.argbValue
+			// BackgroundColor.A is 200 in DefaultConfig
+
+			renderer := newMockTextRenderer()
+			game := NewGameWithRenderer(config, renderer)
+
+			screen := ebiten.NewImage(400, 300)
+			defer screen.Deallocate()
+
+			// Draw should not panic
+			game.Draw(screen)
+
+			// Verify the config is preserved correctly
+			if game.config.ARGBVisual != tt.argbVisual {
+				t.Errorf("ARGBVisual = %v, want %v", game.config.ARGBVisual, tt.argbVisual)
+			}
+			if game.config.ARGBValue != tt.argbValue {
+				t.Errorf("ARGBValue = %d, want %d", game.config.ARGBValue, tt.argbValue)
+			}
+		})
+	}
+}

@@ -162,8 +162,21 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
+	// Apply background color with ARGB transparency if enabled
+	bgColor := g.config.BackgroundColor
+	if g.config.ARGBVisual {
+		// Apply ARGBValue to background alpha (clamp to 0-255)
+		argbAlpha := g.config.ARGBValue
+		if argbAlpha < 0 {
+			argbAlpha = 0
+		} else if argbAlpha > 255 {
+			argbAlpha = 255
+		}
+		bgColor.A = uint8(argbAlpha)
+	}
+
 	// Clear screen with background color
-	screen.Fill(g.config.BackgroundColor)
+	screen.Fill(bgColor)
 
 	// Draw borders if enabled
 	if g.config.DrawBorders {
@@ -497,6 +510,12 @@ func (g *Game) Run() error {
 	ebiten.SetWindowSize(g.config.Width, g.config.Height)
 	ebiten.SetWindowTitle(g.config.Title)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+
+	// Enable screen transparency if configured
+	// This allows the window background to be transparent when the compositor supports it
+	if g.config.Transparent || g.config.ARGBVisual {
+		ebiten.SetScreenTransparent(true)
+	}
 
 	g.mu.Lock()
 	g.running = true

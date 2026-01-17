@@ -234,3 +234,74 @@ func TestConfigDisplayEffectsCustomValues(t *testing.T) {
 		t.Errorf("ShadeColor.B = %d, want 255", config.ShadeColor.B)
 	}
 }
+
+func TestDefaultConfigARGBSettings(t *testing.T) {
+	config := DefaultConfig()
+
+	// Test ARGB transparency defaults
+	if config.Transparent {
+		t.Error("Transparent should be false by default")
+	}
+	if config.ARGBVisual {
+		t.Error("ARGBVisual should be false by default")
+	}
+	if config.ARGBValue != 255 {
+		t.Errorf("ARGBValue = %d, want 255 (fully opaque)", config.ARGBValue)
+	}
+}
+
+func TestConfigARGBCustomValues(t *testing.T) {
+	tests := []struct {
+		name        string
+		transparent bool
+		argbVisual  bool
+		argbValue   int
+	}{
+		{
+			name:        "transparency enabled",
+			transparent: true,
+			argbVisual:  false,
+			argbValue:   255,
+		},
+		{
+			name:        "argb visual enabled",
+			transparent: false,
+			argbVisual:  true,
+			argbValue:   128,
+		},
+		{
+			name:        "both enabled with semi-transparent",
+			transparent: true,
+			argbVisual:  true,
+			argbValue:   100,
+		},
+		{
+			name:        "fully transparent",
+			transparent: true,
+			argbVisual:  true,
+			argbValue:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Width:       400,
+				Height:      300,
+				Transparent: tt.transparent,
+				ARGBVisual:  tt.argbVisual,
+				ARGBValue:   tt.argbValue,
+			}
+
+			if config.Transparent != tt.transparent {
+				t.Errorf("Transparent = %v, want %v", config.Transparent, tt.transparent)
+			}
+			if config.ARGBVisual != tt.argbVisual {
+				t.Errorf("ARGBVisual = %v, want %v", config.ARGBVisual, tt.argbVisual)
+			}
+			if config.ARGBValue != tt.argbValue {
+				t.Errorf("ARGBValue = %d, want %d", config.ARGBValue, tt.argbValue)
+			}
+		})
+	}
+}

@@ -36,6 +36,9 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	interval := c.cfg.Display.UpdateInterval
 	textLines := c.cfg.Text.Template
 	textColor := c.cfg.Colors.Default
+	transparent := c.cfg.Window.Transparent
+	argbVisual := c.cfg.Window.ARGBVisual
+	argbValue := c.cfg.Window.ARGBValue
 	ctx := c.ctx
 	c.mu.RUnlock()
 
@@ -52,24 +55,26 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	if interval <= 0 {
 		interval = defaultUpdateInterval
 	}
-	// Background color uses a hardcoded semi-transparent black because
-	// config.ColorConfig currently has no dedicated background color field.
-	// Colors.Default is specifically "the default text color" per its documentation,
-	// so using it for background would be semantically incorrect and confusing.
-	// TODO: Consider adding a dedicated background color field to ColorConfig.
+
+	// Background color: use semi-transparent black by default
+	// When ARGBVisual is enabled, the ARGBValue will override the alpha channel
 	bgColor := color.RGBA{R: 0, G: 0, B: 0, A: defaultBackgroundAlpha}
+
 	// Default text color is white if not specified in config
 	if textColor == (color.RGBA{}) {
 		textColor = color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	}
 
-	// Create render configuration
+	// Create render configuration with transparency settings
 	renderConfig := render.Config{
 		Width:           width,
 		Height:          height,
 		Title:           title,
 		UpdateInterval:  interval,
 		BackgroundColor: bgColor,
+		Transparent:     transparent,
+		ARGBVisual:      argbVisual,
+		ARGBValue:       argbValue,
 	}
 
 	// Create the game instance

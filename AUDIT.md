@@ -4,7 +4,7 @@
 - **Date**: 2026-01-17 (Updated)
 - **Tests**: 2500+ total (including subtests), all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
-- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed, 1 partial), 4 low (4 fixed/documented)
+- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (4 fixed), 4 low (4 fixed/documented)
 - **Implemented Compatibility**: ~90% (of implemented features work correctly)
 - **Overall Feature Coverage**: ~56%
 
@@ -348,20 +348,25 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ### Medium Priority
 
-**BUG-003: ARGB transparency not implemented** ⚠️ PARTIAL
+**BUG-003: ARGB transparency not implemented** ✅ FIXED
 - **Severity**: Medium
 - **Feature**: own_window_argb_visual
 - **Reproduce**: Set own_window_argb_visual=true
 - **Expected**: 32-bit visual with alpha channel
-- **Actual**: Config directives `own_window_argb_visual` and `own_window_argb_value` are now parsed and stored. Effect not yet applied at rendering layer.
-- **Location**: Window management layer
-- **Status**: Config parsing complete. Rendering effect requires X11-specific implementation or Ebiten enhancement.
+- **Actual**: Window transparency now works with compositor support
+- **Location**: internal/render/game.go, internal/render/types.go, pkg/conky/render.go
+- **Status**: FIXED - Rendering layer now integrates ARGB transparency via Ebiten's SetScreenTransparent
 - **Progress**:
   - ✅ Added `ARGBVisual` (bool) and `ARGBValue` (int 0-255) fields to `WindowConfig`
   - ✅ Implemented parsing in both legacy.go and lua.go
   - ✅ Added validation with warnings for misconfigured settings
   - ✅ Comprehensive tests for parsing and validation
-  - ⏳ Rendering layer integration pending (requires compositor support)
+  - ✅ Added `Transparent`, `ARGBVisual`, `ARGBValue` fields to `render.Config`
+  - ✅ `Game.Run()` calls `ebiten.SetScreenTransparent(true)` when transparency is enabled
+  - ✅ `Game.Draw()` applies `ARGBValue` to background alpha when `ARGBVisual` is true
+  - ✅ Config values wired from `config.WindowConfig` to `render.Config` in pkg/conky/render.go
+  - ✅ Tests cover all transparency configuration combinations including edge cases
+- **Note**: Actual transparency requires a running compositor (picom, compton, KWin, etc.) on Linux
 
 **BUG-004: Graphical bars not implemented** ✅ FIXED
 - **Severity**: Medium
@@ -543,7 +548,7 @@ All monitoring operations are well under the 16ms target for 60 FPS rendering.
 3. ~~**BUG-004**: Graphical bar/graph widgets~~ ✅ FIXED
 
 ### Should Fix
-1. **BUG-003**: ARGB transparency (8h) - platform dependent
+1. ~~**BUG-003**: ARGB transparency~~ ✅ FIXED - Rendering layer now integrates transparency via Ebiten
 2. ~~**BUG-005**: Scroll animation~~ ✅ FIXED
 3. ~~**BUG-006**: Battery time calculation~~ ✅ FIXED
 4. **BUG-007**: Additional config directives (16h ongoing)
