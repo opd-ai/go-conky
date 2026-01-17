@@ -18,7 +18,7 @@ This audit compares the documented functionality in README.md and supporting doc
 | **DOCUMENTATION ISSUE** | 1 | 1 |
 | **MISSING FEATURE** | 4 | 0 |
 | **EDGE CASE BUG** | 3 | 3 |
-| **PERFORMANCE ISSUE** | 1 | 0 |
+| **PERFORMANCE ISSUE** | 1 | 1 |
 
 **Overall Assessment:** The codebase is well-implemented with proper concurrency safety, error handling, and modular architecture. Most discrepancies are partial implementations or documentation clarifications rather than critical bugs.
 
@@ -30,6 +30,7 @@ This audit compares the documented functionality in README.md and supporting doc
 - ✅ Implemented `CopyPath` to return actual path segments instead of empty slice
 - ✅ Fixed `RelMoveTo`, `RelLineTo`, `RelCurveTo` to default to (0,0) when there's no current point
 - ✅ Implemented `SetFillRule` and `SetOperator` to properly control fill rule and compositing mode
+- ✅ Made convenience drawing functions (`DrawLine`, `DrawRectangle`, `FillRectangle`, `DrawCircle`, `FillCircle`) atomic
 
 ---
 
@@ -319,32 +320,22 @@ func (cr *CairoRenderer) expandPathBoundsUnlocked(x, y float64) {
 
 ---
 
-### PERFORMANCE ISSUE: Convenience Drawing Functions Not Atomic
+### ~~PERFORMANCE ISSUE: Convenience Drawing Functions Not Atomic~~ [RESOLVED]
 
-**File:** internal/render/cairo.go:1161-1208  
+**File:** internal/render/cairo.go:1335-1397  
 **Severity:** Low  
-**Description:** The convenience functions (`DrawLine`, `DrawRectangle`, `FillRectangle`, `DrawCircle`, `FillCircle`) are documented as NOT atomic, with each internal method call acquiring and releasing the mutex independently.
+**Status:** ✅ RESOLVED - Convenience functions are now atomic.
+
+**Description:** The convenience functions (`DrawLine`, `DrawRectangle`, `FillRectangle`, `DrawCircle`, `FillCircle`) previously acquired and released the mutex for each internal method call. This has been fixed by implementing internal unlocked versions of the core methods and updating the convenience functions to acquire the lock once and perform all operations atomically.
+
+**Resolution:** 
+- Added internal unlocked methods: `newPathUnlocked`, `moveToUnlocked`, `lineToUnlocked`, `rectangleUnlocked`, `arcUnlocked`, `closePathUnlocked`, `strokeUnlocked`, `fillUnlocked`
+- Updated `DrawLine`, `DrawRectangle`, `FillRectangle`, `DrawCircle`, `FillCircle` to acquire the mutex once and use the unlocked methods
+- All convenience functions are now thread-safe atomic operations
 
 **Expected Behavior:** Thread-safe atomic operations for convenience functions.
 
-**Actual Behavior:** Multiple lock/unlock cycles per operation could lead to visual artifacts in concurrent scenarios where another goroutine modifies state between operations.
-
-**Impact:** In highly concurrent applications, these functions may produce inconsistent results.
-
-**Reproduction:** Call convenience functions from multiple goroutines simultaneously while also calling state-modifying functions.
-
-**Code Reference:**
-```go
-// DrawLine draws a line from (x1,y1) to (x2,y2) with the current color and line width.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
-func (cr *CairoRenderer) DrawLine(x1, y1, x2, y2 float64) {
-    cr.NewPath()   // Lock/Unlock
-    cr.MoveTo(x1, y1)  // Lock/Unlock
-    cr.LineTo(x2, y2)  // Lock/Unlock
-    cr.Stroke()        // Lock/Unlock
-}
-```
+**Actual Behavior:** Now holds the mutex for the entire operation, ensuring thread-safe atomic drawing.
 
 ---
 
@@ -386,7 +377,7 @@ func (cr *CairoRenderer) DrawLine(x1, y1, x2, y2 float64) {
 
 4. ~~**Low Priority:** Make `Sysname` platform-aware by using `runtime.GOOS`.~~ ✅ RESOLVED - Added `getSysname()` helper function using `runtime.GOOS`.
 
-5. **Future Consideration:** Implement atomic versions of convenience drawing functions for thread-critical applications.
+5. ~~**Future Consideration:** Implement atomic versions of convenience drawing functions for thread-critical applications.~~ ✅ RESOLVED - Convenience functions are now atomic.
 
 ---
 

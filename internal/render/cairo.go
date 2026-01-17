@@ -919,14 +919,7 @@ func (cr *CairoRenderer) initPathAtOrigin() {
 func (cr *CairoRenderer) NewPath() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	cr.path = &vector.Path{}
-	cr.pathSegments = make([]PathSegment, 0)
-	cr.hasPath = false
-	cr.pathBoundsInit = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.newPathUnlocked()
 }
 
 // MoveTo begins a new sub-path at the given point.
@@ -1229,13 +1222,7 @@ func (cr *CairoRenderer) Stroke() {
 	})
 
 	// Clear the path after stroking
-	cr.path = &vector.Path{}
-	cr.hasPath = false
-	cr.pathBoundsInit = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.clearPathUnlocked()
 }
 
 // Fill fills the current path with the current color.
@@ -1257,13 +1244,7 @@ func (cr *CairoRenderer) Fill() {
 	})
 
 	// Clear the path after filling
-	cr.path = &vector.Path{}
-	cr.hasPath = false
-	cr.pathBoundsInit = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.clearPathUnlocked()
 }
 
 // FillPreserve fills the current path without clearing it.
@@ -1333,60 +1314,67 @@ func (cr *CairoRenderer) PaintWithAlpha(alpha float64) {
 }
 
 // --- Convenience Drawing Functions ---
+//
+// These functions provide atomic operations that acquire the lock once and perform
+// all operations under that single lock. This ensures thread-safe atomic drawing
+// operations in concurrent scenarios.
 
 // DrawLine draws a line from (x1,y1) to (x2,y2) with the current color and line width.
-// This is a convenience function that combines MoveTo, LineTo, and Stroke.
-// DrawLine draws a line from (x1,y1) to (x2,y2) with the current color and line width.
-// This is a convenience function that combines MoveTo, LineTo, and Stroke.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, MoveTo, LineTo, and Stroke.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) DrawLine(x1, y1, x2, y2 float64) {
-	cr.NewPath()
-	cr.MoveTo(x1, y1)
-	cr.LineTo(x2, y2)
-	cr.Stroke()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.moveToUnlocked(x1, y1)
+	cr.lineToUnlocked(x2, y2)
+	cr.strokeUnlocked()
 }
 
 // DrawRectangle draws a stroked rectangle.
-// This is a convenience function that combines Rectangle and Stroke.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, Rectangle and Stroke.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) DrawRectangle(x, y, width, height float64) {
-	cr.NewPath()
-	cr.Rectangle(x, y, width, height)
-	cr.Stroke()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.rectangleUnlocked(x, y, width, height)
+	cr.strokeUnlocked()
 }
 
 // FillRectangle draws a filled rectangle.
-// This is a convenience function that combines Rectangle and Fill.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, Rectangle and Fill.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) FillRectangle(x, y, width, height float64) {
-	cr.NewPath()
-	cr.Rectangle(x, y, width, height)
-	cr.Fill()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.rectangleUnlocked(x, y, width, height)
+	cr.fillUnlocked()
 }
 
 // DrawCircle draws a stroked circle.
-// This is a convenience function that combines Arc and Stroke.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, Arc, ClosePath and Stroke.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) DrawCircle(xc, yc, radius float64) {
-	cr.NewPath()
-	cr.Arc(xc, yc, radius, 0, 2*math.Pi)
-	cr.ClosePath()
-	cr.Stroke()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.arcUnlocked(xc, yc, radius, 0, 2*math.Pi)
+	cr.closePathUnlocked()
+	cr.strokeUnlocked()
 }
 
 // FillCircle draws a filled circle.
-// This is a convenience function that combines Arc and Fill.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, Arc, ClosePath and Fill.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) FillCircle(xc, yc, radius float64) {
-	cr.NewPath()
-	cr.Arc(xc, yc, radius, 0, 2*math.Pi)
-	cr.ClosePath()
-	cr.Fill()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.arcUnlocked(xc, yc, radius, 0, 2*math.Pi)
+	cr.closePathUnlocked()
+	cr.fillUnlocked()
 }
 
 // --- Helper Functions ---
@@ -1493,6 +1481,181 @@ func (cr *CairoRenderer) setVertexColors(vertices []ebiten.Vertex) {
 		vertices[i].ColorB = b
 		vertices[i].ColorA = a
 	}
+}
+
+// --- Unlocked Internal Methods ---
+//
+// These internal methods perform path and drawing operations without acquiring the mutex.
+// They are used by the atomic convenience functions to perform multiple operations
+// under a single lock. All of these methods MUST be called while holding the mutex.
+
+// newPathUnlocked clears the current path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) newPathUnlocked() {
+	cr.clearPathUnlocked()
+}
+
+// moveToUnlocked begins a new sub-path at the given point without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) moveToUnlocked(x, y float64) {
+	cr.expandPathBounds(float32(x), float32(y))
+	cr.path.MoveTo(float32(x), float32(y))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
+	cr.pathStartX = float32(x)
+	cr.pathStartY = float32(y)
+	cr.pathCurrentX = float32(x)
+	cr.pathCurrentY = float32(y)
+	cr.hasPath = true
+}
+
+// lineToUnlocked adds a line to the path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) lineToUnlocked(x, y float64) {
+	cr.expandPathBounds(float32(x), float32(y))
+	if !cr.hasPath {
+		cr.path.MoveTo(float32(x), float32(y))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
+		cr.pathStartX = float32(x)
+		cr.pathStartY = float32(y)
+		cr.hasPath = true
+	} else {
+		cr.path.LineTo(float32(x), float32(y))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y})
+	}
+	cr.pathCurrentX = float32(x)
+	cr.pathCurrentY = float32(y)
+}
+
+// rectangleUnlocked adds a rectangle to the path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) rectangleUnlocked(x, y, width, height float64) {
+	// Expand bounds to include all corners
+	cr.expandPathBounds(float32(x), float32(y))
+	cr.expandPathBounds(float32(x+width), float32(y+height))
+
+	cr.path.MoveTo(float32(x), float32(y))
+	cr.path.LineTo(float32(x+width), float32(y))
+	cr.path.LineTo(float32(x+width), float32(y+height))
+	cr.path.LineTo(float32(x), float32(y+height))
+	cr.path.Close()
+
+	// Track all segments
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y + height})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y + height})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+
+	cr.pathStartX = float32(x)
+	cr.pathStartY = float32(y)
+	cr.pathCurrentX = float32(x)
+	cr.pathCurrentY = float32(y)
+	cr.hasPath = true
+}
+
+// arcUnlocked adds a circular arc to the path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) arcUnlocked(xc, yc, radius, angle1, angle2 float64) {
+	// Calculate start point
+	startX := xc + radius*math.Cos(angle1)
+	startY := yc + radius*math.Sin(angle1)
+
+	// Expand bounds for arc - use bounding box of full circle (conservative)
+	cr.expandPathBounds(float32(xc-radius), float32(yc-radius))
+	cr.expandPathBounds(float32(xc+radius), float32(yc+radius))
+
+	// Move or line to start point
+	if !cr.hasPath {
+		cr.path.MoveTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: startX, Y: startY})
+		cr.pathStartX = float32(startX)
+		cr.pathStartY = float32(startY)
+		cr.hasPath = true
+	} else {
+		cr.path.LineTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: startX, Y: startY})
+	}
+
+	// Add arc using Ebiten's Arc method
+	cr.path.Arc(float32(xc), float32(yc), float32(radius), float32(angle1), float32(angle2), vector.Clockwise)
+
+	// Track arc segment
+	endX := xc + radius*math.Cos(angle2)
+	endY := yc + radius*math.Sin(angle2)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type:    PathArc,
+		X:       endX,
+		Y:       endY,
+		CenterX: xc,
+		CenterY: yc,
+		Radius:  radius,
+		Angle1:  angle1,
+		Angle2:  angle2,
+	})
+
+	// Update current position
+	cr.pathCurrentX = float32(endX)
+	cr.pathCurrentY = float32(endY)
+}
+
+// closePathUnlocked closes the current sub-path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) closePathUnlocked() {
+	if cr.hasPath {
+		cr.path.Close()
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+	}
+}
+
+// clearPathUnlocked resets the path state after drawing without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) clearPathUnlocked() {
+	cr.path = &vector.Path{}
+	cr.pathSegments = make([]PathSegment, 0)
+	cr.hasPath = false
+	cr.pathBoundsInit = false
+	cr.pathMinX = 0
+	cr.pathMinY = 0
+	cr.pathMaxX = 0
+	cr.pathMaxY = 0
+}
+
+// strokeUnlocked strokes the current path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) strokeUnlocked() {
+	if !cr.canDraw() {
+		return
+	}
+
+	opts := cr.buildStrokeOptions()
+	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, opts)
+	cr.setVertexColors(vertices)
+	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+		AntiAlias: cr.antialias,
+		Blend:     cr.getEbitenBlend(),
+	})
+
+	// Clear the path after stroking
+	cr.clearPathUnlocked()
+}
+
+// fillUnlocked fills the current path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) fillUnlocked() {
+	if !cr.canDraw() {
+		return
+	}
+
+	vertices, indices := cr.path.AppendVerticesAndIndicesForFilling(nil, nil)
+	cr.setVertexColors(vertices)
+	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+		AntiAlias: cr.antialias,
+		FillRule:  cr.getEbitenFillRule(),
+		Blend:     cr.getEbitenBlend(),
+	})
+
+	// Clear the path after filling
+	cr.clearPathUnlocked()
 }
 
 // GetCurrentPoint returns the current point in the path.
