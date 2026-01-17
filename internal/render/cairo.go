@@ -919,14 +919,7 @@ func (cr *CairoRenderer) initPathAtOrigin() {
 func (cr *CairoRenderer) NewPath() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	cr.path = &vector.Path{}
-	cr.pathSegments = make([]PathSegment, 0)
-	cr.hasPath = false
-	cr.pathBoundsInit = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.newPathUnlocked()
 }
 
 // MoveTo begins a new sub-path at the given point.
@@ -1229,13 +1222,7 @@ func (cr *CairoRenderer) Stroke() {
 	})
 
 	// Clear the path after stroking
-	cr.path = &vector.Path{}
-	cr.hasPath = false
-	cr.pathBoundsInit = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.clearPathUnlocked()
 }
 
 // Fill fills the current path with the current color.
@@ -1257,13 +1244,7 @@ func (cr *CairoRenderer) Fill() {
 	})
 
 	// Clear the path after filling
-	cr.path = &vector.Path{}
-	cr.hasPath = false
-	cr.pathBoundsInit = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.clearPathUnlocked()
 }
 
 // FillPreserve fills the current path without clearing it.
@@ -1633,6 +1614,18 @@ func (cr *CairoRenderer) closePathUnlocked() {
 	}
 }
 
+// clearPathUnlocked resets the path state after drawing without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) clearPathUnlocked() {
+	cr.path = &vector.Path{}
+	cr.hasPath = false
+	cr.pathBoundsInit = false
+	cr.pathMinX = 0
+	cr.pathMinY = 0
+	cr.pathMaxX = 0
+	cr.pathMaxY = 0
+}
+
 // strokeUnlocked strokes the current path without acquiring the mutex.
 // This must be called while holding the mutex.
 func (cr *CairoRenderer) strokeUnlocked() {
@@ -1649,13 +1642,7 @@ func (cr *CairoRenderer) strokeUnlocked() {
 	})
 
 	// Clear the path after stroking
-	cr.path = &vector.Path{}
-	cr.hasPath = false
-	cr.pathBoundsInit = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.clearPathUnlocked()
 }
 
 // fillUnlocked fills the current path without acquiring the mutex.
@@ -1674,13 +1661,7 @@ func (cr *CairoRenderer) fillUnlocked() {
 	})
 
 	// Clear the path after filling
-	cr.path = &vector.Path{}
-	cr.hasPath = false
-	cr.pathBoundsInit = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.clearPathUnlocked()
 }
 
 // GetCurrentPoint returns the current point in the path.
