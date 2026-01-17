@@ -536,9 +536,10 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "weather":
 		return api.resolveWeather(args)
 
-	// Stock ticker stub - requires external API and keys
+	// Stock ticker stub - not implemented; requires external API keys.
+	// Users should use ${execi} with custom scripts. See docs/migration.md.
 	case "stockquote":
-		return ""
+		return "N/A"
 
 	default:
 		// Return original if unknown variable

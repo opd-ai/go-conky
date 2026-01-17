@@ -219,6 +219,55 @@ Conky-Go supports the most commonly used Conky variables:
 | `${execi interval command}` | Execute command with caching | `${execi 60 sensors \| grep temp}` |
 | `${execpi interval command}` | Cached execution (parsed) | `${execpi 30 echo ${cpu}%}` |
 
+### Stock Quotes
+
+The `${stockquote}` variable is **not implemented** in Conky-Go. Stock data APIs (Yahoo Finance, Alpha Vantage, IEX Cloud, etc.) require API keys, have usage limits, and their terms of service change frequently. This makes a built-in implementation impractical.
+
+**Recommended Approach:** Use `${execi}` with a custom script:
+
+```bash
+# Create a script: ~/.config/conky/scripts/stock.sh
+#!/bin/bash
+# Example using curl and a free API (API key required)
+# Replace YOUR_API_KEY with an actual key from your chosen provider
+
+SYMBOL="${1:-AAPL}"
+API_KEY="YOUR_API_KEY"
+
+# Example with Alpha Vantage (free tier available)
+curl -s "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${SYMBOL}&apikey=${API_KEY}" | \
+    jq -r '.["Global Quote"]["05. price"]'
+```
+
+Then use in your configuration:
+
+```
+${execi 300 ~/.config/conky/scripts/stock.sh AAPL}
+```
+
+**Popular Stock API Providers:**
+- **Alpha Vantage**: Free tier with 5 requests/minute, 500/day
+- **IEX Cloud**: Free tier with 50,000 credits/month
+- **Finnhub**: Free tier with 60 API calls/minute
+- **Yahoo Finance** (via yfinance Python library): Unofficial, no key required
+
+**Example with yfinance (Python):**
+
+```bash
+# Install: pip install yfinance
+# Script: ~/.config/conky/scripts/stock_yf.py
+#!/usr/bin/env python3
+import sys
+import yfinance as yf
+
+symbol = sys.argv[1] if len(sys.argv) > 1 else "AAPL"
+stock = yf.Ticker(symbol)
+info = stock.info
+print(f"{info.get('regularMarketPrice', 'N/A')}")
+```
+
+Usage: `${execi 300 python3 ~/.config/conky/scripts/stock_yf.py AAPL}`
+
 ### Formatting
 
 | Variable | Description |
