@@ -16,7 +16,7 @@ This audit compares the documented functionality in README.md and supporting doc
 | **CRITICAL BUG** | 0 | 0 |
 | **FUNCTIONAL MISMATCH** | 4 | 4 |
 | **DOCUMENTATION ISSUE** | 1 | 1 |
-| **MISSING FEATURE** | 4 | 3 |
+| **MISSING FEATURE** | 5 | 4 |
 | **EDGE CASE BUG** | 3 | 3 |
 | **PERFORMANCE ISSUE** | 1 | 1 |
 
@@ -35,6 +35,10 @@ This audit compares the documented functionality in README.md and supporting doc
 - ✅ Implemented seamless in-place configuration hot-reloading (`ReloadConfig()` method)
 - ✅ Implemented Nvidia GPU monitoring via nvidia-smi (`${nvidia}` variables now return real GPU data)
 - ✅ Implemented IMAP/POP3 mail monitoring (`${imap_unseen}`, `${pop3_unseen}`, `${new_mails}` variables now work)
+- ✅ Implemented METAR weather monitoring (`${weather}` variable now returns real weather data)
+
+**Remaining (Low Priority):**
+- Stock quote variables (`${stockquote}`) - Requires external API keys; recommend using `${execi}` with custom scripts
 
 ---
 
@@ -250,25 +254,62 @@ func (cr *CairoRenderer) Clip() {
 
 ---
 
-### MISSING FEATURE: Weather and Stock Variables Return Empty
+### ~~MISSING FEATURE: Weather Variables Return Empty~~ [RESOLVED]
 
-**File:** internal/lua/api.go:494-500  
+**File:** internal/lua/api.go, internal/monitor/weather.go  
 **Severity:** Low  
-**Description:** Weather and stock quote variables are stubs that return empty strings.
+**Status:** ✅ RESOLVED - Weather monitoring now uses METAR data from aviationweather.gov.
 
-**Expected Behavior:** Weather and stock information when configured.
+**Description:** The `${weather}` variable previously returned empty strings. This has been fixed with a full METAR weather monitoring implementation.
+
+**Resolution:**
+- Added `weatherReader` in `internal/monitor/weather.go` to fetch and parse METAR data
+- Uses aviationweather.gov API (free, no API key required)
+- Parses METAR format for temperature, dew point, humidity, pressure, wind, visibility, cloud cover, and conditions
+- Added `Weather(stationID string)` method to `SystemMonitor`
+- Added `Weather(stationID string)` to `SystemDataProvider` interface
+- Implemented `resolveWeather()` function in api.go
+- Added caching with configurable minimum interval (10 minutes default)
+- Added comprehensive test coverage
+
+**Supported Syntax:**
+- `${weather STATION_ID}` - Returns weather condition (default)
+- `${weather STATION_ID temp}` - Temperature in Celsius
+- `${weather STATION_ID temp_f}` - Temperature in Fahrenheit
+- `${weather STATION_ID dewpoint}` - Dew point in Celsius
+- `${weather STATION_ID humidity}` - Relative humidity percentage
+- `${weather STATION_ID pressure}` - Pressure in hPa
+- `${weather STATION_ID pressure_inhg}` - Pressure in inches of mercury
+- `${weather STATION_ID wind}` - Wind speed in knots
+- `${weather STATION_ID wind_dir}` - Wind direction in degrees
+- `${weather STATION_ID wind_dir_compass}` - Wind direction as compass (N, NE, E, etc.)
+- `${weather STATION_ID wind_gust}` - Wind gust speed in knots
+- `${weather STATION_ID visibility}` - Visibility in statute miles
+- `${weather STATION_ID condition}` - Weather condition description
+- `${weather STATION_ID cloud}` - Cloud coverage description
+- `${weather STATION_ID raw}` - Raw METAR string
+
+**Note:** Station IDs are ICAO codes (e.g., KJFK, KORD, EGLL).
+
+---
+
+### MISSING FEATURE: Stock Quote Variables Return Empty
+
+**File:** internal/lua/api.go  
+**Severity:** Low  
+**Description:** Stock quote variables (`${stockquote}`) are stubs that return empty strings.
+
+**Expected Behavior:** Stock price information when configured.
 
 **Actual Behavior:** Always returns empty string.
 
-**Impact:** Weather and stock monitoring not available.
+**Impact:** Stock monitoring not available.
+
+**Recommendation:** Stock data APIs (Yahoo Finance, Alpha Vantage, etc.) require API keys and have usage limits. Consider documenting that users should use `${execi}` with custom scripts for stock data, which is the standard approach for Conky users.
 
 **Code Reference:**
 ```go
-// Weather stubs
-case "weather":
-    return ""
-
-// Stock ticker stub
+// Stock ticker stub - requires external API and keys
 case "stockquote":
     return ""
 ```

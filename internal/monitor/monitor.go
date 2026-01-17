@@ -29,6 +29,7 @@ type SystemMonitor struct {
 	tcpReader         *tcpReader
 	gpuReader         *gpuReader
 	mailReader        *mailReader
+	weatherReader     *weatherReader
 	ctx               context.Context
 	cancel            context.CancelFunc
 	wg                sync.WaitGroup
@@ -59,6 +60,7 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		tcpReader:         newTCPReader(),
 		gpuReader:         newGPUReader(),
 		mailReader:        newMailReader(),
+		weatherReader:     newWeatherReader(),
 		ctx:               ctx,
 		cancel:            cancel,
 	}
@@ -358,6 +360,12 @@ func (sm *SystemMonitor) MailTotalUnseen() int {
 // MailTotalMessages returns the sum of all messages across all accounts.
 func (sm *SystemMonitor) MailTotalMessages() int {
 	return sm.mailReader.GetTotalMessages()
+}
+
+// Weather returns weather data for the given station ID (ICAO code).
+func (sm *SystemMonitor) Weather(stationID string) WeatherStats {
+	stats, _ := sm.weatherReader.ReadWeather(stationID)
+	return stats
 }
 
 // augmentNetworkStats adds IP address, gateway, nameserver, and wireless information to network stats.

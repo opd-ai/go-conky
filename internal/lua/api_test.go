@@ -27,6 +27,7 @@ type mockSystemDataProvider struct {
 	tcp        monitor.TCPStats
 	gpu        monitor.GPUStats
 	mail       monitor.MailStats
+	weather    monitor.WeatherStats
 }
 
 func (m *mockSystemDataProvider) CPU() monitor.CPUStats               { return m.cpu }
@@ -101,6 +102,9 @@ func (m *mockSystemDataProvider) MailTotalMessages() int {
 		total += account.Total
 	}
 	return total
+}
+func (m *mockSystemDataProvider) Weather(stationID string) monitor.WeatherStats {
+	return m.weather
 }
 
 func newMockProvider() *mockSystemDataProvider {
@@ -302,6 +306,20 @@ func newMockProvider() *mockSystemDataProvider {
 			PowerDraw:   180.5,
 			PowerLimit:  320.0,
 			Available:   true,
+		},
+		weather: monitor.WeatherStats{
+			StationID:     "KJFK",
+			Temperature:   22,
+			DewPoint:      10,
+			Humidity:      50,
+			Pressure:      1013.25,
+			WindSpeed:     15,
+			WindDirection: 270,
+			WindGust:      25,
+			Visibility:    10,
+			Condition:     "clear",
+			Cloud:         "few clouds",
+			RawMETAR:      "KJFK 151756Z 27015G25KT 10SM FEW045 22/10 A2992",
 		},
 	}
 }
@@ -2276,6 +2294,96 @@ func TestParseMailVariablesNoAccounts(t *testing.T) {
 			name:     "new_mails no accounts",
 			template: "${new_mails}",
 			expected: "0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseWeatherVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "weather temp",
+			template: "${weather KJFK temp}",
+			expected: "22",
+		},
+		{
+			name:     "weather temperature_f",
+			template: "${weather KJFK temp_f}",
+			expected: "72",
+		},
+		{
+			name:     "weather humidity",
+			template: "${weather KJFK humidity}",
+			expected: "50",
+		},
+		{
+			name:     "weather wind",
+			template: "${weather KJFK wind}",
+			expected: "15",
+		},
+		{
+			name:     "weather wind_dir",
+			template: "${weather KJFK wind_dir}",
+			expected: "270",
+		},
+		{
+			name:     "weather wind_dir_compass",
+			template: "${weather KJFK wind_dir_compass}",
+			expected: "W",
+		},
+		{
+			name:     "weather condition default",
+			template: "${weather KJFK}",
+			expected: "clear",
+		},
+		{
+			name:     "weather condition explicit",
+			template: "${weather KJFK condition}",
+			expected: "clear",
+		},
+		{
+			name:     "weather cloud",
+			template: "${weather KJFK cloud}",
+			expected: "few clouds",
+		},
+		{
+			name:     "weather pressure",
+			template: "${weather KJFK pressure}",
+			expected: "1013",
+		},
+		{
+			name:     "weather visibility",
+			template: "${weather KJFK visibility}",
+			expected: "10.0",
+		},
+		{
+			name:     "weather no station",
+			template: "${weather}",
+			expected: "",
 		},
 	}
 

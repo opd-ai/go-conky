@@ -41,6 +41,7 @@ type SystemDataProvider interface {
 	MailTotalCount(name string) int
 	MailTotalUnseen() int
 	MailTotalMessages() int
+	Weather(stationID string) monitor.WeatherStats
 }
 
 // execCacheEntry stores cached output from execi commands.
@@ -531,11 +532,11 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "new_mails", "mails":
 		return api.resolveTotalMails(args)
 
-	// Weather stubs
+	// Weather variables
 	case "weather":
-		return ""
+		return api.resolveWeather(args)
 
-	// Stock ticker stub
+	// Stock ticker stub - requires external API and keys
 	case "stockquote":
 		return ""
 
@@ -1793,4 +1794,32 @@ func (api *ConkyAPI) resolveTotalMails(args []string) string {
 		return strconv.Itoa(api.sysProvider.MailUnseenCount(args[0]))
 	}
 	return strconv.Itoa(api.sysProvider.MailTotalUnseen())
+}
+
+// resolveWeather resolves the ${weather} variable.
+// Syntax: ${weather station_id field}
+// Example: ${weather KJFK temp} returns temperature at JFK airport
+// Supported fields: temp, temp_f, dewpoint, humidity, pressure, pressure_inhg,
+// wind, wind_dir, wind_dir_compass, wind_gust, visibility, condition, cloud, raw
+func (api *ConkyAPI) resolveWeather(args []string) string {
+	if len(args) < 1 {
+		return ""
+	}
+
+	stationID := args[0]
+	field := "condition" // default field
+	if len(args) >= 2 {
+		field = args[1]
+	}
+
+	weather := api.sysProvider.Weather(stationID)
+	if weather.Error != "" && weather.RawMETAR == "" {
+		return "N/A"
+	}
+
+	result := weather.GetField(field)
+	if result == "" {
+		return "N/A"
+	}
+	return result
 }
