@@ -56,6 +56,19 @@ type RemoteConfig struct {
 	// Only use for testing or when host key verification is handled externally.
 	// A warning will be logged when this option is used.
 	InsecureIgnoreHostKey bool
+
+	// CircuitBreakerEnabled enables circuit breaker protection for SSH operations.
+	// When enabled, consecutive failures will temporarily stop connection attempts.
+	// Default: true
+	CircuitBreakerEnabled *bool
+
+	// CircuitBreakerFailureThreshold is the number of consecutive failures before
+	// opening the circuit. Default: 5
+	CircuitBreakerFailureThreshold int
+
+	// CircuitBreakerTimeout is how long the circuit stays open before attempting
+	// recovery. Default: 30 seconds
+	CircuitBreakerTimeout time.Duration
 }
 
 // AuthMethod defines SSH authentication methods.

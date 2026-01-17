@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/opd-ai/go-conky/pkg/conky"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -29,6 +30,9 @@ type sshPlatform struct {
 	cancel     context.CancelFunc
 	mu         sync.RWMutex
 	cmdTimeout time.Duration
+
+	// circuitBreaker protects SSH operations from cascading failures
+	circuitBreaker *conky.CircuitBreaker
 
 	// Providers for system monitoring
 	cpu        CPUProvider
@@ -65,6 +69,27 @@ func newSSHPlatform(config RemoteConfig) (*sshPlatform, error) {
 	p := &sshPlatform{
 		config:     config,
 		cmdTimeout: config.CommandTimeout,
+	}
+
+	// Initialize circuit breaker if enabled (default: true)
+	circuitEnabled := config.CircuitBreakerEnabled == nil || *config.CircuitBreakerEnabled
+	if circuitEnabled {
+		cbConfig := conky.CircuitBreakerConfig{
+			FailureThreshold: config.CircuitBreakerFailureThreshold,
+			Timeout:          config.CircuitBreakerTimeout,
+			OnStateChange: func(from, to conky.CircuitState) {
+				log.Printf("SSH circuit breaker for %s: %s -> %s",
+					config.Host, from.String(), to.String())
+			},
+		}
+		// Apply defaults if not configured
+		if cbConfig.FailureThreshold == 0 {
+			cbConfig.FailureThreshold = 5
+		}
+		if cbConfig.Timeout == 0 {
+			cbConfig.Timeout = 30 * time.Second
+		}
+		p.circuitBreaker = conky.NewCircuitBreaker(cbConfig)
 	}
 
 	return p, nil
@@ -266,7 +291,26 @@ func (p *sshPlatform) detectOS() (string, error) {
 }
 
 // runCommand executes a command on the remote system and returns the output.
+// If a circuit breaker is configured, operations will be rejected when the
+// circuit is open due to consecutive failures.
 func (p *sshPlatform) runCommand(cmd string) (string, error) {
+	// Check circuit breaker before attempting command
+	if p.circuitBreaker != nil {
+		var output string
+		err := p.circuitBreaker.Execute(func() error {
+			var cmdErr error
+			output, cmdErr = p.runCommandInternal(cmd)
+			return cmdErr
+		})
+		return output, err
+	}
+
+	// No circuit breaker, run directly
+	return p.runCommandInternal(cmd)
+}
+
+// runCommandInternal executes a command on the remote system without circuit breaker protection.
+func (p *sshPlatform) runCommandInternal(cmd string) (string, error) {
 	p.mu.RLock()
 	client := p.client
 	p.mu.RUnlock()
@@ -347,4 +391,22 @@ func (p *sshPlatform) Battery() BatteryProvider {
 
 func (p *sshPlatform) Sensors() SensorProvider {
 	return p.sensors
+}
+
+// CircuitBreakerStats returns the current circuit breaker statistics.
+// Returns nil if circuit breaker is not enabled.
+func (p *sshPlatform) CircuitBreakerStats() *conky.CircuitBreakerStats {
+	if p.circuitBreaker == nil {
+		return nil
+	}
+	stats := p.circuitBreaker.Stats()
+	return &stats
+}
+
+// ResetCircuitBreaker resets the circuit breaker to closed state.
+// This is useful for manual recovery after addressing connectivity issues.
+func (p *sshPlatform) ResetCircuitBreaker() {
+	if p.circuitBreaker != nil {
+		p.circuitBreaker.Reset()
+	}
 }

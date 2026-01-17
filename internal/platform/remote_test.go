@@ -436,3 +436,161 @@ func TestRemoteConfigHostKeyFields(t *testing.T) {
 		t.Error("HostKeyCallback should not be nil")
 	}
 }
+
+// TestCircuitBreakerEnabled tests that circuit breaker is enabled by default.
+func TestCircuitBreakerEnabled(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	if p.circuitBreaker == nil {
+		t.Error("Circuit breaker should be enabled by default")
+	}
+}
+
+// TestCircuitBreakerDisabled tests that circuit breaker can be disabled.
+func TestCircuitBreakerDisabled(t *testing.T) {
+	enabled := false
+	config := RemoteConfig{
+		Host:                  "example.com",
+		User:                  "testuser",
+		AuthMethod:            PasswordAuth{Password: "testpass"},
+		CircuitBreakerEnabled: &enabled,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	if p.circuitBreaker != nil {
+		t.Error("Circuit breaker should be disabled when CircuitBreakerEnabled is false")
+	}
+}
+
+// TestCircuitBreakerConfig tests custom circuit breaker configuration.
+func TestCircuitBreakerConfig(t *testing.T) {
+	config := RemoteConfig{
+		Host:                           "example.com",
+		User:                           "testuser",
+		AuthMethod:                     PasswordAuth{Password: "testpass"},
+		CircuitBreakerFailureThreshold: 10,
+		CircuitBreakerTimeout:          1 * time.Minute,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	if p.circuitBreaker == nil {
+		t.Fatal("Circuit breaker should be enabled")
+	}
+
+	stats := p.CircuitBreakerStats()
+	if stats == nil {
+		t.Fatal("CircuitBreakerStats() should return non-nil stats")
+	}
+
+	// Verify the circuit breaker is in closed state initially
+	if stats.State.String() != "closed" {
+		t.Errorf("Initial state = %v, want closed", stats.State)
+	}
+}
+
+// TestCircuitBreakerStats tests that stats are returned correctly.
+func TestCircuitBreakerStats(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	stats := p.CircuitBreakerStats()
+	if stats == nil {
+		t.Fatal("CircuitBreakerStats() should return non-nil stats")
+	}
+
+	// Check initial stats
+	if stats.TotalFailures != 0 {
+		t.Errorf("Initial TotalFailures = %d, want 0", stats.TotalFailures)
+	}
+	if stats.TotalSuccesses != 0 {
+		t.Errorf("Initial TotalSuccesses = %d, want 0", stats.TotalSuccesses)
+	}
+}
+
+// TestCircuitBreakerStatsNil tests that stats are nil when circuit breaker is disabled.
+func TestCircuitBreakerStatsNil(t *testing.T) {
+	enabled := false
+	config := RemoteConfig{
+		Host:                  "example.com",
+		User:                  "testuser",
+		AuthMethod:            PasswordAuth{Password: "testpass"},
+		CircuitBreakerEnabled: &enabled,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	stats := p.CircuitBreakerStats()
+	if stats != nil {
+		t.Error("CircuitBreakerStats() should return nil when circuit breaker is disabled")
+	}
+}
+
+// TestResetCircuitBreaker tests the circuit breaker reset functionality.
+func TestResetCircuitBreaker(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Reset should not panic
+	p.ResetCircuitBreaker()
+
+	// Verify still closed
+	stats := p.CircuitBreakerStats()
+	if stats.State.String() != "closed" {
+		t.Errorf("State after reset = %v, want closed", stats.State)
+	}
+}
+
+// TestResetCircuitBreakerWhenDisabled tests reset with disabled circuit breaker.
+func TestResetCircuitBreakerWhenDisabled(t *testing.T) {
+	enabled := false
+	config := RemoteConfig{
+		Host:                  "example.com",
+		User:                  "testuser",
+		AuthMethod:            PasswordAuth{Password: "testpass"},
+		CircuitBreakerEnabled: &enabled,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Reset should not panic when circuit breaker is disabled
+	p.ResetCircuitBreaker()
+}
