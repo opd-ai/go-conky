@@ -464,9 +464,9 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "scroll":
 		return api.resolveScroll(args)
 	case "lua":
-		return "" // Lua function calls handled separately
+		return api.resolveLua(args, false)
 	case "lua_parse":
-		return "" // Lua function calls handled separately
+		return api.resolveLua(args, true)
 	case "template0":
 		return api.resolveTemplate(0, args)
 	case "template1":
@@ -2186,4 +2186,64 @@ func (api *ConkyAPI) resolveWeather(args []string) string {
 		return "N/A"
 	}
 	return result
+}
+
+// resolveLua calls a Lua function and returns its result.
+// Usage: ${lua function_name arg1 arg2 ...}
+// If parse is true (${lua_parse}), the result is parsed for Conky variables.
+// Arguments are passed as strings to the Lua function.
+func (api *ConkyAPI) resolveLua(args []string, parse bool) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	funcName := args[0]
+
+	// Build Lua arguments from remaining args
+	luaArgs := make([]rt.Value, len(args)-1)
+	for i, arg := range args[1:] {
+		luaArgs[i] = rt.StringValue(arg)
+	}
+
+	// Call the Lua function
+	result, err := api.runtime.CallFunction(funcName, luaArgs...)
+	if err != nil {
+		// Function not found or error - return empty string
+		return ""
+	}
+
+	// Convert result to string
+	resultStr := luaValueToString(result)
+
+	// If lua_parse, parse the result for Conky variables
+	if parse && resultStr != "" {
+		return api.Parse(resultStr)
+	}
+
+	return resultStr
+}
+
+// luaValueToString converts a Lua value to its string representation.
+func luaValueToString(v rt.Value) string {
+	switch v.Type() {
+	case rt.StringType:
+		s, _ := v.TryString()
+		return s
+	case rt.IntType:
+		i, _ := v.TryInt()
+		return strconv.FormatInt(i, 10)
+	case rt.FloatType:
+		f, _ := v.TryFloat()
+		return strconv.FormatFloat(f, 'f', -1, 64)
+	case rt.BoolType:
+		if v.AsBool() {
+			return "true"
+		}
+		return "false"
+	case rt.NilType:
+		return ""
+	default:
+		// For tables and other types, return empty
+		return ""
+	}
 }

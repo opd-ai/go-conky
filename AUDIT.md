@@ -110,6 +110,8 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | conky_draw_post hook | ✅ PASS | Called after draw |
 | Cairo bindings | ✅ PASS | 102 functions registered |
 | conky_window table | ✅ PASS | All 12 fields: width, height, display, drawable, visual, border_*, text_* |
+| ${lua} | ✅ PASS | Calls Lua function, returns result |
+| ${lua_parse} | ✅ PASS | Calls Lua function, parses result for Conky variables |
 
 ---
 
@@ -247,8 +249,10 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | ${shmem} | ✅ PASS | Shared memory |
 | ${freq_dyn} | ✅ PASS | Dynamic frequency |
 | ${freq_dyn_g} | ✅ PASS | Dynamic freq GHz |
+| ${lua} | ✅ PASS | Call Lua function, display result |
+| ${lua_parse} | ✅ PASS | Call Lua function, parse result for Conky variables |
 
-**Display Objects Implemented: 148 case handlers covering ~120 unique variables of 200+ (~60%)**
+**Display Objects Implemented: 150 case handlers covering ~122 unique variables of 200+ (~61%)**
 
 #### Missing Display Objects
 | Object | Priority | Notes |
@@ -256,8 +260,8 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | ${graph} | HIGH | Graph rendering |
 | ${bar} | HIGH | Graphical bar |
 | ${gauge} | MEDIUM | Gauge widget |
-| ${lua} | MEDIUM | Lua function call |
-| ${lua_parse} | MEDIUM | Lua parse call |
+| ${lua} | ✅ DONE | Lua function call |
+| ${lua_parse} | ✅ DONE | Lua parse call with variable substitution |
 | ${image} | MEDIUM | Image display |
 | ${mpd_*} | LOW | MPD music player |
 | ${audacious_*} | LOW | Audacious player |
@@ -455,11 +459,11 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 |----------|--------|-------------|--------|---------|-------|
 | Config Directives | 150 | 42 | 0 | 108 | 28% |
 | Cairo Functions | 180 | 102 | 0 | 78 | 57% |
-| Lua Integration | 10 | 8 | 0 | 2 | 80% |
-| Display Objects | 200 | 121 | 3 | 76 | 59% |
+| Lua Integration | 12 | 12 | 0 | 0 | 100% |
+| Display Objects | 200 | 123 | 3 | 74 | 61% |
 | Window Management | 20 | 10 | 2 | 8 | 50% |
 | System Monitoring | 30 | 28 | 0 | 2 | 93% |
-| **Overall** | **590** | **311** | **5** | **274** | **53%** |
+| **Overall** | **592** | **317** | **5** | **270** | **54%** |
 
 **Functional Compatibility Score: 90%** (of implemented features work correctly)
 
@@ -524,7 +528,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ### Short-term Improvements
 1. ~~Add remaining common config directives (draw_borders, draw_outline, draw_shades)~~ ✅ DONE - Parsing implemented
-2. Implement ${lua} and ${lua_parse} for advanced script integration
+2. ~~Implement ${lua} and ${lua_parse} for advanced script integration~~ ✅ DONE - Lua function calls working
 3. Add ${image} support for PNG/SVG display
 4. Implement rendering effects for draw_borders, draw_outline, draw_shades in render layer
 
@@ -702,6 +706,17 @@ The Go Conky implementation demonstrates solid architecture and good test covera
 **Expected**: Template expansion with \1, \2, etc. replaced by arguments
 **Result**: ✅ PASS - Template variables fully functional
 **Evidence**: TestTemplateVariables, TestTemplateSetAndGet, TestTemplateArgumentSubstitution pass with 13 test cases covering all template slots, argument substitution, embedded variables, and edge cases
+
+### TEST: Lua Function Calls
+**Action**: Call Lua functions using ${lua} and ${lua_parse} variables
+**Expected**: ${lua func} calls Lua function and returns result; ${lua_parse func} also parses result for Conky variables
+**Result**: ✅ PASS - Lua function calls fully functional
+**Evidence**: TestLuaVariables, TestLuaValueToString, TestLuaWithConkyParse pass with 24 test cases covering:
+  - Simple function calls, functions with arguments, variadic functions
+  - Return type handling (string, int, float, bool, nil)
+  - ${lua_parse} parsing embedded Conky variables
+  - ${lua} preserving raw output without parsing
+  - Mixed templates with Lua and system variables
 
 ---
 
