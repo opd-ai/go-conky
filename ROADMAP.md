@@ -2418,14 +2418,18 @@ The SSH connection management has been implemented in `internal/platform/ssh_con
 
 #### Task 2.3: Configuration Validation Enhancement
 **Acceptance Criteria**:
-- [ ] Validate all configuration at startup before running
-- [ ] Add environment-specific configuration support
+- [x] Validate all configuration at startup before running
+- [x] Add environment-specific configuration support
 - [ ] Implement configuration hot-reload for applicable settings
 - [ ] Document all configuration options with defaults
 
-**Current Status**: Partially implemented in `internal/config/validation.go`
-- Validation exists but could be more comprehensive
-- Environment variable support not implemented
+**Current Status**: Implemented in `internal/config/validation.go` and `internal/config/env.go`
+- Validation exists with comprehensive checks for window, display, colors, and text template
+- ✅ Environment variable support implemented in `internal/config/env.go`:
+  - `ExpandEnv(s string)` - expands `${VAR}`, `${VAR:-default}`, and `$VAR` patterns
+  - `ExpandEnvConfig(cfg *Config)` - expands env vars in font, template lines, and template definitions
+  - `ExpandEnvConfigWithOptions()` - fine-grained control over which fields to expand
+  - Comprehensive test coverage in `internal/config/env_test.go`
 
 ### Phase 3: Operational Excellence (Lower Priority)
 **Duration**: 3-4 weeks

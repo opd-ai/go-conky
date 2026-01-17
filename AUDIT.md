@@ -45,8 +45,14 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | stippled_borders | ✅ PASS | Stippled border option parsed |
 | own_window_argb_visual | ✅ PASS | ARGB transparency parsing |
 | own_window_argb_value | ✅ PASS | Alpha value (0-255) parsing |
+| environment variables | ✅ PASS | ${VAR}, ${VAR:-default}, $VAR expansion |
 
 **Config Directives Implemented: 43 of 150+ (~29%)**
+
+**Additional Configuration Features:**
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Environment variable expansion | ✅ PASS | Supports ${VAR}, ${VAR:-default}, and $VAR patterns in font, template lines, and template definitions |
 
 #### Missing Configuration Directives
 | Directive | Priority | Notes |
@@ -806,6 +812,19 @@ The Go Conky implementation demonstrates solid architecture and good test covera
   - Painting with surface sources
   - Surface pattern color sampling
   - Position offsets for surface patterns
+
+### TEST: Environment Variable Expansion
+**Action**: Test environment variable expansion in configuration values
+**Expected**: ${VAR}, ${VAR:-default}, and $VAR patterns expanded in config
+**Result**: ✅ PASS - Environment variable expansion fully functional
+**Evidence**: TestExpandEnv, TestExpandEnvConfig, TestExpandEnvConfigWithOptions pass with 28 test cases covering:
+  - Simple ${VAR} and $VAR format expansion
+  - Default value syntax ${VAR:-default}
+  - Multiple variables in single string
+  - Mixed expansion formats
+  - Config struct expansion (font, template lines, template definitions)
+  - Optional expansion control via functional options
+  - Edge cases (empty strings, invalid variable names)
 
 ---
 
