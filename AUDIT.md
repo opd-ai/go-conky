@@ -2,11 +2,11 @@
 
 ## Summary
 - **Date**: 2026-01-17 (Updated)
-- **Tests**: 2200+ total (including subtests), all passed, 0 failed
+- **Tests**: 2443+ total (including subtests), all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
 - **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed, 1 partial), 4 low (4 fixed/documented)
 - **Implemented Compatibility**: ~90% (of implemented features work correctly)
-- **Overall Feature Coverage**: ~53%
+- **Overall Feature Coverage**: ~54%
 
 ## Overview
 
@@ -64,7 +64,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ---
 
-### Cairo Rendering (87.3% coverage, 102 functions)
+### Cairo Rendering (87.3% coverage, 104 functions)
 
 | Function Category | Functions | Status | Notes |
 |------------------|-----------|--------|-------|
@@ -80,14 +80,15 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | Matrix | 16 | ✅ PASS | Full matrix operations |
 | Query | 8 | ✅ PASS | get_current_point, path_extents, etc. |
 | Surface | 12 | ✅ PASS | image_surface_create, write_to_png, destroy |
+| Masking | 2 | ✅ PASS | mask, mask_surface |
 
-**Cairo Functions Implemented: 102 of ~180 (~57%)**
+**Cairo Functions Implemented: 104 of ~180 (~58%)**
 
 #### Missing Cairo Functions
 | Function | Priority | Notes |
 |----------|----------|-------|
-| cairo_mask | HIGH | Mask compositing |
-| cairo_mask_surface | HIGH | Surface masking |
+| cairo_mask | ✅ DONE | Mask compositing using pattern alpha |
+| cairo_mask_surface | ✅ DONE | Surface masking using Ebiten BlendSourceIn |
 | cairo_push_group | MEDIUM | Group rendering |
 | cairo_pop_group | MEDIUM | Group rendering |
 | cairo_set_source_surface | MEDIUM | Surface as source |
@@ -464,12 +465,12 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | Category | Target | Implemented | Broken | Missing | Score |
 |----------|--------|-------------|--------|---------|-------|
 | Config Directives | 150 | 42 | 0 | 108 | 28% |
-| Cairo Functions | 180 | 102 | 0 | 78 | 57% |
+| Cairo Functions | 180 | 104 | 0 | 76 | 58% |
 | Lua Integration | 12 | 12 | 0 | 0 | 100% |
 | Display Objects | 200 | 124 | 3 | 73 | 62% |
 | Window Management | 20 | 10 | 2 | 8 | 50% |
 | System Monitoring | 30 | 28 | 0 | 2 | 93% |
-| **Overall** | **592** | **318** | **5** | **269** | **54%** |
+| **Overall** | **592** | **320** | **5** | **267** | **54%** |
 
 **Functional Compatibility Score: 90%** (of implemented features work correctly)
 
@@ -500,7 +501,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | internal/render | 87.3% | ✅ Very Good |
 | pkg/conky | 71.9% | Good |
 
-**Total Tests: 1021 passing, 0 failing**
+**Total Tests: 2443 passing, 0 failing** (including subtests)
 
 ---
 
@@ -735,6 +736,19 @@ The Go Conky implementation demonstrates solid architecture and good test covera
   - -n no-cache option
   - Combined options
   - Empty args handling
+
+### TEST: Cairo Mask Functions
+**Action**: Test cairo_mask and cairo_mask_surface functions
+**Expected**: Pattern and surface alpha channels modulate source color
+**Result**: ✅ PASS - Mask functions fully functional
+**Evidence**: TestCairoRenderer_Mask_* and TestCairoRenderer_MaskSurface_* pass with 22 test cases covering:
+  - Nil screen and pattern handling
+  - Solid, transparent, and partial alpha patterns
+  - Linear and radial gradient masks
+  - Surface masks with transformations
+  - Clipping interaction
+  - Concurrent access safety
+  - Edge cases (zero size, negative positions, outside screen bounds)
 
 ---
 

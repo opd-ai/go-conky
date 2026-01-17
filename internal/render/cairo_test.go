@@ -2957,3 +2957,364 @@ func TestCairoRenderer_ConvenienceFunctionsConcurrency(t *testing.T) {
 
 	wg.Wait()
 }
+
+// --- Mask Function Tests ---
+
+func TestCairoRenderer_Mask_NilScreen(t *testing.T) {
+	cr := NewCairoRenderer()
+	// No screen set - should not panic
+	pattern := NewSolidPattern(1, 1, 1, 1)
+	cr.Mask(pattern)
+}
+
+func TestCairoRenderer_Mask_NilPattern(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+	// Nil pattern - should not panic
+	cr.Mask(nil)
+}
+
+func TestCairoRenderer_Mask_SolidPattern(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(10, 10)
+	cr.SetScreen(screen)
+
+	// Set source color to red
+	cr.SetSourceRGBA(1, 0, 0, 1)
+
+	// Create a solid white mask (fully opaque)
+	mask := NewSolidPattern(1, 1, 1, 1)
+
+	// Apply mask
+	cr.Mask(mask)
+
+	// The screen should have the source color applied where mask is opaque
+	// Read a pixel to verify (note: we can't read pixels directly in test,
+	// but we verify the operation completed without error)
+}
+
+func TestCairoRenderer_Mask_TransparentPattern(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(10, 10)
+	cr.SetScreen(screen)
+
+	// Set source color to red
+	cr.SetSourceRGBA(1, 0, 0, 1)
+
+	// Create a transparent mask (alpha = 0)
+	mask := NewSolidPattern(1, 1, 1, 0)
+
+	// Apply mask - should result in no change since mask is transparent
+	cr.Mask(mask)
+}
+
+func TestCairoRenderer_Mask_PartialAlphaPattern(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(10, 10)
+	cr.SetScreen(screen)
+
+	// Set source color to red
+	cr.SetSourceRGBA(1, 0, 0, 1)
+
+	// Create a half-transparent mask (alpha = 0.5)
+	mask := NewSolidPattern(1, 1, 1, 0.5)
+
+	// Apply mask
+	cr.Mask(mask)
+}
+
+func TestCairoRenderer_Mask_LinearGradientPattern(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Set source color to blue
+	cr.SetSourceRGBA(0, 0, 1, 1)
+
+	// Create a linear gradient mask from transparent to opaque
+	mask := NewLinearPattern(0, 0, 100, 0)
+	mask.AddColorStopRGBA(0, 1, 1, 1, 0) // Transparent at left
+	mask.AddColorStopRGBA(1, 1, 1, 1, 1) // Opaque at right
+
+	// Apply mask - should create a fade-in effect from left to right
+	cr.Mask(mask)
+}
+
+func TestCairoRenderer_Mask_RadialGradientPattern(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Set source color to green
+	cr.SetSourceRGBA(0, 1, 0, 1)
+
+	// Create a radial gradient mask from center (opaque) to edge (transparent)
+	mask := NewRadialPattern(50, 50, 0, 50, 50, 50)
+	mask.AddColorStopRGBA(0, 1, 1, 1, 1) // Opaque at center
+	mask.AddColorStopRGBA(1, 1, 1, 1, 0) // Transparent at edge
+
+	// Apply mask - should create a circular fade effect
+	cr.Mask(mask)
+}
+
+func TestCairoRenderer_Mask_WithClipping(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Set up a clip region
+	cr.Rectangle(25, 25, 50, 50)
+	cr.Clip()
+
+	// Set source color
+	cr.SetSourceRGBA(1, 0, 0, 1)
+
+	// Create a mask
+	mask := NewSolidPattern(1, 1, 1, 1)
+
+	// Apply mask - should only affect the clipped region
+	cr.Mask(mask)
+}
+
+func TestCairoRenderer_MaskSurface_NilScreen(t *testing.T) {
+	cr := NewCairoRenderer()
+	// No screen set - should not panic
+	surface := NewCairoSurface(10, 10)
+	defer surface.Destroy()
+	cr.MaskSurface(surface, 0, 0)
+}
+
+func TestCairoRenderer_MaskSurface_NilSurface(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+	// Nil surface - should not panic
+	cr.MaskSurface(nil, 0, 0)
+}
+
+func TestCairoRenderer_MaskSurface_DestroyedSurface(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Create and destroy a surface
+	surface := NewCairoSurface(10, 10)
+	surface.Destroy()
+
+	// Using destroyed surface - should not panic
+	cr.MaskSurface(surface, 0, 0)
+}
+
+func TestCairoRenderer_MaskSurface_BasicUsage(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Set source color to red
+	cr.SetSourceRGBA(1, 0, 0, 1)
+
+	// Create a mask surface with a simple pattern
+	surface := NewCairoSurface(50, 50)
+	defer surface.Destroy()
+
+	// Fill the mask surface with white (opaque)
+	maskImg := surface.Image()
+	if maskImg != nil {
+		maskImg.Fill(color.White)
+	}
+
+	// Apply mask surface at position (25, 25)
+	cr.MaskSurface(surface, 25, 25)
+}
+
+func TestCairoRenderer_MaskSurface_WithTransformation(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Apply a translation
+	cr.Translate(10, 10)
+
+	// Set source color
+	cr.SetSourceRGBA(0, 1, 0, 1)
+
+	// Create a mask surface
+	surface := NewCairoSurface(30, 30)
+	defer surface.Destroy()
+
+	maskImg := surface.Image()
+	if maskImg != nil {
+		maskImg.Fill(color.RGBA{R: 255, G: 255, B: 255, A: 128}) // 50% opacity
+	}
+
+	// Apply mask surface - transformation should be applied to position
+	cr.MaskSurface(surface, 20, 20)
+}
+
+func TestCairoRenderer_MaskSurface_OutsideScreen(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	cr.SetSourceRGBA(1, 0, 0, 1)
+
+	// Create a mask surface
+	surface := NewCairoSurface(10, 10)
+	defer surface.Destroy()
+
+	maskImg := surface.Image()
+	if maskImg != nil {
+		maskImg.Fill(color.White)
+	}
+
+	// Apply mask surface outside screen bounds - should handle gracefully
+	cr.MaskSurface(surface, 200, 200)
+}
+
+func TestCairoRenderer_MaskSurface_PartiallyOutsideScreen(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	cr.SetSourceRGBA(0, 0, 1, 1)
+
+	// Create a mask surface
+	surface := NewCairoSurface(50, 50)
+	defer surface.Destroy()
+
+	maskImg := surface.Image()
+	if maskImg != nil {
+		maskImg.Fill(color.White)
+	}
+
+	// Apply mask surface partially outside screen bounds
+	cr.MaskSurface(surface, 75, 75)
+}
+
+func TestCairoRenderer_MaskSurface_NegativePosition(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	cr.SetSourceRGBA(1, 1, 0, 1)
+
+	// Create a mask surface
+	surface := NewCairoSurface(50, 50)
+	defer surface.Destroy()
+
+	maskImg := surface.Image()
+	if maskImg != nil {
+		maskImg.Fill(color.White)
+	}
+
+	// Apply mask surface at negative position (partially visible)
+	cr.MaskSurface(surface, -25, -25)
+}
+
+func TestCairoRenderer_MaskSurface_WithClipping(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Set up a clip region
+	cr.Rectangle(25, 25, 50, 50)
+	cr.Clip()
+
+	cr.SetSourceRGBA(1, 0, 1, 1)
+
+	// Create a mask surface
+	surface := NewCairoSurface(100, 100)
+	defer surface.Destroy()
+
+	maskImg := surface.Image()
+	if maskImg != nil {
+		maskImg.Fill(color.White)
+	}
+
+	// Apply mask surface - should only affect the clipped region
+	cr.MaskSurface(surface, 0, 0)
+}
+
+func TestCairoRenderer_Mask_ZeroSizeScreen(t *testing.T) {
+	cr := NewCairoRenderer()
+	// Create a 1x1 screen (minimum valid size)
+	screen := createTestScreen(1, 1)
+	cr.SetScreen(screen)
+
+	cr.SetSourceRGBA(1, 0, 0, 1)
+	mask := NewSolidPattern(1, 1, 1, 1)
+	cr.Mask(mask)
+}
+
+func TestCairoRenderer_MaskSurface_ZeroSizeMask(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	cr.SetSourceRGBA(1, 0, 0, 1)
+
+	// Create a minimum size surface (1x1)
+	surface := NewCairoSurface(1, 1)
+	defer surface.Destroy()
+
+	maskImg := surface.Image()
+	if maskImg != nil {
+		maskImg.Fill(color.White)
+	}
+
+	cr.MaskSurface(surface, 50, 50)
+}
+
+func TestCairoRenderer_Mask_ConcurrentAccess(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	var wg sync.WaitGroup
+
+	// Run multiple goroutines calling Mask
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				cr.SetSourceRGBA(float64(id)/10, float64(j)/10, 0.5, 1)
+				mask := NewSolidPattern(1, 1, 1, float64(j)/10)
+				cr.Mask(mask)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestCairoRenderer_MaskSurface_ConcurrentAccess(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	var wg sync.WaitGroup
+
+	// Run multiple goroutines calling MaskSurface
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			surface := NewCairoSurface(10, 10)
+			defer surface.Destroy()
+
+			maskImg := surface.Image()
+			if maskImg != nil {
+				maskImg.Fill(color.RGBA{R: 255, G: 255, B: 255, A: uint8(id * 25)})
+			}
+
+			for j := 0; j < 10; j++ {
+				cr.SetSourceRGBA(float64(id)/10, float64(j)/10, 0.5, 1)
+				cr.MaskSurface(surface, float64(id*10), float64(j*10))
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}

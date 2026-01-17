@@ -2820,3 +2820,149 @@ func (cr *CairoRenderer) GetFontWeight() FontWeight {
 	defer cr.mu.Unlock()
 	return cr.fontWeight
 }
+
+// --- Mask Functions ---
+//
+// Mask operations composite the current source using a mask pattern's alpha
+// channel. Where the mask is opaque, the source is fully applied; where
+// transparent, no source is applied.
+
+// Mask paints the current source using the alpha channel of the given pattern
+// as a mask. This is equivalent to cairo_mask.
+//
+// The mask pattern's alpha channel modulates the current source: where the
+// mask is opaque (alpha = 1), the source is fully applied; where transparent
+// (alpha = 0), no source is applied. Intermediate alpha values produce
+// partial transparency.
+//
+// The current path is not affected by this operation.
+func (cr *CairoRenderer) Mask(pattern *CairoPattern) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if cr.screen == nil || pattern == nil {
+		return
+	}
+
+	// Get screen bounds
+	bounds := cr.screen.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	// Create a temporary image to hold the masked result
+	tempImg := ebiten.NewImage(w, h)
+	defer tempImg.Deallocate()
+
+	// For each pixel, compute the mask alpha and blend accordingly
+	// We use a pixel-by-pixel approach for accuracy
+	pixels := make([]byte, w*h*4)
+
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			// Get mask alpha at this point
+			maskColor := pattern.ColorAtPoint(float64(x), float64(y))
+			maskAlpha := float64(maskColor.A) / 255.0
+
+			// Compute final color: source color with alpha modulated by mask
+			finalR := uint8(float64(cr.currentColor.R) * maskAlpha)
+			finalG := uint8(float64(cr.currentColor.G) * maskAlpha)
+			finalB := uint8(float64(cr.currentColor.B) * maskAlpha)
+			finalA := uint8(float64(cr.currentColor.A) * maskAlpha)
+
+			// Write to pixel buffer (RGBA format)
+			offset := (y*w + x) * 4
+			pixels[offset] = finalR
+			pixels[offset+1] = finalG
+			pixels[offset+2] = finalB
+			pixels[offset+3] = finalA
+		}
+	}
+
+	tempImg.WritePixels(pixels)
+
+	// Get clipped screen for compositing
+	screen, _, _ := cr.getClippedScreen()
+
+	// Composite the masked image onto the screen
+	screen.DrawImage(tempImg, &ebiten.DrawImageOptions{
+		Blend: cr.getEbitenBlend(),
+	})
+}
+
+// MaskSurface paints the current source using the alpha channel of the given
+// surface as a mask. This is equivalent to cairo_mask_surface.
+//
+// The surface is placed at (surfaceX, surfaceY) in user-space coordinates.
+// The alpha channel of the surface modulates the current source color.
+//
+// Implementation note: This uses Ebiten's DrawImage with color matrix to
+// achieve the masking effect without requiring ReadPixels, which has
+// limitations in Ebiten's execution model.
+func (cr *CairoRenderer) MaskSurface(surface *CairoSurface, surfaceX, surfaceY float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if cr.screen == nil || surface == nil || surface.IsDestroyed() {
+		return
+	}
+
+	maskImg := surface.Image()
+	if maskImg == nil {
+		return
+	}
+
+	// Get mask bounds
+	maskBounds := maskImg.Bounds()
+	maskW := maskBounds.Dx()
+	maskH := maskBounds.Dy()
+
+	if maskW <= 0 || maskH <= 0 {
+		return
+	}
+
+	// Apply transformation to surface position
+	tx, ty := cr.transformPointUnlocked(surfaceX, surfaceY)
+
+	// Create a temporary image the size of the mask to hold the colored result
+	tempImg := ebiten.NewImage(maskW, maskH)
+	defer tempImg.Deallocate()
+
+	// Fill temp image with the source color
+	tempImg.Fill(cr.currentColor)
+
+	// Get clipped screen for compositing
+	screen, _, _ := cr.getClippedScreen()
+
+	// Use Ebiten's blend modes to apply the mask.
+	// We draw the colored image using the mask's alpha channel.
+	// The BlendSourceIn blend mode uses: result = source * dest_alpha
+	// So we first draw the mask to establish alpha, then draw color with SourceIn.
+
+	// Alternative approach: Use a ColorMatrix to modulate the colored image
+	// by the mask's alpha. We draw the mask first, then draw the color on top.
+
+	// Create a destination image for compositing
+	compositeImg := ebiten.NewImage(maskW, maskH)
+	defer compositeImg.Deallocate()
+
+	// Draw the mask to establish the alpha channel
+	compositeImg.DrawImage(maskImg, nil)
+
+	// Now draw the colored image with SourceIn blending
+	// SourceIn: result = source * dest_alpha (uses destination alpha as mask)
+	opts := &ebiten.DrawImageOptions{
+		Blend: ebiten.BlendSourceIn,
+	}
+	compositeImg.DrawImage(tempImg, opts)
+
+	// Finally, draw the composite result to the screen at the specified position
+	screenOpts := &ebiten.DrawImageOptions{
+		Blend: cr.getEbitenBlend(),
+	}
+	screenOpts.GeoM.Translate(tx, ty)
+	screen.DrawImage(compositeImg, screenOpts)
+}
