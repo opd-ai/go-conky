@@ -2273,7 +2273,7 @@ The SSH host key verification has been implemented with the following features:
 #### Task 1.3: Observability Foundation
 **Acceptance Criteria**:
 - [x] Integrate structured logging throughout the application
-- [ ] Add request/operation correlation IDs
+- [x] Add request/operation correlation IDs
 - [ ] Implement metrics collection for key operations
 - [x] Create health check mechanism
 
@@ -2285,6 +2285,16 @@ Structured logging has been implemented via a slog-based adapter in `pkg/conky/s
 - `JSONLogger()` returns a JSON-format logger for production log aggregation
 - `NopLogger()` returns a no-op logger for disabling logging
 - Full test coverage in `pkg/conky/slog_test.go`
+
+Correlation IDs have been implemented in `pkg/conky/correlation.go`:
+- `CorrelationID` type for unique operation identifiers (16-char hex string)
+- `NewCorrelationID()` generates cryptographically random IDs
+- `WithCorrelationID(ctx, id)` adds correlation ID to context
+- `CorrelationIDFromContext(ctx)` retrieves correlation ID from context
+- `EnsureCorrelationID(ctx)` ensures context has a correlation ID
+- `CorrelatedLogger` wraps Logger to auto-include correlation IDs
+- `CorrelatedSlogHandler` integrates with slog.InfoContext/DebugContext
+- Full test coverage in `pkg/conky/correlation_test.go`
 
 Health check mechanism has been implemented in `pkg/conky/health.go`:
 - `Health()` method added to the `Conky` interface
@@ -2305,6 +2315,17 @@ opts.Logger = conky.JSONLogger(os.Stdout, slog.LevelInfo)
 
 // Or integrate with existing slog setup
 opts.Logger = conky.NewSlogAdapter(slog.Default())
+
+// Use correlation IDs for tracing operations
+ctx := conky.WithCorrelationID(context.Background(), conky.NewCorrelationID())
+logger := conky.NewCorrelatedLogger(ctx, conky.DefaultLogger())
+logger.Info("operation started", "user", "alice")
+// Output includes: correlation_id=a1b2c3d4e5f67890
+
+// Or use with slog directly for native context support
+handler := conky.NewCorrelatedSlogHandler(slog.NewJSONHandler(os.Stdout, nil))
+slogger := slog.New(handler)
+slogger.InfoContext(ctx, "operation completed")
 ```
 
 ### Phase 2: Performance & Reliability (Medium Priority)
@@ -2448,6 +2469,7 @@ The circuit breaker pattern has been implemented in `pkg/conky/circuitbreaker.go
 - [x] Error handler callbacks
 - [x] Structured logging implementation (pkg/conky/slog.go - SlogAdapter, DefaultLogger, JSONLogger, NopLogger)
 - [x] Health check mechanism (pkg/conky/health.go - HealthCheck, HealthStatus, ComponentHealth)
+- [x] Correlation IDs for operation tracing (pkg/conky/correlation.go - CorrelationID, CorrelatedLogger, CorrelatedSlogHandler)
 - [ ] Application metrics collection (NEEDS IMPLEMENTATION)
 
 ### Testing Requirements
@@ -2563,7 +2585,7 @@ deployment platforms (Kubernetes, Docker, cloud providers) rather than applicati
    - ~~Add structured logging infrastructure~~ ✅ COMPLETED - SlogAdapter in pkg/conky/slog.go
 
 2. **Short-term Actions** (Next 2 Sprints):
-   - Add request/operation correlation IDs
+   - ~~Add request/operation correlation IDs~~ ✅ COMPLETED - CorrelationID in pkg/conky/correlation.go
    - ~~Implement circuit breaker for remote connections~~ ✅ COMPLETED - CircuitBreaker in pkg/conky/circuitbreaker.go
    - ~~Add health check mechanism~~ ✅ COMPLETED - Health() method in pkg/conky/health.go
    - Increase test coverage for critical paths
@@ -2580,4 +2602,5 @@ deployment platforms (Kubernetes, Docker, cloud providers) rather than applicati
 *Based on go-conky codebase assessment conducted 2026-01-16*
 *Updated 2026-01-16: SSH host key verification implemented*
 *Updated 2026-01-17: Circuit breaker pattern implemented for SSH remote connections*
+*Updated 2026-01-17: Correlation IDs implemented for operation tracing*
 ~~~~
