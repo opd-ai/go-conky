@@ -51,13 +51,20 @@ type execCacheEntry struct {
 	expiresAt time.Time
 }
 
+// scrollState tracks the current scroll position for a scroll instance.
+type scrollState struct {
+	position   int       // Current scroll offset
+	lastUpdate time.Time // When the scroll was last advanced
+}
+
 // ConkyAPI provides the Conky Lua API implementation.
 // It registers conky_parse() and other Conky functions in the Lua environment.
 type ConkyAPI struct {
-	runtime     *ConkyRuntime
-	sysProvider SystemDataProvider
-	execCache   map[string]*execCacheEntry
-	mu          sync.RWMutex
+	runtime      *ConkyRuntime
+	sysProvider  SystemDataProvider
+	execCache    map[string]*execCacheEntry
+	scrollStates map[string]*scrollState
+	mu           sync.RWMutex
 }
 
 // NewConkyAPI creates a new ConkyAPI instance and registers all Conky functions
@@ -68,9 +75,10 @@ func NewConkyAPI(runtime *ConkyRuntime, provider SystemDataProvider) (*ConkyAPI,
 	}
 
 	api := &ConkyAPI{
-		runtime:     runtime,
-		sysProvider: provider,
-		execCache:   make(map[string]*execCacheEntry),
+		runtime:      runtime,
+		sysProvider:  provider,
+		execCache:    make(map[string]*execCacheEntry),
+		scrollStates: make(map[string]*scrollState),
 	}
 
 	api.registerFunctions()
@@ -1627,13 +1635,94 @@ func (api *ConkyAPI) resolveStippledHR(args []string) string {
 	return result
 }
 
-// resolveScroll returns scrolling text (simplified - just returns the text).
+// resolveScroll returns scrolling text with animation.
+// Usage: ${scroll length step text}
+// - length: visible width in characters
+// - step: number of characters to scroll per update (default 1)
+// - text: the text to scroll (can contain spaces)
+// The text scrolls left by 'step' characters each update cycle, wrapping around.
 func (api *ConkyAPI) resolveScroll(args []string) string {
 	if len(args) < 2 {
 		return ""
 	}
-	// Skip the length/step args and return the text
-	return strings.Join(args[2:], " ")
+
+	// Parse length (visible width)
+	length, err := strconv.Atoi(args[0])
+	if err != nil || length <= 0 {
+		length = 20 // default width
+	}
+
+	// Parse step (characters to scroll per update)
+	step := 1
+	if len(args) >= 2 {
+		if s, err := strconv.Atoi(args[1]); err == nil && s > 0 {
+			step = s
+		}
+	}
+
+	// Get the text to scroll (join remaining args)
+	text := ""
+	if len(args) >= 3 {
+		text = strings.Join(args[2:], " ")
+	}
+
+	// Empty text returns empty
+	if text == "" {
+		return ""
+	}
+
+	// If text is shorter than or equal to length, no scrolling needed
+	textLen := len([]rune(text))
+	if textLen <= length {
+		// Pad to length for consistent width
+		return padRight(text, length)
+	}
+
+	// Create a unique key for this scroll instance (based on the original args)
+	scrollKey := strings.Join(args, "|")
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
+	// Get or create scroll state
+	state, exists := api.scrollStates[scrollKey]
+	if !exists {
+		state = &scrollState{
+			position:   0,
+			lastUpdate: time.Now(),
+		}
+		api.scrollStates[scrollKey] = state
+	}
+
+	// Advance scroll position (on each call, as update cycle advances)
+	// Use circular scrolling: when we reach the end, wrap around
+	now := time.Now()
+	if now.Sub(state.lastUpdate) > 0 {
+		state.position = (state.position + step) % textLen
+		state.lastUpdate = now
+	}
+
+	// Create the scrolled view by extracting a window from the text
+	// For smooth wrapping, duplicate the text
+	runes := []rune(text)
+	doubledRunes := append(runes, runes...)
+
+	start := state.position % textLen
+	end := start + length
+	if end > len(doubledRunes) {
+		end = len(doubledRunes)
+	}
+
+	return string(doubledRunes[start:end])
+}
+
+// padRight pads a string with spaces to reach the desired length.
+func padRight(s string, length int) string {
+	runes := []rune(s)
+	if len(runes) >= length {
+		return s
+	}
+	return s + strings.Repeat(" ", length-len(runes))
 }
 
 // resolveFSInodes returns total inodes for a mount point.

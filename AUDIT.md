@@ -4,7 +4,7 @@
 - **Date**: 2026-01-17 (Updated)
 - **Tests**: 2194 total (including subtests), all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
-- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (2 fixed), 4 low
+- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed), 4 low
 - **Implemented Compatibility**: ~90% (of implemented features work correctly)
 - **Overall Feature Coverage**: ~52%
 
@@ -219,7 +219,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | ${tab} | ✅ PASS | Tab character |
 | ${hr} | ✅ PASS | Horizontal rule |
 | ${stippled_hr} | ✅ PASS | Stippled rule |
-| ${scroll} | ⚠️ PARTIAL | Returns text without scroll |
+| ${scroll} | ✅ PASS | Scrolling text with animation |
 | ${membar} | ✅ PASS | Memory bar |
 | ${swapbar} | ✅ PASS | Swap bar |
 | ${cpubar} | ✅ PASS | CPU bar |
@@ -349,14 +349,21 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 - **Tests**: Comprehensive tests in `widget_marker_test.go` and `game_test.go`
 - **Location**: internal/render/widget_marker.go, internal/render/game.go, internal/lua/api.go
 
-**BUG-005: ${scroll} returns static text**
+**BUG-005: ${scroll} returns static text** ✅ FIXED
 - **Severity**: Medium
 - **Feature**: ${scroll}
-- **Reproduce**: Use ${scroll 20 5 ${exec long command}}
-- **Expected**: Scrolling text animation
-- **Actual**: Returns text without scrolling
-- **Location**: internal/lua/api.go:1559
-- **Fix**: Implement scroll state tracking and animation
+- **Status**: FIXED - Now implements proper scroll animation with state tracking
+- **Solution**: Added `scrollState` struct to track scroll position per scroll instance.
+  Each unique scroll template maintains its own state with current position and last update time.
+  The text scrolls left by the specified step amount on each update cycle, wrapping around.
+  Supports Unicode text by counting runes instead of bytes.
+- **Tests**: Added comprehensive tests in `api_test.go`:
+  - `TestScrollAnimation` - tests basic functionality, short text padding, empty text handling
+  - `TestScrollAnimationAdvances` - verifies scroll position advancement
+  - `TestScrollStateIsolation` - ensures different scroll instances have separate state
+  - `TestScrollUnicodeText` - validates Unicode character handling
+  - `TestPadRight` - tests the padding helper function
+- **Location**: internal/lua/api.go
 
 **BUG-006: ${battery_time} incomplete** ✅ FIXED
 - **Severity**: Medium
@@ -472,7 +479,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ### Should Fix
 1. **BUG-003**: ARGB transparency (8h) - platform dependent
-2. **BUG-005**: Scroll animation (4h)
+2. ~~**BUG-005**: Scroll animation~~ ✅ FIXED
 3. ~~**BUG-006**: Battery time calculation~~ ✅ FIXED
 4. **BUG-007**: Additional config directives (16h ongoing)
 

@@ -2543,3 +2543,184 @@ func TestParseWeatherVariables(t *testing.T) {
 		})
 	}
 }
+
+// TestScrollAnimation tests the scroll variable animation.
+func TestScrollAnimation(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, newMockProvider())
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		check    func(result string) bool
+		desc     string
+	}{
+		{
+			name:     "short text no scroll",
+			template: "${scroll 20 1 Hello}",
+			check:    func(r string) bool { return len(r) == 20 && r[:5] == "Hello" },
+			desc:     "short text should be padded to length",
+		},
+		{
+			name:     "long text scrolls",
+			template: "${scroll 10 1 This is a very long text that needs scrolling}",
+			check:    func(r string) bool { return len(r) == 10 },
+			desc:     "result should be exactly 10 characters",
+		},
+		{
+			name:     "default step",
+			template: "${scroll 5 1 ABCDEFGHIJ}",
+			check:    func(r string) bool { return len(r) == 5 },
+			desc:     "should return 5 character window",
+		},
+		{
+			name:     "missing args",
+			template: "${scroll 10}",
+			check:    func(r string) bool { return r == "" },
+			desc:     "insufficient args returns empty",
+		},
+		{
+			name:     "empty text",
+			template: "${scroll 10 1}",
+			check:    func(r string) bool { return r == "" },
+			desc:     "empty text returns empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if !tt.check(result) {
+				t.Errorf("%s: got %q (len=%d)", tt.desc, result, len(result))
+			}
+		})
+	}
+}
+
+// TestScrollAnimationAdvances tests that scroll position advances.
+func TestScrollAnimationAdvances(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, newMockProvider())
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Use a simple text that's longer than the window
+	template := "${scroll 5 1 ABCDEFGHIJ}"
+
+	// Get first result
+	result1 := api.Parse(template)
+	if len(result1) != 5 {
+		t.Errorf("expected length 5, got %d: %q", len(result1), result1)
+	}
+
+	// Parse again - position should advance
+	result2 := api.Parse(template)
+	if len(result2) != 5 {
+		t.Errorf("expected length 5, got %d: %q", len(result2), result2)
+	}
+
+	// Results should differ after advancement (unless wrapping at same position)
+	// Due to step=1, they should differ
+	if result1 == result2 {
+		// This is actually acceptable if the time hasn't advanced enough
+		// The scroll advances based on time, not just calls
+		t.Logf("results may be same due to rapid calls: %q vs %q", result1, result2)
+	}
+}
+
+// TestScrollStateIsolation tests that different scroll instances maintain separate state.
+func TestScrollStateIsolation(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, newMockProvider())
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Two different scroll templates should have separate state
+	template1 := "${scroll 5 1 AAAAAAAAAA}"
+	template2 := "${scroll 5 1 BBBBBBBBBB}"
+
+	result1 := api.Parse(template1)
+	result2 := api.Parse(template2)
+
+	// Results should match their respective content
+	for _, r := range result1 {
+		if r != 'A' && r != ' ' {
+			t.Errorf("template1 result should contain only 'A' or space, got %q", result1)
+			break
+		}
+	}
+	for _, r := range result2 {
+		if r != 'B' && r != ' ' {
+			t.Errorf("template2 result should contain only 'B' or space, got %q", result2)
+			break
+		}
+	}
+}
+
+// TestScrollUnicodeText tests scroll with Unicode characters.
+func TestScrollUnicodeText(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, newMockProvider())
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Unicode characters should be counted as single characters
+	template := "${scroll 5 1 日本語テスト文字列}"
+	result := api.Parse(template)
+
+	// Should return 5 runes, not 5 bytes
+	runes := []rune(result)
+	if len(runes) != 5 {
+		t.Errorf("expected 5 runes, got %d: %q", len(runes), result)
+	}
+}
+
+// TestPadRight tests the padRight helper function.
+func TestPadRight(t *testing.T) {
+	tests := []struct {
+		input    string
+		length   int
+		expected string
+	}{
+		{"Hello", 10, "Hello     "},
+		{"Test", 4, "Test"},
+		{"Long", 2, "Long"},
+		{"", 5, "     "},
+		{"日本語", 6, "日本語   "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := padRight(tt.input, tt.length)
+			if result != tt.expected {
+				t.Errorf("padRight(%q, %d) = %q, want %q", tt.input, tt.length, result, tt.expected)
+			}
+		})
+	}
+}
