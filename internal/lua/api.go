@@ -16,6 +16,7 @@ import (
 	rt "github.com/arnodel/golua/runtime"
 
 	"github.com/opd-ai/go-conky/internal/monitor"
+	"github.com/opd-ai/go-conky/internal/render"
 )
 
 // Version is the conky-go version string.
@@ -1224,35 +1225,44 @@ func (api *ConkyAPI) resolveHR(args []string) string {
 	return strings.Repeat("-", width)
 }
 
-// resolveFSBar returns a text-based bar for filesystem usage.
+// resolveFSBar returns a graphical bar widget for filesystem usage.
 // Usage: ${fs_bar height,width mountpoint}
 func (api *ConkyAPI) resolveFSBar(args []string) string {
 	mountPoint := "/"
-	width := 10
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
 
 	if len(args) > 0 {
-		// Check for size,mountpoint format
+		// Check for size,mountpoint format (height,width or just height)
 		parts := strings.Split(args[0], ",")
+		if len(parts) >= 1 {
+			if h, err := strconv.ParseFloat(parts[0], 64); err == nil {
+				height = h
+			}
+		}
 		if len(parts) >= 2 {
-			if w, err := strconv.Atoi(parts[1]); err == nil {
+			if w, err := strconv.ParseFloat(parts[1], 64); err == nil {
 				width = w
 			}
 		}
-		// Last arg is mount point
-		mountPoint = args[len(args)-1]
+		// Last arg is mount point if more than one arg
+		if len(args) > 1 {
+			mountPoint = args[len(args)-1]
+		} else if len(parts) == 1 {
+			// Single arg could be height or mount point
+			if _, err := strconv.ParseFloat(args[0], 64); err != nil {
+				mountPoint = args[0]
+			}
+		}
 	}
 
 	fsStats := api.sysProvider.Filesystem()
 	mount, ok := fsStats.Mounts[mountPoint]
 	if !ok {
-		return strings.Repeat("-", width)
+		return render.EncodeBarMarker(0, width, height)
 	}
 
-	filled := int(mount.UsagePercent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+	return render.EncodeBarMarker(mount.UsagePercent, width, height)
 }
 
 // resolveFSType returns the filesystem type for a mount point.
@@ -1299,11 +1309,18 @@ func (api *ConkyAPI) resolveBattery(args []string) string {
 	return fmt.Sprintf("%s %.0f%%", status, batStats.TotalCapacity)
 }
 
-// resolveBatteryBar returns a text-based bar for battery level.
+// resolveBatteryBar returns a graphical bar widget for battery level.
 func (api *ConkyAPI) resolveBatteryBar(args []string) string {
-	width := 10
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
+
 	if len(args) > 0 {
-		if w, err := strconv.Atoi(args[0]); err == nil {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
 			width = w
 		}
 	}
@@ -1311,11 +1328,7 @@ func (api *ConkyAPI) resolveBatteryBar(args []string) string {
 	batStats := api.sysProvider.Battery()
 	percent := batStats.TotalCapacity
 
-	filled := int(percent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+	return render.EncodeBarMarker(percent, width, height)
 }
 
 // resolveBatteryTime returns estimated battery time remaining.
@@ -1564,28 +1577,35 @@ func (api *ConkyAPI) resolveEntropyPerc() string {
 	return fmt.Sprintf("%.0f", perc)
 }
 
-// resolveEntropyBar returns a text bar for entropy.
+// resolveEntropyBar returns a graphical bar widget for entropy.
 func (api *ConkyAPI) resolveEntropyBar(args []string) string {
-	width := 10
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
+
 	if len(args) > 0 {
-		if w, err := strconv.Atoi(args[0]); err == nil {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
 			width = w
 		}
 	}
+
 	data, err := os.ReadFile("/proc/sys/kernel/random/entropy_avail")
 	if err != nil {
-		return strings.Repeat("-", width)
+		return render.EncodeBarMarker(0, width, height)
 	}
 	avail, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
-		return strings.Repeat("-", width)
+		return render.EncodeBarMarker(0, width, height)
 	}
-	perc := float64(avail) / 4096.0
-	filled := int(perc * float64(width))
-	if filled > width {
-		filled = width
+	perc := float64(avail) / 4096.0 * 100
+	if perc > 100 {
+		perc = 100
 	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+	return render.EncodeBarMarker(perc, width, height)
 }
 
 // resolveStippledHR returns a stippled horizontal rule.
@@ -1655,49 +1675,78 @@ func (api *ConkyAPI) resolveFSInodesPerc(args []string) string {
 	return "0"
 }
 
-// resolveMemBar returns a text bar for memory usage.
+// resolveMemBar returns a graphical bar widget for memory usage.
 func (api *ConkyAPI) resolveMemBar(args []string) string {
-	width := 10
-	if len(args) > 0 {
-		if w, err := strconv.Atoi(args[0]); err == nil {
-			width = w
-		}
-	}
-	mem := api.sysProvider.Memory()
-	filled := int(mem.UsagePercent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
-}
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
 
-// resolveSwapBar returns a text bar for swap usage.
-func (api *ConkyAPI) resolveSwapBar(args []string) string {
-	width := 10
 	if len(args) > 0 {
-		if w, err := strconv.Atoi(args[0]); err == nil {
-			width = w
-		}
-	}
-	mem := api.sysProvider.Memory()
-	filled := int(mem.SwapPercent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
-}
-
-// resolveCPUBar returns a text bar for CPU usage.
-func (api *ConkyAPI) resolveCPUBar(args []string) string {
-	width := 10
-	cpuIdx := -1 // -1 means overall
-	if len(args) > 0 {
-		if idx, err := strconv.Atoi(args[0]); err == nil {
-			cpuIdx = idx - 1 // Convert to 0-based
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
 		}
 	}
 	if len(args) > 1 {
-		if w, err := strconv.Atoi(args[1]); err == nil {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
+			width = w
+		}
+	}
+
+	mem := api.sysProvider.Memory()
+	return render.EncodeBarMarker(mem.UsagePercent, width, height)
+}
+
+// resolveSwapBar returns a graphical bar widget for swap usage.
+func (api *ConkyAPI) resolveSwapBar(args []string) string {
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
+
+	if len(args) > 0 {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
+			width = w
+		}
+	}
+
+	mem := api.sysProvider.Memory()
+	return render.EncodeBarMarker(mem.SwapPercent, width, height)
+}
+
+// resolveCPUBar returns a graphical bar widget for CPU usage.
+func (api *ConkyAPI) resolveCPUBar(args []string) string {
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
+	cpuIdx := -1           // -1 means overall
+
+	// Parse arguments: ${cpubar cpu# height,width} or ${cpubar height}
+	if len(args) > 0 {
+		// First arg could be CPU number or height
+		if strings.HasPrefix(strings.ToLower(args[0]), "cpu") {
+			// It's a CPU specifier like "cpu0"
+			if idx, err := strconv.Atoi(strings.TrimPrefix(strings.ToLower(args[0]), "cpu")); err == nil {
+				cpuIdx = idx
+			}
+		} else if idx, err := strconv.Atoi(args[0]); err == nil {
+			// Check if it's a small number (likely a CPU core) or larger (likely height)
+			if idx <= 16 {
+				cpuIdx = idx - 1 // Convert to 0-based
+			} else {
+				height = float64(idx)
+			}
+		} else if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if h, err := strconv.ParseFloat(args[1], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 2 {
+		if w, err := strconv.ParseFloat(args[2], 64); err == nil {
 			width = w
 		}
 	}
@@ -1710,15 +1759,25 @@ func (api *ConkyAPI) resolveCPUBar(args []string) string {
 		percent = cpuStats.UsagePercent
 	}
 
-	filled := int(percent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+	return render.EncodeBarMarker(percent, width, height)
 }
 
-// resolveLoadGraph returns a simple text representation of load.
-func (api *ConkyAPI) resolveLoadGraph(_ []string) string {
+// resolveLoadGraph returns a graphical representation of load.
+func (api *ConkyAPI) resolveLoadGraph(args []string) string {
+	width := float64(100)  // Default width in pixels
+	height := float64(20)  // Default height in pixels
+
+	if len(args) > 0 {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
+			width = w
+		}
+	}
+
 	sysInfo := api.sysProvider.SysInfo()
 	// Normalize load to percentage based on CPU count
 	cpuCount := api.sysProvider.CPU().CPUCount
@@ -1729,9 +1788,8 @@ func (api *ConkyAPI) resolveLoadGraph(_ []string) string {
 	if loadPerc > 100 {
 		loadPerc = 100
 	}
-	width := 10
-	filled := int(loadPerc * float64(width) / 100)
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+
+	return render.EncodeGraphMarker(loadPerc, width, height)
 }
 
 // resolveACPIFan returns ACPI fan status.

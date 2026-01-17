@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 // ErrGameTerminated is returned when the game loop is terminated via context cancellation.
@@ -155,10 +156,97 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Clear screen with background color
 	screen.Fill(g.config.BackgroundColor)
 
-	// Render all text lines
+	// Render all text lines with inline widget support
 	for _, line := range g.lines {
-		g.textRenderer.DrawText(screen, line.Text, line.X, line.Y, line.Color)
+		g.drawLineWithWidgets(screen, line)
 	}
+}
+
+// drawLineWithWidgets renders a text line, handling inline widget markers.
+func (g *Game) drawLineWithWidgets(screen *ebiten.Image, line TextLine) {
+	// Fast path: if no widget markers, just draw text
+	if !ContainsWidgetMarker(line.Text) {
+		g.textRenderer.DrawText(screen, line.Text, line.X, line.Y, line.Color)
+		return
+	}
+
+	// Parse segments and render each one
+	segments := ParseWidgetSegments(line.Text)
+	x := line.X
+
+	for _, seg := range segments {
+		if seg.IsWidget && seg.Widget != nil {
+			// Render the widget
+			g.drawInlineWidget(screen, seg.Widget, x, line.Y, line.Color)
+			x += seg.Widget.Width
+		} else {
+			// Render text segment
+			g.textRenderer.DrawText(screen, seg.Text, x, line.Y, line.Color)
+			textWidth, _ := g.textRenderer.MeasureText(seg.Text)
+			x += textWidth
+		}
+	}
+}
+
+// drawInlineWidget renders a widget at the specified position.
+func (g *Game) drawInlineWidget(screen *ebiten.Image, marker *WidgetMarker, x, y float64, clr color.RGBA) {
+	// Adjust y to center the widget vertically on the text baseline
+	// Text baseline is at y, widget should be centered around the text
+	lineHeight := g.textRenderer.LineHeight()
+	widgetY := y - lineHeight + (lineHeight-marker.Height)/2
+
+	switch marker.Type {
+	case WidgetTypeBar:
+		g.drawProgressBar(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
+	case WidgetTypeGraph:
+		g.drawGraphWidget(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
+	case WidgetTypeGauge:
+		// Gauge is not yet implemented, fall back to bar
+		g.drawProgressBar(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
+	}
+}
+
+// drawProgressBar renders a horizontal progress bar.
+func (g *Game) drawProgressBar(screen *ebiten.Image, x, y, width, height, value float64, clr color.RGBA) {
+	// Draw background
+	bgColor := color.RGBA{R: clr.R / 3, G: clr.G / 3, B: clr.B / 3, A: clr.A}
+	vector.DrawFilledRect(screen, float32(x), float32(y), float32(width), float32(height), bgColor, false)
+
+	// Draw filled portion
+	fillWidth := width * value / 100
+	if fillWidth > width {
+		fillWidth = width
+	}
+	if fillWidth > 0 {
+		vector.DrawFilledRect(screen, float32(x), float32(y), float32(fillWidth), float32(height), clr, false)
+	}
+
+	// Draw border
+	borderColor := color.RGBA{R: clr.R / 2, G: clr.G / 2, B: clr.B / 2, A: clr.A}
+	vector.StrokeRect(screen, float32(x), float32(y), float32(width), float32(height), 1, borderColor, false)
+}
+
+// drawGraphWidget renders a simple filled area representing a graph.
+func (g *Game) drawGraphWidget(screen *ebiten.Image, x, y, width, height, value float64, clr color.RGBA) {
+	// Draw background
+	bgColor := color.RGBA{R: clr.R / 3, G: clr.G / 3, B: clr.B / 3, A: clr.A}
+	vector.DrawFilledRect(screen, float32(x), float32(y), float32(width), float32(height), bgColor, false)
+
+	// Draw filled area from bottom
+	fillHeight := height * value / 100
+	if fillHeight > height {
+		fillHeight = height
+	}
+	if fillHeight > 0 {
+		fillY := y + height - fillHeight
+		// Use a gradient-like effect with lighter fill
+		fillColor := color.RGBA{R: clr.R, G: clr.G, B: clr.B, A: uint8(float64(clr.A) * 0.7)}
+		vector.DrawFilledRect(screen, float32(x), float32(fillY), float32(width), float32(fillHeight), fillColor, false)
+	}
+
+	// Draw border
+	borderColor := color.RGBA{R: clr.R / 2, G: clr.G / 2, B: clr.B / 2, A: clr.A}
+	vector.StrokeRect(screen, float32(x), float32(y), float32(width), float32(height), 1, borderColor, false)
 }
 
 // Layout implements ebiten.Game.Layout.

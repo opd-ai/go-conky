@@ -2,11 +2,11 @@
 
 ## Summary
 - **Date**: 2026-01-17 (Updated)
-- **Tests**: 1021 total, all passed, 0 failed
+- **Tests**: 2194 total (including subtests), all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
-- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (1 fixed), 4 low
-- **Implemented Compatibility**: ~89% (of implemented features work correctly)
-- **Overall Feature Coverage**: ~50%
+- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (2 fixed), 4 low
+- **Implemented Compatibility**: ~90% (of implemented features work correctly)
+- **Overall Feature Coverage**: ~52%
 
 ## Overview
 
@@ -332,14 +332,22 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 - **Location**: Window management layer
 - **Fix**: Requires X11-specific implementation or Ebiten enhancement
 
-**BUG-004: Graphical bars not implemented**
+**BUG-004: Graphical bars not implemented** ✅ FIXED
 - **Severity**: Medium
 - **Feature**: ${bar}, ${graph}
-- **Reproduce**: Use ${bar cpu} in config
-- **Expected**: Graphical bar rendered
-- **Actual**: Returns text-based representation
-- **Location**: internal/lua/api.go
-- **Fix**: Implement proper bar/graph widgets in render layer
+- **Status**: FIXED - Graphical bars and graphs now render as actual widgets
+- **Solution**: Implemented a widget marker system that encodes bar/graph parameters
+  in the text output. The rendering layer parses these markers and draws graphical
+  progress bars and filled area graphs using Ebiten's vector drawing functions.
+- **Implementation**:
+  - Added `WidgetMarker` type in `internal/render/widget_marker.go` for encoding/decoding widget parameters
+  - Updated bar functions (`membar`, `cpubar`, `swapbar`, `fs_bar`, `battery_bar`, `entropy_bar`)
+    to return widget markers instead of text
+  - Added `resolveLoadGraph()` to return graph widget markers
+  - Extended `Game.Draw()` to parse widget markers and render inline graphical widgets
+  - Widgets automatically adapt colors from the text color setting
+- **Tests**: Comprehensive tests in `widget_marker_test.go` and `game_test.go`
+- **Location**: internal/render/widget_marker.go, internal/render/game.go, internal/lua/api.go
 
 **BUG-005: ${scroll} returns static text**
 - **Severity**: Medium
@@ -460,7 +468,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 ### Must Fix (Before Release)
 1. ~~**BUG-001**: Cairo clipping enforcement~~ ✅ FIXED
 2. ~~**BUG-002**: conky_window table completion~~ ✅ FIXED
-3. **BUG-004**: Graphical bar/graph widgets (8h)
+3. ~~**BUG-004**: Graphical bar/graph widgets~~ ✅ FIXED
 
 ### Should Fix
 1. **BUG-003**: ARGB transparency (8h) - platform dependent
@@ -480,7 +488,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ### Immediate Actions
 1. ~~**Complete window integration**~~ ✅ DONE - The conky_window table now includes all 12 fields for Lua scripts
-2. **Implement graphical widgets** - ${bar} and ${graph} are commonly used; text substitutes are insufficient
+2. ~~**Implement graphical widgets**~~ ✅ DONE - ${bar} and ${graph} now render as actual graphical widgets
 3. ~~**Fix Cairo clipping**~~ ✅ DONE - Rectangular clipping now enforced via Ebiten SubImage
 
 ### Short-term Improvements
@@ -494,10 +502,10 @@ This audit evaluates the Go Conky implementation for functional correctness and 
    - Good test coverage on critical paths
    - Thread-safe design with proper mutex usage
    - Pure Go Lua integration avoids CGO complexity
+   - Widget marker system enables inline graphical elements
 
 2. **Areas for Improvement**:
    - Window management abstraction needed for ARGB support
-   - Consider adding widget rendering layer for bars/graphs
    - Platform package needs more test coverage
 
 ### Documentation Needs

@@ -425,3 +425,145 @@ func TestErrGameTerminated(t *testing.T) {
 		t.Errorf("ErrGameTerminated.Error() = %q, want %q", ErrGameTerminated.Error(), "game terminated")
 	}
 }
+
+func TestDrawLineWithWidgets(t *testing.T) {
+	config := DefaultConfig()
+	mockRenderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, mockRenderer)
+
+	// Test drawing plain text (no widgets)
+	t.Run("plain text", func(t *testing.T) {
+		line := TextLine{
+			Text:  "Hello World",
+			X:     10,
+			Y:     20,
+			Color: color.RGBA{R: 255, G: 255, B: 255, A: 255},
+		}
+		// This should use the text renderer once
+		mockRenderer.drawTextCalls = 0
+		game.drawLineWithWidgets(ebiten.NewImage(400, 300), line)
+		if mockRenderer.drawTextCalls != 1 {
+			t.Errorf("expected 1 DrawText call, got %d", mockRenderer.drawTextCalls)
+		}
+	})
+
+	// Test drawing text with widget marker
+	t.Run("text with widget", func(t *testing.T) {
+		// Create a line with embedded widget marker
+		marker := EncodeBarMarker(50, 100, 8)
+		line := TextLine{
+			Text:  "CPU: " + marker + " done",
+			X:     10,
+			Y:     20,
+			Color: color.RGBA{R: 255, G: 255, B: 255, A: 255},
+		}
+		mockRenderer.drawTextCalls = 0
+		mockRenderer.measureTextCalls = 0
+		game.drawLineWithWidgets(ebiten.NewImage(400, 300), line)
+		// Should draw "CPU: " and " done" as text (2 calls)
+		if mockRenderer.drawTextCalls != 2 {
+			t.Errorf("expected 2 DrawText calls, got %d", mockRenderer.drawTextCalls)
+		}
+	})
+
+	// Test widget-only line
+	t.Run("widget only", func(t *testing.T) {
+		marker := EncodeBarMarker(75, 100, 8)
+		line := TextLine{
+			Text:  marker,
+			X:     10,
+			Y:     20,
+			Color: color.RGBA{R: 100, G: 200, B: 100, A: 255},
+		}
+		mockRenderer.drawTextCalls = 0
+		game.drawLineWithWidgets(ebiten.NewImage(400, 300), line)
+		// No text to draw
+		if mockRenderer.drawTextCalls != 0 {
+			t.Errorf("expected 0 DrawText calls for widget-only line, got %d", mockRenderer.drawTextCalls)
+		}
+	})
+}
+
+func TestDrawInlineWidgetTypes(t *testing.T) {
+	config := DefaultConfig()
+	mockRenderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, mockRenderer)
+	screen := ebiten.NewImage(400, 300)
+
+	// Test bar widget
+	t.Run("bar widget", func(t *testing.T) {
+		marker := &WidgetMarker{Type: WidgetTypeBar, Value: 50, Width: 100, Height: 8}
+		// Should not panic
+		game.drawInlineWidget(screen, marker, 10, 20, color.RGBA{R: 100, G: 200, B: 100, A: 255})
+	})
+
+	// Test graph widget
+	t.Run("graph widget", func(t *testing.T) {
+		marker := &WidgetMarker{Type: WidgetTypeGraph, Value: 75, Width: 100, Height: 20}
+		// Should not panic
+		game.drawInlineWidget(screen, marker, 10, 50, color.RGBA{R: 200, G: 100, B: 100, A: 255})
+	})
+
+	// Test gauge widget (falls back to bar)
+	t.Run("gauge widget", func(t *testing.T) {
+		marker := &WidgetMarker{Type: WidgetTypeGauge, Value: 90, Width: 30, Height: 30}
+		// Should not panic
+		game.drawInlineWidget(screen, marker, 10, 100, color.RGBA{R: 100, G: 100, B: 200, A: 255})
+	})
+}
+
+func TestDrawProgressBar(t *testing.T) {
+	config := DefaultConfig()
+	mockRenderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, mockRenderer)
+	screen := ebiten.NewImage(400, 300)
+
+	tests := []struct {
+		name   string
+		value  float64
+		width  float64
+		height float64
+	}{
+		{"empty bar", 0, 100, 8},
+		{"half bar", 50, 100, 8},
+		{"full bar", 100, 100, 8},
+		{"over 100%", 150, 100, 8},
+		{"thin bar", 50, 200, 4},
+		{"tall bar", 50, 50, 20},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Should not panic
+			game.drawProgressBar(screen, 10, 10, tt.width, tt.height, tt.value,
+				color.RGBA{R: 100, G: 200, B: 100, A: 255})
+		})
+	}
+}
+
+func TestDrawGraphWidget(t *testing.T) {
+	config := DefaultConfig()
+	mockRenderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, mockRenderer)
+	screen := ebiten.NewImage(400, 300)
+
+	tests := []struct {
+		name   string
+		value  float64
+		width  float64
+		height float64
+	}{
+		{"empty graph", 0, 100, 20},
+		{"half graph", 50, 100, 20},
+		{"full graph", 100, 100, 20},
+		{"over 100%", 150, 100, 20},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Should not panic
+			game.drawGraphWidget(screen, 10, 10, tt.width, tt.height, tt.value,
+				color.RGBA{R: 100, G: 100, B: 200, A: 255})
+		})
+	}
+}

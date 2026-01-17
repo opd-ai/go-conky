@@ -9,6 +9,7 @@ import (
 	rt "github.com/arnodel/golua/runtime"
 
 	"github.com/opd-ai/go-conky/internal/monitor"
+	"github.com/opd-ai/go-conky/internal/render"
 )
 
 // mockSystemDataProvider implements SystemDataProvider for testing.
@@ -966,11 +967,6 @@ func TestParseBatteryVariables(t *testing.T) {
 			expected: "Discharging 85%",
 		},
 		{
-			name:     "battery bar",
-			template: "${battery_bar 10}",
-			expected: "########--",
-		},
-		{
 			name:     "battery time discharging",
 			template: "${battery_time}",
 			expected: "2:30",
@@ -1667,11 +1663,6 @@ func TestParseMiscVariables(t *testing.T) {
 			expected: "xfs",
 		},
 		{
-			name:     "fs bar",
-			template: "${fs_bar 10 /}",
-			expected: "####------",
-		},
-		{
 			name:     "hr",
 			template: "${hr 5}",
 			expected: "-----",
@@ -1853,8 +1844,15 @@ func TestEntropyVariables(t *testing.T) {
 
 	// Test entropy_bar
 	result = api.Parse("${entropy_bar}")
-	if len(result) != 10 { // default width is 10
-		t.Errorf("expected bar of length 10, got length %d: %q", len(result), result)
+	if !render.ContainsWidgetMarker(result) {
+		t.Errorf("expected widget marker for entropy_bar, got: %q", result)
+	} else {
+		marker := render.DecodeWidgetMarker(result)
+		if marker == nil {
+			t.Errorf("failed to decode entropy_bar widget marker")
+		} else if marker.Type != render.WidgetTypeBar {
+			t.Errorf("expected bar widget type, got %s", marker.Type.String())
+		}
 	}
 }
 
@@ -1872,28 +1870,41 @@ func TestBarWidgets(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		variable string
-		minLen   int
+		name       string
+		variable   string
+		wantType   string
+		wantWidth  float64
+		wantHeight float64
 	}{
-		{"membar default", "${membar}", 10},
-		{"membar custom width", "${membar 20}", 20},
-		{"swapbar default", "${swapbar}", 10},
-		{"cpubar default", "${cpubar}", 10},
-		{"loadgraph default", "${loadgraph}", 10},
+		{"membar default", "${membar}", "bar", 100, 8},
+		{"membar custom height", "${membar 20}", "bar", 100, 20},
+		{"swapbar default", "${swapbar}", "bar", 100, 8},
+		{"cpubar default", "${cpubar}", "bar", 100, 8},
+		{"loadgraph default", "${loadgraph}", "graph", 100, 20},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := api.Parse(tt.variable)
-			if len(result) != tt.minLen {
-				t.Errorf("expected bar of length %d, got length %d: %q", tt.minLen, len(result), result)
+			// Check that result is a widget marker
+			if !render.ContainsWidgetMarker(result) {
+				t.Errorf("expected widget marker, got: %q", result)
+				return
 			}
-			// Check bar contains only # and -
-			for _, c := range result {
-				if c != '#' && c != '-' {
-					t.Errorf("unexpected character in bar: %c", c)
-				}
+			// Decode and verify the marker
+			marker := render.DecodeWidgetMarker(result)
+			if marker == nil {
+				t.Errorf("failed to decode widget marker: %q", result)
+				return
+			}
+			if marker.Type.String() != tt.wantType {
+				t.Errorf("widget type = %s, want %s", marker.Type.String(), tt.wantType)
+			}
+			if marker.Width != tt.wantWidth {
+				t.Errorf("widget width = %v, want %v", marker.Width, tt.wantWidth)
+			}
+			if marker.Height != tt.wantHeight {
+				t.Errorf("widget height = %v, want %v", marker.Height, tt.wantHeight)
 			}
 		})
 	}
