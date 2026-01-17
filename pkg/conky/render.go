@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 
+	"github.com/opd-ai/go-conky/internal/config"
 	"github.com/opd-ai/go-conky/internal/render"
 )
 
@@ -39,6 +40,9 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	transparent := c.cfg.Window.Transparent
 	argbVisual := c.cfg.Window.ARGBVisual
 	argbValue := c.cfg.Window.ARGBValue
+	windowHints := c.cfg.Window.Hints
+	windowX := c.cfg.Window.X
+	windowY := c.cfg.Window.Y
 	ctx := c.ctx
 	c.mu.RUnlock()
 
@@ -65,7 +69,10 @@ func (gr *gameRunner) run(c *conkyImpl) {
 		textColor = color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	}
 
-	// Create render configuration with transparency settings
+	// Parse window hints into render config flags
+	undecorated, floating, skipTaskbar, skipPager := parseWindowHints(windowHints)
+
+	// Create render configuration with transparency and window hint settings
 	renderConfig := render.Config{
 		Width:           width,
 		Height:          height,
@@ -75,6 +82,12 @@ func (gr *gameRunner) run(c *conkyImpl) {
 		Transparent:     transparent,
 		ARGBVisual:      argbVisual,
 		ARGBValue:       argbValue,
+		Undecorated:     undecorated,
+		Floating:        floating,
+		WindowX:         windowX,
+		WindowY:         windowY,
+		SkipTaskbar:     skipTaskbar,
+		SkipPager:       skipPager,
 	}
 
 	// Create the game instance
@@ -105,6 +118,27 @@ func (gr *gameRunner) run(c *conkyImpl) {
 			c.notifyError(fmt.Errorf("render loop error: %w", err))
 		}
 	}
+}
+
+// parseWindowHints converts config.WindowHint slice to individual render flags.
+// Returns: undecorated, floating (above), skipTaskbar, skipPager
+func parseWindowHints(hints []config.WindowHint) (bool, bool, bool, bool) {
+	var undecorated, floating, skipTaskbar, skipPager bool
+	for _, hint := range hints {
+		switch hint {
+		case config.WindowHintUndecorated:
+			undecorated = true
+		case config.WindowHintAbove:
+			floating = true
+		case config.WindowHintSkipTaskbar:
+			skipTaskbar = true
+		case config.WindowHintSkipPager:
+			skipPager = true
+		// WindowHintBelow, WindowHintSticky are not supported by Ebiten
+		// but are parsed and documented for completeness
+		}
+	}
+	return undecorated, floating, skipTaskbar, skipPager
 }
 
 // runRenderLoop creates and runs the Ebiten rendering loop.

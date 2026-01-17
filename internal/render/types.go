@@ -30,6 +30,25 @@ type Config struct {
 	// 0 is fully transparent, 255 is fully opaque.
 	// Only effective when ARGBVisual is true.
 	ARGBValue int
+	// Undecorated removes window decorations (title bar, borders) when true.
+	// Corresponds to the "undecorated" window hint in Conky configuration.
+	Undecorated bool
+	// Floating keeps the window above all other windows when true.
+	// Corresponds to the "above" window hint in Conky configuration.
+	// Note: The "below" hint is not supported by Ebiten.
+	Floating bool
+	// WindowX is the initial horizontal window position in pixels.
+	// Negative values are ignored (uses system default position).
+	WindowX int
+	// WindowY is the initial vertical window position in pixels.
+	// Negative values are ignored (uses system default position).
+	WindowY int
+	// SkipTaskbar hides the window from the taskbar when true.
+	// Note: This is not directly supported by Ebiten but documented for completeness.
+	SkipTaskbar bool
+	// SkipPager hides the window from the pager when true.
+	// Note: This is not directly supported by Ebiten but documented for completeness.
+	SkipPager bool
 	// DrawBorders enables drawing a border around the content area.
 	DrawBorders bool
 	// DrawOutline enables drawing an outline (stroke) around text.
@@ -63,6 +82,12 @@ func DefaultConfig() Config {
 		Transparent:       false,
 		ARGBVisual:        false,
 		ARGBValue:         255, // Fully opaque by default
+		Undecorated:       false,
+		Floating:          false,
+		WindowX:           -1, // Use system default position
+		WindowY:           -1, // Use system default position
+		SkipTaskbar:       false,
+		SkipPager:         false,
 		DrawBorders:       false,
 		DrawOutline:       false,
 		DrawShades:        false,

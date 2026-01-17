@@ -305,3 +305,110 @@ func TestConfigARGBCustomValues(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultConfigWindowHints(t *testing.T) {
+	config := DefaultConfig()
+
+	// Test window hints defaults
+	if config.Undecorated {
+		t.Error("Undecorated should be false by default")
+	}
+	if config.Floating {
+		t.Error("Floating should be false by default")
+	}
+	if config.WindowX != -1 {
+		t.Errorf("WindowX = %d, want -1 (system default)", config.WindowX)
+	}
+	if config.WindowY != -1 {
+		t.Errorf("WindowY = %d, want -1 (system default)", config.WindowY)
+	}
+	if config.SkipTaskbar {
+		t.Error("SkipTaskbar should be false by default")
+	}
+	if config.SkipPager {
+		t.Error("SkipPager should be false by default")
+	}
+}
+
+func TestConfigWindowHintsCustomValues(t *testing.T) {
+	tests := []struct {
+		name        string
+		undecorated bool
+		floating    bool
+		windowX     int
+		windowY     int
+		skipTaskbar bool
+		skipPager   bool
+	}{
+		{
+			name:        "undecorated only",
+			undecorated: true,
+			floating:    false,
+			windowX:     -1,
+			windowY:     -1,
+			skipTaskbar: false,
+			skipPager:   false,
+		},
+		{
+			name:        "floating only",
+			undecorated: false,
+			floating:    true,
+			windowX:     -1,
+			windowY:     -1,
+			skipTaskbar: false,
+			skipPager:   false,
+		},
+		{
+			name:        "desktop widget style",
+			undecorated: true,
+			floating:    true,
+			windowX:     100,
+			windowY:     50,
+			skipTaskbar: true,
+			skipPager:   true,
+		},
+		{
+			name:        "positioned window",
+			undecorated: false,
+			floating:    false,
+			windowX:     0,
+			windowY:     0,
+			skipTaskbar: false,
+			skipPager:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Width:       400,
+				Height:      300,
+				Undecorated: tt.undecorated,
+				Floating:    tt.floating,
+				WindowX:     tt.windowX,
+				WindowY:     tt.windowY,
+				SkipTaskbar: tt.skipTaskbar,
+				SkipPager:   tt.skipPager,
+			}
+
+			if config.Undecorated != tt.undecorated {
+				t.Errorf("Undecorated = %v, want %v", config.Undecorated, tt.undecorated)
+			}
+			if config.Floating != tt.floating {
+				t.Errorf("Floating = %v, want %v", config.Floating, tt.floating)
+			}
+			if config.WindowX != tt.windowX {
+				t.Errorf("WindowX = %d, want %d", config.WindowX, tt.windowX)
+			}
+			if config.WindowY != tt.windowY {
+				t.Errorf("WindowY = %d, want %d", config.WindowY, tt.windowY)
+			}
+			if config.SkipTaskbar != tt.skipTaskbar {
+				t.Errorf("SkipTaskbar = %v, want %v", config.SkipTaskbar, tt.skipTaskbar)
+			}
+			if config.SkipPager != tt.skipPager {
+				t.Errorf("SkipPager = %v, want %v", config.SkipPager, tt.skipPager)
+			}
+		})
+	}
+}

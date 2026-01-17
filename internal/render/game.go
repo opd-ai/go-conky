@@ -517,6 +517,27 @@ func (g *Game) Run() error {
 		ebiten.SetScreenTransparent(true)
 	}
 
+	// Apply window hints for transparency and overlay behavior
+	// These settings help achieve proper desktop widget behavior
+
+	// Remove window decorations (title bar, borders) if requested
+	// This is typically used for overlay-style widgets that blend with the desktop
+	if g.config.Undecorated {
+		ebiten.SetWindowDecorated(false)
+	}
+
+	// Keep window above all others if requested
+	// This is commonly used for system monitors that should always be visible
+	if g.config.Floating {
+		ebiten.SetWindowFloating(true)
+	}
+
+	// Set initial window position if specified
+	// Negative values indicate use of system default positioning
+	if g.config.WindowX >= 0 && g.config.WindowY >= 0 {
+		ebiten.SetWindowPosition(g.config.WindowX, g.config.WindowY)
+	}
+
 	g.mu.Lock()
 	g.running = true
 	g.mu.Unlock()
