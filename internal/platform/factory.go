@@ -69,6 +69,30 @@ type RemoteConfig struct {
 	// CircuitBreakerTimeout is how long the circuit stays open before attempting
 	// recovery. Default: 30 seconds
 	CircuitBreakerTimeout time.Duration
+
+	// KeepAliveInterval is the interval between SSH keepalive probes.
+	// Default: 30 seconds. Set to 0 to disable keepalives.
+	KeepAliveInterval time.Duration
+
+	// KeepAliveTimeout is the timeout for keepalive responses.
+	// Default: 15 seconds.
+	KeepAliveTimeout time.Duration
+
+	// MaxReconnectAttempts is the maximum number of reconnection attempts.
+	// 0 means unlimited attempts. Default: 0 (unlimited).
+	MaxReconnectAttempts int
+
+	// InitialReconnectDelay is the initial delay before first reconnection attempt.
+	// Default: 1 second.
+	InitialReconnectDelay time.Duration
+
+	// MaxReconnectDelay is the maximum delay between reconnection attempts.
+	// Default: 5 minutes.
+	MaxReconnectDelay time.Duration
+
+	// OnConnectionStateChange is called when the connection state changes.
+	// Useful for monitoring connection health.
+	OnConnectionStateChange func(from, to ConnectionState)
 }
 
 // AuthMethod defines SSH authentication methods.

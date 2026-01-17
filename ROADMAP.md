@@ -2389,12 +2389,32 @@ The circuit breaker pattern has been implemented in `pkg/conky/circuitbreaker.go
 - `internal/platform/remote.go` - SSH integration
 - `internal/platform/factory.go` - Configuration fields
 
-#### Task 2.2: SSH Connection Management
+#### Task 2.2: SSH Connection Management ✅ COMPLETED
 **Acceptance Criteria**:
-- [ ] Implement connection pooling for SSH sessions
-- [ ] Add automatic reconnection with exponential backoff
-- [ ] Configure connection keepalive
-- [ ] Add connection health monitoring
+- [x] Implement connection pooling for SSH sessions
+- [x] Add automatic reconnection with exponential backoff
+- [x] Configure connection keepalive
+- [x] Add connection health monitoring
+
+**Implementation Summary**:
+The SSH connection management has been implemented in `internal/platform/ssh_connection.go`:
+- Added `sshConnectionManager` type that handles the full SSH connection lifecycle
+- Implemented connection keepalive using SSH global requests (configurable interval/timeout)
+- Implemented automatic reconnection with exponential backoff (configurable delays and max attempts)
+- Added connection health monitoring via `IsHealthy()`, `State()`, and `Stats()` methods
+- Added `ConnectionState` enum (Disconnected, Connecting, Connected, Reconnecting)
+- Added `ConnectionStats` struct for observability (sessions created, keepalives, reconnects)
+- Integrated into `sshPlatform` via `connManager` field
+- Added new configuration fields to `RemoteConfig`:
+  - `KeepAliveInterval`, `KeepAliveTimeout`
+  - `MaxReconnectAttempts`, `InitialReconnectDelay`, `MaxReconnectDelay`
+  - `OnConnectionStateChange` callback
+
+**Code Locations**:
+- `internal/platform/ssh_connection.go` - Core connection manager implementation
+- `internal/platform/ssh_connection_test.go` - Comprehensive tests
+- `internal/platform/remote.go` - Integration with sshPlatform
+- `internal/platform/factory.go` - Configuration fields
 
 #### Task 2.3: Configuration Validation Enhancement
 **Acceptance Criteria**:
@@ -2491,7 +2511,7 @@ The circuit breaker pattern has been implemented in `pkg/conky/circuitbreaker.go
 - [x] Efficient data caching in SystemMonitor
 - [x] No blocking operations without timeouts
 - [x] Resource limits for Lua execution (CPU and memory)
-- [ ] Connection pooling for SSH (NEEDS IMPLEMENTATION)
+- [x] Connection pooling for SSH (IMPLEMENTED - internal/platform/ssh_connection.go)
 - [x] Profiling support (internal/profiling package)
 
 ### Observability Requirements

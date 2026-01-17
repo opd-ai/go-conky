@@ -34,6 +34,9 @@ type sshPlatform struct {
 	// circuitBreaker protects SSH operations from cascading failures
 	circuitBreaker *conky.CircuitBreaker
 
+	// connManager handles SSH connection lifecycle with keepalive and reconnection
+	connManager *sshConnectionManager
+
 	// Providers for system monitoring
 	cpu        CPUProvider
 	memory     MemoryProvider
@@ -111,22 +114,33 @@ func (p *sshPlatform) Initialize(ctx context.Context) error {
 		return fmt.Errorf("failed to build SSH config: %w", err)
 	}
 
-	// Connect to remote host
+	// Set up connection manager with keepalive and reconnection
 	addr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
-	client, err := ssh.Dial("tcp", addr, sshConfig)
-	if err != nil {
+	connConfig := SSHConnectionConfig{
+		KeepAliveInterval:    p.config.KeepAliveInterval,
+		KeepAliveTimeout:     p.config.KeepAliveTimeout,
+		MaxReconnectAttempts: p.config.MaxReconnectAttempts,
+		InitialReconnectDelay: p.config.InitialReconnectDelay,
+		MaxReconnectDelay:    p.config.MaxReconnectDelay,
+		OnStateChange:        p.config.OnConnectionStateChange,
+	}
+	p.connManager = newSSHConnectionManager(addr, sshConfig, connConfig)
+
+	// Connect using the connection manager
+	if err := p.connManager.Connect(p.ctx); err != nil {
 		return fmt.Errorf("failed to connect to %s: %w", addr, err)
 	}
 
+	// Store the client reference for backward compatibility
 	p.mu.Lock()
-	p.client = client
+	p.client = p.connManager.client
 	p.mu.Unlock()
 
 	// Auto-detect target OS if not specified
 	if p.config.TargetOS == "" {
 		p.targetOS, err = p.detectOS()
 		if err != nil {
-			p.client.Close()
+			p.connManager.Close()
 			return fmt.Errorf("failed to detect remote OS: %w", err)
 		}
 	} else {
@@ -311,6 +325,46 @@ func (p *sshPlatform) runCommand(cmd string) (string, error) {
 
 // runCommandInternal executes a command on the remote system without circuit breaker protection.
 func (p *sshPlatform) runCommandInternal(cmd string) (string, error) {
+	// Use connection manager if available
+	if p.connManager != nil {
+		if !p.connManager.IsHealthy() {
+			return "", fmt.Errorf("SSH connection is not healthy (state: %s)", p.connManager.State())
+		}
+
+		session, err := p.connManager.NewSession()
+		if err != nil {
+			return "", fmt.Errorf("failed to create session: %w", err)
+		}
+		defer session.Close()
+
+		var stdout, stderr bytes.Buffer
+		session.Stdout = &stdout
+		session.Stderr = &stderr
+
+		// Run command with timeout
+		done := make(chan error, 1)
+		go func() {
+			done <- session.Run(cmd)
+		}()
+
+		select {
+		case err := <-done:
+			if err != nil {
+				return "", fmt.Errorf("command failed: %w (stderr: %s)", err, stderr.String())
+			}
+			return stdout.String(), nil
+		case <-time.After(p.cmdTimeout):
+			_ = session.Signal(ssh.SIGKILL)
+			_ = session.Close()
+			return "", fmt.Errorf("command timed out after %v", p.cmdTimeout)
+		case <-p.ctx.Done():
+			_ = session.Signal(ssh.SIGKILL)
+			_ = session.Close()
+			return "", p.ctx.Err()
+		}
+	}
+
+	// Fallback to direct client access (for backward compatibility)
 	p.mu.RLock()
 	client := p.client
 	p.mu.RUnlock()
@@ -358,6 +412,13 @@ func (p *sshPlatform) Close() error {
 	if p.cancel != nil {
 		p.cancel()
 	}
+
+	// Close connection manager if used
+	if p.connManager != nil {
+		return p.connManager.Close()
+	}
+
+	// Fallback to direct client close
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.client != nil {
@@ -409,4 +470,37 @@ func (p *sshPlatform) ResetCircuitBreaker() {
 	if p.circuitBreaker != nil {
 		p.circuitBreaker.Reset()
 	}
+}
+
+// ConnectionStats returns the current SSH connection statistics.
+// Returns nil if connection manager is not initialized.
+func (p *sshPlatform) ConnectionStats() *ConnectionStats {
+	if p.connManager == nil {
+		return nil
+	}
+	stats := p.connManager.Stats()
+	return &stats
+}
+
+// ConnectionState returns the current SSH connection state.
+func (p *sshPlatform) ConnectionState() ConnectionState {
+	if p.connManager == nil {
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		if p.client != nil {
+			return ConnectionStateConnected
+		}
+		return ConnectionStateDisconnected
+	}
+	return p.connManager.State()
+}
+
+// IsConnectionHealthy returns true if the SSH connection is healthy.
+func (p *sshPlatform) IsConnectionHealthy() bool {
+	if p.connManager != nil {
+		return p.connManager.IsHealthy()
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.client != nil
 }

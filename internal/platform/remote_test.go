@@ -594,3 +594,113 @@ func TestResetCircuitBreakerWhenDisabled(t *testing.T) {
 	// Reset should not panic when circuit breaker is disabled
 	p.ResetCircuitBreaker()
 }
+
+// TestConnectionManagementConfig tests the new connection management configuration fields.
+func TestConnectionManagementConfig(t *testing.T) {
+	config := RemoteConfig{
+		Host:                  "example.com",
+		User:                  "testuser",
+		AuthMethod:            PasswordAuth{Password: "testpass"},
+		KeepAliveInterval:     1 * time.Minute,
+		KeepAliveTimeout:      30 * time.Second,
+		MaxReconnectAttempts:  10,
+		InitialReconnectDelay: 5 * time.Second,
+		MaxReconnectDelay:     10 * time.Minute,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Verify config was stored
+	if p.config.KeepAliveInterval != 1*time.Minute {
+		t.Errorf("KeepAliveInterval = %v, want 1m", p.config.KeepAliveInterval)
+	}
+	if p.config.MaxReconnectAttempts != 10 {
+		t.Errorf("MaxReconnectAttempts = %v, want 10", p.config.MaxReconnectAttempts)
+	}
+}
+
+// TestConnectionStateMethod tests the ConnectionState method.
+func TestConnectionStateMethod(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Before initialization, should be disconnected
+	state := p.ConnectionState()
+	if state != ConnectionStateDisconnected {
+		t.Errorf("ConnectionState() = %v, want disconnected", state)
+	}
+}
+
+// TestIsConnectionHealthyMethod tests the IsConnectionHealthy method.
+func TestIsConnectionHealthyMethod(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Before initialization, should not be healthy
+	if p.IsConnectionHealthy() {
+		t.Error("IsConnectionHealthy() should be false before initialization")
+	}
+}
+
+// TestConnectionStatsNil tests that ConnectionStats returns nil before initialization.
+func TestConnectionStatsNil(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Before initialization, connManager is nil
+	stats := p.ConnectionStats()
+	if stats != nil {
+		t.Error("ConnectionStats() should be nil before initialization")
+	}
+}
+
+// TestOnConnectionStateChangeCallback tests the state change callback configuration.
+func TestOnConnectionStateChangeCallback(t *testing.T) {
+	var stateChanges []struct{ from, to ConnectionState }
+
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+		OnConnectionStateChange: func(from, to ConnectionState) {
+			stateChanges = append(stateChanges, struct{ from, to ConnectionState }{from, to})
+		},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Verify callback was stored in config
+	if p.config.OnConnectionStateChange == nil {
+		t.Error("OnConnectionStateChange should not be nil")
+	}
+}
