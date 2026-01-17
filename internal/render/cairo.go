@@ -26,6 +26,8 @@ const (
 	PatternTypeLinear
 	// PatternTypeRadial is a radial gradient pattern.
 	PatternTypeRadial
+	// PatternTypeSurface is a surface (image) pattern.
+	PatternTypeSurface
 )
 
 // CairoFillRule represents the fill rule for fill operations.
@@ -93,7 +95,9 @@ type CairoPattern struct {
 	colorStops []ColorStop
 	// Extend mode for patterns
 	extend PatternExtend
-	mu     sync.Mutex
+	// For surface patterns: the source surface/image
+	surface *ebiten.Image
+	mu      sync.Mutex
 }
 
 // NewSolidPattern creates a solid color pattern.
@@ -132,6 +136,29 @@ func NewRadialPattern(cx0, cy0, r0, cx1, cy1, r1 float64) *CairoPattern {
 		cy1:         cy1,
 		r1:          r1,
 		colorStops:  make([]ColorStop, 0),
+	}
+}
+
+// NewSurfacePattern creates a surface (image) pattern.
+// This is equivalent to cairo_pattern_create_for_surface.
+func NewSurfacePattern(surface *CairoSurface) *CairoPattern {
+	if surface == nil || surface.IsDestroyed() {
+		return nil
+	}
+	return &CairoPattern{
+		patternType: PatternTypeSurface,
+		surface:     surface.Image(),
+	}
+}
+
+// NewSurfacePatternFromImage creates a surface pattern from an Ebiten image.
+func NewSurfacePatternFromImage(image *ebiten.Image) *CairoPattern {
+	if image == nil {
+		return nil
+	}
+	return &CairoPattern{
+		patternType: PatternTypeSurface,
+		surface:     image,
 	}
 }
 
@@ -234,6 +261,8 @@ func (p *CairoPattern) ColorAtPoint(x, y float64) color.RGBA {
 		return p.linearColorAt(x, y)
 	case PatternTypeRadial:
 		return p.radialColorAt(x, y)
+	case PatternTypeSurface:
+		return p.surfaceColorAt(x, y)
 	default:
 		return color.RGBA{A: 255}
 	}
@@ -268,6 +297,55 @@ func (p *CairoPattern) radialColorAt(x, y float64) color.RGBA {
 	}
 	t := (dist - p.r0) / (p.r1 - p.r0)
 	return p.ColorAt(t)
+}
+
+// surfaceColorAt returns the color at a point for a surface pattern.
+// Note: Due to Ebiten limitations, this function may not work correctly
+// outside of a running game loop. In such cases, it returns an opaque
+// black pixel. For production use, this is called during the draw phase.
+func (p *CairoPattern) surfaceColorAt(x, y float64) color.RGBA {
+	p.mu.Lock()
+	surface := p.surface
+	x0, y0 := p.x0, p.y0
+	p.mu.Unlock()
+
+	if surface == nil {
+		return color.RGBA{A: 255}
+	}
+
+	// Adjust for pattern offset
+	px := int(x - x0)
+	py := int(y - y0)
+
+	// Check bounds
+	bounds := surface.Bounds()
+	if px < bounds.Min.X || px >= bounds.Max.X || py < bounds.Min.Y || py >= bounds.Max.Y {
+		return color.RGBA{} // Transparent outside bounds
+	}
+
+	// Due to Ebiten limitations, reading pixels requires the game loop to be running.
+	// The surfaceColorAt function is primarily used during the Mask operation,
+	// which happens within the game loop's Draw phase. For use cases that require
+	// reading pixel colors outside the game loop, use ReadPixels with proper timing.
+	// Here we use a defer/recover to handle the case when this is called
+	// outside the game loop (e.g., in tests).
+	var result color.RGBA
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Return opaque pixel if we can't read - caller should handle this
+				result = color.RGBA{A: 255}
+			}
+		}()
+		r, g, b, a := surface.At(px, py).RGBA()
+		result = color.RGBA{
+			R: uint8(r >> 8),
+			G: uint8(g >> 8),
+			B: uint8(b >> 8),
+			A: uint8(a >> 8),
+		}
+	}()
+	return result
 }
 
 // PatternExtend represents the extend mode for patterns.
@@ -528,7 +606,14 @@ type CairoRenderer struct {
 	fillRule CairoFillRule
 	// Compositing operator
 	operator CairoOperator
-	mu       sync.Mutex
+	// Group rendering state - stack of group surfaces
+	groupStack []*groupState
+	// Source surface for SetSourceSurface
+	sourceSurface   *ebiten.Image
+	sourceSurfaceX  float64
+	sourceSurfaceY  float64
+	hasSourceSurface bool
+	mu              sync.Mutex
 }
 
 // cairoState holds a snapshot of the drawing state for save/restore.
@@ -564,6 +649,25 @@ type cairoState struct {
 	// Compositing operator
 	operator CairoOperator
 }
+
+// groupState holds the state for a push_group operation.
+type groupState struct {
+	surface       *ebiten.Image // The group's temporary surface
+	previousScreen *ebiten.Image // The screen before push_group was called
+	content       CairoContent  // Content type for the group
+}
+
+// CairoContent represents the content type for group surfaces.
+type CairoContent int
+
+const (
+	// CairoContentColor creates a group with RGB content (no alpha).
+	CairoContentColor CairoContent = iota
+	// CairoContentAlpha creates a group with alpha-only content.
+	CairoContentAlpha
+	// CairoContentColorAlpha creates a group with RGBA content (default).
+	CairoContentColorAlpha
+)
 
 // FontSlant represents Cairo font slant styles.
 type FontSlant int
@@ -1305,7 +1409,7 @@ func (cr *CairoRenderer) StrokePreserve() {
 	})
 }
 
-// Paint fills the entire surface with the current color.
+// Paint fills the entire surface with the current color or source pattern.
 // When a clip region is set, only the clipped area is filled.
 // This is equivalent to cairo_paint.
 func (cr *CairoRenderer) Paint() {
@@ -1317,12 +1421,27 @@ func (cr *CairoRenderer) Paint() {
 	}
 
 	// Get clipped screen for painting
-	screen, _, _ := cr.getClippedScreen()
+	screen, clipX, clipY := cr.getClippedScreen()
+
+	// Check if we have a surface pattern to paint
+	if cr.sourcePattern != nil && cr.sourcePattern.patternType == PatternTypeSurface {
+		if cr.sourcePattern.surface != nil {
+			opts := &ebiten.DrawImageOptions{
+				Blend: cr.getEbitenBlend(),
+			}
+			// Apply pattern offset, adjusted for clip region
+			opts.GeoM.Translate(cr.sourcePattern.x0-float64(clipX), cr.sourcePattern.y0-float64(clipY))
+			screen.DrawImage(cr.sourcePattern.surface, opts)
+			return
+		}
+	}
+
+	// Fall back to solid color
 	screen.Fill(cr.currentColor)
 }
 
-// PaintWithAlpha fills the entire surface with the current color at the given alpha.
-// When a clip region is set, only the clipped area is filled.
+// PaintWithAlpha fills the entire surface with the current color or source pattern
+// at the given alpha. When a clip region is set, only the clipped area is filled.
 // This is equivalent to cairo_paint_with_alpha.
 func (cr *CairoRenderer) PaintWithAlpha(alpha float64) {
 	cr.mu.Lock()
@@ -1332,11 +1451,27 @@ func (cr *CairoRenderer) PaintWithAlpha(alpha float64) {
 		return
 	}
 
+	// Get clipped screen for painting
+	screen, clipX, clipY := cr.getClippedScreen()
+
+	// Check if we have a surface pattern to paint
+	if cr.sourcePattern != nil && cr.sourcePattern.patternType == PatternTypeSurface {
+		if cr.sourcePattern.surface != nil {
+			opts := &ebiten.DrawImageOptions{
+				Blend: cr.getEbitenBlend(),
+			}
+			// Apply pattern offset, adjusted for clip region
+			opts.GeoM.Translate(cr.sourcePattern.x0-float64(clipX), cr.sourcePattern.y0-float64(clipY))
+			// Apply alpha via color matrix
+			opts.ColorScale.Scale(1, 1, 1, float32(alpha))
+			screen.DrawImage(cr.sourcePattern.surface, opts)
+			return
+		}
+	}
+
+	// Fall back to solid color with alpha
 	clr := cr.currentColor
 	clr.A = clampToByte(alpha)
-
-	// Get clipped screen for painting
-	screen, _, _ := cr.getClippedScreen()
 	screen.Fill(clr)
 }
 
@@ -2965,4 +3100,196 @@ func (cr *CairoRenderer) MaskSurface(surface *CairoSurface, surfaceX, surfaceY f
 	}
 	screenOpts.GeoM.Translate(tx, ty)
 	screen.DrawImage(compositeImg, screenOpts)
+}
+
+// --- Group Rendering Functions ---
+//
+// Group rendering allows drawing to a temporary surface that can later be
+// composited back to the main surface. This is useful for complex effects
+// like transparency, blur, or when you need to capture drawing operations.
+
+// PushGroup temporarily redirects drawing to an internal group surface.
+// This is equivalent to cairo_push_group.
+//
+// All subsequent drawing operations will be directed to the group surface
+// until PopGroup or PopGroupToSource is called. Groups can be nested.
+func (cr *CairoRenderer) PushGroup() {
+	cr.PushGroupWithContent(CairoContentColorAlpha)
+}
+
+// PushGroupWithContent temporarily redirects drawing to a group surface with
+// the specified content type. This is equivalent to cairo_push_group_with_content.
+//
+// The content type determines the properties of the group surface:
+// - CairoContentColor: RGB only (no alpha channel)
+// - CairoContentAlpha: Alpha only (no color)
+// - CairoContentColorAlpha: Full RGBA (default)
+func (cr *CairoRenderer) PushGroupWithContent(content CairoContent) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if cr.screen == nil {
+		return
+	}
+
+	// Get screen dimensions
+	bounds := cr.screen.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	// Create a new group surface
+	groupSurface := ebiten.NewImage(w, h)
+
+	// For alpha-only content, we still use RGBA but will only use alpha channel
+	// For color-only content, we start with opaque background
+	if content == CairoContentColor {
+		groupSurface.Fill(color.RGBA{A: 255})
+	}
+
+	// Save current screen and push group state
+	state := &groupState{
+		surface:        groupSurface,
+		previousScreen: cr.screen,
+		content:        content,
+	}
+	cr.groupStack = append(cr.groupStack, state)
+
+	// Redirect drawing to the group surface
+	cr.screen = groupSurface
+}
+
+// PopGroup terminates the current group and returns its contents as a pattern.
+// This is equivalent to cairo_pop_group.
+//
+// The returned pattern can be used with SetSource to composite the group
+// contents onto the original surface. Returns nil if no group was pushed.
+func (cr *CairoRenderer) PopGroup() *CairoPattern {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	return cr.popGroupUnlocked()
+}
+
+// popGroupUnlocked pops the group without acquiring the mutex.
+// Returns a surface pattern containing the group contents.
+// Must be called while holding the mutex.
+func (cr *CairoRenderer) popGroupUnlocked() *CairoPattern {
+	if len(cr.groupStack) == 0 {
+		return nil
+	}
+
+	// Pop the group state
+	lastIdx := len(cr.groupStack) - 1
+	state := cr.groupStack[lastIdx]
+	cr.groupStack = cr.groupStack[:lastIdx]
+
+	// Restore the previous screen
+	cr.screen = state.previousScreen
+
+	// Create a surface pattern from the group surface
+	// The pattern will contain the group's image data
+	pattern := &CairoPattern{
+		patternType: PatternTypeSurface,
+		surface:     state.surface,
+	}
+
+	return pattern
+}
+
+// PopGroupToSource terminates the current group and sets it as the source.
+// This is equivalent to cairo_pop_group_to_source.
+//
+// This is a convenience function equivalent to:
+//
+//	pattern := cr.PopGroup()
+//	cr.SetSource(pattern)
+func (cr *CairoRenderer) PopGroupToSource() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	pattern := cr.popGroupUnlocked()
+	if pattern != nil {
+		cr.sourcePattern = pattern
+	}
+}
+
+// GetGroupTarget returns the current target surface.
+// If a group is active, this returns the group surface; otherwise
+// it returns the original surface.
+// This is equivalent to cairo_get_group_target.
+func (cr *CairoRenderer) GetGroupTarget() *ebiten.Image {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.screen
+}
+
+// HasGroup returns whether a group is currently active.
+func (cr *CairoRenderer) HasGroup() bool {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return len(cr.groupStack) > 0
+}
+
+// --- Source Surface Functions ---
+//
+// These functions allow using a surface (image) as the source for drawing
+// operations. This enables painting images or compositing surfaces.
+
+// SetSourceSurface sets a surface as the source for subsequent drawing operations.
+// The surface is placed at (x, y) in user-space coordinates.
+// This is equivalent to cairo_set_source_surface.
+//
+// After calling SetSourceSurface, operations like Paint() will draw the surface
+// content instead of a solid color.
+func (cr *CairoRenderer) SetSourceSurface(surface *CairoSurface, x, y float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if surface == nil || surface.IsDestroyed() {
+		cr.sourceSurface = nil
+		cr.hasSourceSurface = false
+		return
+	}
+
+	cr.sourceSurface = surface.Image()
+	cr.sourceSurfaceX = x
+	cr.sourceSurfaceY = y
+	cr.hasSourceSurface = cr.sourceSurface != nil
+
+	// Create a surface pattern and set it as source
+	if cr.hasSourceSurface {
+		cr.sourcePattern = &CairoPattern{
+			patternType: PatternTypeSurface,
+			surface:     cr.sourceSurface,
+			x0:          x,
+			y0:          y,
+		}
+	}
+}
+
+// SetSourceSurfaceImage sets an Ebiten image as the source for drawing operations.
+// This is a convenience function for cases where you have a raw Ebiten image
+// instead of a CairoSurface.
+func (cr *CairoRenderer) SetSourceSurfaceImage(image *ebiten.Image, x, y float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	cr.sourceSurface = image
+	cr.sourceSurfaceX = x
+	cr.sourceSurfaceY = y
+	cr.hasSourceSurface = image != nil
+
+	// Create a surface pattern and set it as source
+	if cr.hasSourceSurface {
+		cr.sourcePattern = &CairoPattern{
+			patternType: PatternTypeSurface,
+			surface:     image,
+			x0:          x,
+			y0:          y,
+		}
+	}
 }

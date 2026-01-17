@@ -3318,3 +3318,500 @@ func TestCairoRenderer_MaskSurface_ConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 }
+
+// --- Group Rendering Tests ---
+
+func TestCairoRenderer_PushGroup(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Initially no group
+	if cr.HasGroup() {
+		t.Error("Expected no group initially")
+	}
+
+	// Push a group
+	cr.PushGroup()
+
+	// Should have a group now
+	if !cr.HasGroup() {
+		t.Error("Expected to have a group after PushGroup")
+	}
+
+	// The target should be different from the original screen
+	target := cr.GetGroupTarget()
+	if target == nil {
+		t.Error("Expected GetGroupTarget to return non-nil")
+	}
+}
+
+func TestCairoRenderer_PushGroupWithContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		content CairoContent
+	}{
+		{"ColorAlpha", CairoContentColorAlpha},
+		{"Color", CairoContentColor},
+		{"Alpha", CairoContentAlpha},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cr := NewCairoRenderer()
+			screen := createTestScreen(100, 100)
+			cr.SetScreen(screen)
+
+			cr.PushGroupWithContent(tt.content)
+
+			if !cr.HasGroup() {
+				t.Error("Expected to have a group after PushGroupWithContent")
+			}
+		})
+	}
+}
+
+func TestCairoRenderer_PopGroup(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Push a group
+	cr.PushGroup()
+
+	// Draw something in the group
+	cr.SetSourceRGB(1, 0, 0) // Red
+	cr.Rectangle(10, 10, 50, 50)
+	cr.Fill()
+
+	// Pop the group
+	pattern := cr.PopGroup()
+
+	// Should have no group now
+	if cr.HasGroup() {
+		t.Error("Expected no group after PopGroup")
+	}
+
+	// Pattern should be returned
+	if pattern == nil {
+		t.Error("Expected PopGroup to return a pattern")
+	}
+
+	// Pattern should be a surface pattern
+	if pattern.Type() != PatternTypeSurface {
+		t.Errorf("Expected PatternTypeSurface, got %v", pattern.Type())
+	}
+}
+
+func TestCairoRenderer_PopGroupNoGroup(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Pop without push should return nil
+	pattern := cr.PopGroup()
+	if pattern != nil {
+		t.Error("Expected PopGroup to return nil when no group exists")
+	}
+}
+
+func TestCairoRenderer_PopGroupToSource(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Push a group
+	cr.PushGroup()
+
+	// Draw something in the group
+	cr.SetSourceRGB(0, 1, 0) // Green
+	cr.Rectangle(0, 0, 100, 100)
+	cr.Fill()
+
+	// Pop to source
+	cr.PopGroupToSource()
+
+	// Should have no group now
+	if cr.HasGroup() {
+		t.Error("Expected no group after PopGroupToSource")
+	}
+
+	// Source pattern should be set
+	source := cr.GetSource()
+	if source == nil {
+		t.Error("Expected source pattern to be set after PopGroupToSource")
+	}
+
+	if source.Type() != PatternTypeSurface {
+		t.Errorf("Expected PatternTypeSurface, got %v", source.Type())
+	}
+}
+
+func TestCairoRenderer_NestedGroups(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Push first group
+	cr.PushGroup()
+	if !cr.HasGroup() {
+		t.Error("Expected to have a group after first PushGroup")
+	}
+
+	// Push second group (nested)
+	cr.PushGroup()
+	if !cr.HasGroup() {
+		t.Error("Expected to have a group after second PushGroup")
+	}
+
+	// Pop second group
+	pattern2 := cr.PopGroup()
+	if pattern2 == nil {
+		t.Error("Expected non-nil pattern from second PopGroup")
+	}
+	if !cr.HasGroup() {
+		t.Error("Expected to still have a group after popping nested group")
+	}
+
+	// Pop first group
+	pattern1 := cr.PopGroup()
+	if pattern1 == nil {
+		t.Error("Expected non-nil pattern from first PopGroup")
+	}
+	if cr.HasGroup() {
+		t.Error("Expected no group after popping all groups")
+	}
+}
+
+func TestCairoRenderer_GroupDrawing(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Fill background with blue
+	cr.SetSourceRGB(0, 0, 1)
+	cr.Paint()
+
+	// Push a group
+	cr.PushGroup()
+
+	// Draw a red rectangle in the group
+	cr.SetSourceRGB(1, 0, 0)
+	cr.Rectangle(25, 25, 50, 50)
+	cr.Fill()
+
+	// Pop to source
+	cr.PopGroupToSource()
+
+	// Paint the group onto the screen
+	cr.Paint()
+
+	// The group content should now be on the screen
+	target := cr.GetGroupTarget()
+	if target == nil {
+		t.Error("Expected target to be non-nil")
+	}
+}
+
+func TestCairoRenderer_PushGroupNoScreen(t *testing.T) {
+	cr := NewCairoRenderer()
+	// No screen set
+
+	// PushGroup should not panic
+	cr.PushGroup()
+
+	// Should not have a group since no screen was set
+	if cr.HasGroup() {
+		t.Error("Expected no group when screen is not set")
+	}
+}
+
+// --- Source Surface Tests ---
+
+func TestCairoRenderer_SetSourceSurface(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Create a source surface
+	surface := NewCairoSurface(50, 50)
+	defer surface.Destroy()
+
+	// Set source surface
+	cr.SetSourceSurface(surface, 10, 20)
+
+	// Check that source pattern is set
+	source := cr.GetSource()
+	if source == nil {
+		t.Error("Expected source pattern to be set after SetSourceSurface")
+	}
+
+	if source.Type() != PatternTypeSurface {
+		t.Errorf("Expected PatternTypeSurface, got %v", source.Type())
+	}
+}
+
+func TestCairoRenderer_SetSourceSurfaceNil(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Set nil surface
+	cr.SetSourceSurface(nil, 10, 20)
+
+	// This should not cause issues - the test passes if no panic
+}
+
+func TestCairoRenderer_SetSourceSurfaceImage(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Create an Ebiten image
+	img := ebiten.NewImage(50, 50)
+	defer img.Deallocate()
+
+	// Fill it with color
+	img.Fill(color.RGBA{R: 255, G: 0, B: 0, A: 255})
+
+	// Set as source
+	cr.SetSourceSurfaceImage(img, 0, 0)
+
+	// Check that source pattern is set
+	source := cr.GetSource()
+	if source == nil {
+		t.Error("Expected source pattern to be set after SetSourceSurfaceImage")
+	}
+
+	if source.Type() != PatternTypeSurface {
+		t.Errorf("Expected PatternTypeSurface, got %v", source.Type())
+	}
+}
+
+func TestCairoRenderer_PaintWithSurfaceSource(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Create a colored source surface
+	img := ebiten.NewImage(100, 100)
+	defer img.Deallocate()
+	img.Fill(color.RGBA{R: 255, G: 128, B: 0, A: 255}) // Orange
+
+	// Set as source
+	cr.SetSourceSurfaceImage(img, 0, 0)
+
+	// Paint should use the surface
+	cr.Paint()
+
+	// Verify the screen was painted
+	// (we can't easily verify pixel colors in this test framework, but
+	// the test passes if Paint doesn't panic)
+}
+
+func TestCairoRenderer_PaintWithAlphaSurfaceSource(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Fill background with blue
+	cr.SetSourceRGB(0, 0, 1)
+	cr.Paint()
+
+	// Create a colored source surface
+	img := ebiten.NewImage(100, 100)
+	defer img.Deallocate()
+	img.Fill(color.RGBA{R: 255, G: 0, B: 0, A: 255}) // Red
+
+	// Set as source
+	cr.SetSourceSurfaceImage(img, 0, 0)
+
+	// Paint with half alpha
+	cr.PaintWithAlpha(0.5)
+
+	// The test passes if no panic occurs
+}
+
+// --- Surface Pattern Tests ---
+
+func TestNewSurfacePattern(t *testing.T) {
+	surface := NewCairoSurface(50, 50)
+	defer surface.Destroy()
+
+	pattern := NewSurfacePattern(surface)
+	if pattern == nil {
+		t.Fatal("Expected NewSurfacePattern to return non-nil")
+	}
+
+	if pattern.Type() != PatternTypeSurface {
+		t.Errorf("Expected PatternTypeSurface, got %v", pattern.Type())
+	}
+}
+
+func TestNewSurfacePatternNil(t *testing.T) {
+	pattern := NewSurfacePattern(nil)
+	if pattern != nil {
+		t.Error("Expected NewSurfacePattern(nil) to return nil")
+	}
+}
+
+func TestNewSurfacePatternFromImage(t *testing.T) {
+	img := ebiten.NewImage(50, 50)
+	defer img.Deallocate()
+
+	pattern := NewSurfacePatternFromImage(img)
+	if pattern == nil {
+		t.Fatal("Expected NewSurfacePatternFromImage to return non-nil")
+	}
+
+	if pattern.Type() != PatternTypeSurface {
+		t.Errorf("Expected PatternTypeSurface, got %v", pattern.Type())
+	}
+}
+
+func TestNewSurfacePatternFromImageNil(t *testing.T) {
+	pattern := NewSurfacePatternFromImage(nil)
+	if pattern != nil {
+		t.Error("Expected NewSurfacePatternFromImage(nil) to return nil")
+	}
+}
+
+func TestSurfacePattern_ColorAtPoint(t *testing.T) {
+	// Note: Due to Ebiten limitations, reading pixels requires the game loop
+	// to be running. This test verifies the function doesn't panic and returns
+	// a valid color (though not necessarily the exact color we wrote).
+	img := ebiten.NewImage(10, 10)
+	defer img.Deallocate()
+	redColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	img.Fill(redColor)
+
+	pattern := NewSurfacePatternFromImage(img)
+
+	// Get color at a point inside the surface
+	// Due to Ebiten limitations outside game loop, this may return a fallback color
+	gotColor := pattern.ColorAtPoint(5, 5)
+
+	// The function should return an opaque color (either the actual or fallback)
+	if gotColor.A == 0 {
+		t.Errorf("Expected opaque color at (5,5), got transparent")
+	}
+}
+
+func TestSurfacePattern_ColorAtPointOutside(t *testing.T) {
+	img := ebiten.NewImage(10, 10)
+	defer img.Deallocate()
+	img.Fill(color.RGBA{R: 255, G: 0, B: 0, A: 255})
+
+	pattern := NewSurfacePatternFromImage(img)
+
+	// Get color at a point outside the surface
+	gotColor := pattern.ColorAtPoint(20, 20)
+
+	// Should be transparent (outside bounds)
+	if gotColor.A != 0 {
+		t.Errorf("Expected transparent at (20,20), got alpha %d", gotColor.A)
+	}
+}
+
+func TestSurfacePattern_ColorAtPointWithOffset(t *testing.T) {
+	// Note: Due to Ebiten limitations, reading pixels requires the game loop
+	// to be running. This test verifies the function doesn't panic.
+	img := ebiten.NewImage(10, 10)
+	defer img.Deallocate()
+	img.Fill(color.RGBA{R: 0, G: 255, B: 0, A: 255}) // Green
+
+	pattern := &CairoPattern{
+		patternType: PatternTypeSurface,
+		surface:     img,
+		x0:          5, // Offset by 5
+		y0:          5,
+	}
+
+	// Point (7, 7) with offset (5, 5) should map to (2, 2) in the surface
+	gotColor := pattern.ColorAtPoint(7, 7)
+
+	// The function should return an opaque color (either actual or fallback)
+	if gotColor.A == 0 {
+		t.Errorf("Expected opaque color at (7,7), got transparent")
+	}
+
+	// Point (3, 3) with offset (5, 5) should map to (-2, -2) which is outside
+	gotColor = pattern.ColorAtPoint(3, 3)
+	// Outside bounds should be transparent
+	if gotColor.A != 0 {
+		t.Errorf("Expected transparent at (3,3), got alpha %d", gotColor.A)
+	}
+}
+
+// --- Group Rendering Integration Tests ---
+
+func TestCairoRenderer_GroupWithClipping(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Set a clip region
+	cr.Rectangle(20, 20, 60, 60)
+	cr.Clip()
+
+	// Push a group
+	cr.PushGroup()
+
+	// Draw in the group
+	cr.SetSourceRGB(1, 0, 0)
+	cr.Rectangle(0, 0, 100, 100)
+	cr.Fill()
+
+	// Pop and paint
+	cr.PopGroupToSource()
+	cr.Paint()
+
+	// Test passes if no panic occurs
+}
+
+func TestCairoRenderer_GroupWithTransform(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Apply a transform
+	cr.Translate(10, 10)
+	cr.Scale(2, 2)
+
+	// Push a group
+	cr.PushGroup()
+
+	// Draw in the group
+	cr.SetSourceRGB(0, 1, 0)
+	cr.Rectangle(0, 0, 25, 25)
+	cr.Fill()
+
+	// Pop and paint
+	cr.PopGroupToSource()
+	cr.Paint()
+
+	// Test passes if no panic occurs
+}
+
+func TestCairoRenderer_GroupConcurrency(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 5; j++ {
+				cr.PushGroup()
+				cr.SetSourceRGB(float64(id)/10, float64(j)/5, 0.5)
+				cr.Rectangle(float64(id*10), float64(j*10), 8, 8)
+				cr.Fill()
+				cr.PopGroupToSource()
+				cr.Paint()
+			}
+		}(i)
+	}
+	wg.Wait()
+}

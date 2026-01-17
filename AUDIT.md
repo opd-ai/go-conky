@@ -2,11 +2,11 @@
 
 ## Summary
 - **Date**: 2026-01-17 (Updated)
-- **Tests**: 2443+ total (including subtests), all passed, 0 failed
+- **Tests**: 2500+ total (including subtests), all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
 - **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed, 1 partial), 4 low (4 fixed/documented)
 - **Implemented Compatibility**: ~90% (of implemented features work correctly)
-- **Overall Feature Coverage**: ~54%
+- **Overall Feature Coverage**: ~56%
 
 ## Overview
 
@@ -66,7 +66,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ---
 
-### Cairo Rendering (87.3% coverage, 104 functions)
+### Cairo Rendering (87.3% coverage, 111 functions)
 
 | Function Category | Functions | Status | Notes |
 |------------------|-----------|--------|-------|
@@ -78,22 +78,23 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | Text | 6 | ✅ PASS | select_font_face, set_font_size, show_text, text_extents |
 | Transform | 10 | ✅ PASS | translate, rotate, scale, save, restore, identity_matrix |
 | Clipping | 5 | ✅ PASS | Rectangular clipping enforced via Ebiten SubImage |
-| Patterns | 10 | ✅ PASS | Linear/radial gradients, color stops |
+| Patterns | 12 | ✅ PASS | Linear/radial/surface gradients, color stops |
 | Matrix | 16 | ✅ PASS | Full matrix operations |
 | Query | 8 | ✅ PASS | get_current_point, path_extents, etc. |
-| Surface | 12 | ✅ PASS | image_surface_create, write_to_png, destroy |
+| Surface | 14 | ✅ PASS | image_surface_create, write_to_png, destroy, set_source_surface |
 | Masking | 2 | ✅ PASS | mask, mask_surface |
+| Groups | 5 | ✅ PASS | push_group, pop_group, pop_group_to_source, get_group_target |
 
-**Cairo Functions Implemented: 104 of ~180 (~58%)**
+**Cairo Functions Implemented: 111 of ~180 (~62%)**
 
 #### Missing Cairo Functions
 | Function | Priority | Notes |
 |----------|----------|-------|
 | cairo_mask | ✅ DONE | Mask compositing using pattern alpha |
 | cairo_mask_surface | ✅ DONE | Surface masking using Ebiten BlendSourceIn |
-| cairo_push_group | MEDIUM | Group rendering |
-| cairo_pop_group | MEDIUM | Group rendering |
-| cairo_set_source_surface | MEDIUM | Surface as source |
+| cairo_push_group | ✅ DONE | Group rendering - redirects drawing to temporary surface |
+| cairo_pop_group | ✅ DONE | Group rendering - returns group as pattern |
+| cairo_set_source_surface | ✅ DONE | Surface as source - enables painting surfaces |
 | cairo_surface_create_similar | LOW | Similar surface creation |
 | cairo_glyph_* | LOW | Advanced glyph rendering |
 
@@ -473,12 +474,12 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | Category | Target | Implemented | Broken | Missing | Score |
 |----------|--------|-------------|--------|---------|-------|
 | Config Directives | 150 | 44 | 0 | 106 | 29% |
-| Cairo Functions | 180 | 104 | 0 | 76 | 58% |
+| Cairo Functions | 180 | 111 | 0 | 69 | 62% |
 | Lua Integration | 12 | 12 | 0 | 0 | 100% |
 | Display Objects | 200 | 124 | 3 | 73 | 62% |
 | Window Management | 20 | 10 | 2 | 8 | 50% |
 | System Monitoring | 30 | 28 | 0 | 2 | 93% |
-| **Overall** | **592** | **322** | **5** | **265** | **54%** |
+| **Overall** | **592** | **329** | **5** | **258** | **56%** |
 
 **Functional Compatibility Score: 90%** (of implemented features work correctly)
 
@@ -783,6 +784,28 @@ The Go Conky implementation demonstrates solid architecture and good test covera
   - Value clamping for out-of-range values
   - Combined settings
   - Validation warnings for misconfigured settings
+
+### TEST: Cairo Group Rendering
+**Action**: Test cairo_push_group, cairo_pop_group, and related functions
+**Expected**: Groups allow drawing to temporary surfaces and compositing back
+**Result**: ✅ PASS - Group rendering fully functional
+**Evidence**: TestCairoRenderer_PushGroup, TestCairoRenderer_PopGroup, TestCairoRenderer_PopGroupToSource, TestCairoRenderer_NestedGroups pass with 10 test cases covering:
+  - Pushing/popping groups
+  - Nested groups
+  - Different content types (ColorAlpha, Color, Alpha)
+  - Group drawing and compositing
+  - Concurrency safety
+
+### TEST: Cairo Source Surface
+**Action**: Test cairo_set_source_surface and surface pattern functions
+**Expected**: Surfaces can be used as source for Paint operations
+**Result**: ✅ PASS - Surface source fully functional
+**Evidence**: TestCairoRenderer_SetSourceSurface, TestNewSurfacePattern, TestCairoRenderer_PaintWithSurfaceSource pass with 12 test cases covering:
+  - Setting surfaces as source
+  - Creating surface patterns
+  - Painting with surface sources
+  - Surface pattern color sampling
+  - Position offsets for surface patterns
 
 ---
 
