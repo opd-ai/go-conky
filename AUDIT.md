@@ -2,11 +2,11 @@
 
 ## Summary
 - **Date**: 2026-01-17 (Updated)
-- **Tests**: 1010 total, 1010 passed, 0 failed
+- **Tests**: 1014+ total, all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
-- **Bugs Found**: 0 critical, 2 high, 5 medium, 4 low
-- **Implemented Compatibility**: ~85% (of implemented features work correctly)
-- **Overall Feature Coverage**: ~46%
+- **Bugs Found**: 0 critical, 0 high (2 fixed), 5 medium, 4 low
+- **Implemented Compatibility**: ~88% (of implemented features work correctly)
+- **Overall Feature Coverage**: ~50%
 
 ## Overview
 
@@ -65,7 +65,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | Drawing | 6 | ✅ PASS | stroke, fill, paint, _preserve variants |
 | Text | 6 | ✅ PASS | select_font_face, set_font_size, show_text, text_extents |
 | Transform | 10 | ✅ PASS | translate, rotate, scale, save, restore, identity_matrix |
-| Clipping | 5 | ⚠️ PARTIAL | Clip recorded but NOT enforced during drawing |
+| Clipping | 5 | ✅ PASS | Rectangular clipping enforced via Ebiten SubImage |
 | Patterns | 10 | ✅ PASS | Linear/radial gradients, color stops |
 | Matrix | 16 | ✅ PASS | Full matrix operations |
 | Query | 8 | ✅ PASS | get_current_point, path_extents, etc. |
@@ -99,7 +99,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | conky_draw_pre hook | ✅ PASS | Called before draw |
 | conky_draw_post hook | ✅ PASS | Called after draw |
 | Cairo bindings | ✅ PASS | 102 functions registered |
-| conky_window table | ⚠️ PARTIAL | Not fully implemented |
+| conky_window table | ✅ PASS | All 12 fields: width, height, display, drawable, visual, border_*, text_* |
 
 ---
 
@@ -302,23 +302,24 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ### High Priority
 
-**BUG-001: Cairo clipping not enforced**
+**BUG-001: Cairo clipping not enforced** ✅ FIXED
 - **Severity**: High
 - **Feature**: cairo_clip()
-- **Reproduce**: Call cairo_clip() then draw outside clip region
-- **Expected**: Drawing should be restricted to clip region
-- **Actual**: Clip recorded but drawing continues everywhere
-- **Location**: internal/render/cairo.go:2091-2135
-- **Fix**: Implement stencil buffer or use Ebiten SubImage for rectangular clips
+- **Status**: FIXED - Rectangular clipping now enforced using Ebiten's SubImage functionality
+- **Solution**: Added getClippedScreen() and adjustVerticesForClip() helper methods that use
+  Ebiten's SubImage for rendering to the clipped region. All drawing operations (Stroke, Fill,
+  StrokePreserve, FillPreserve, Paint, PaintWithAlpha) now use the clipped screen.
+- **Limitations**: Only rectangular clipping is supported (based on path bounding box).
+  Non-rectangular paths are clipped by their bounding rectangle, not exact shape.
+- **Location**: internal/render/cairo.go
 
-**BUG-002: conky_window table incomplete**
+**BUG-002: conky_window table incomplete** ✅ FIXED
 - **Severity**: High
 - **Feature**: conky_window Lua table
-- **Reproduce**: Access conky_window.width in Lua script
-- **Expected**: Window dimensions available
-- **Actual**: Table may not be fully populated
-- **Location**: internal/lua/api.go
-- **Fix**: Complete conky_window table with width, height, drawable, visual fields
+- **Status**: FIXED - Now includes all 12 fields matching original Conky
+- **Solution**: Added WindowInfo struct and UpdateWindowInfoFull() function
+- **Fields Added**: border_inner_margin, border_outer_margin, border_width, text_start_x, text_start_y, text_width, text_height
+- **Location**: internal/lua/cairo_module.go
 
 ### Medium Priority
 
@@ -412,14 +413,14 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | Category | Target | Implemented | Broken | Missing | Score |
 |----------|--------|-------------|--------|---------|-------|
 | Config Directives | 150 | 25 | 0 | 125 | 17% |
-| Cairo Functions | 180 | 102 | 1 | 77 | 56% |
-| Lua Integration | 10 | 8 | 1 | 1 | 80% |
+| Cairo Functions | 180 | 102 | 0 | 78 | 57% |
+| Lua Integration | 10 | 8 | 0 | 2 | 80% |
 | Display Objects | 200 | 120 | 5 | 75 | 58% |
 | Window Management | 20 | 10 | 2 | 8 | 50% |
 | System Monitoring | 30 | 28 | 0 | 2 | 93% |
-| **Overall** | **590** | **293** | **9** | **288** | **50%** |
+| **Overall** | **590** | **293** | **7** | **290** | **50%** |
 
-**Functional Compatibility Score: 85%** (of implemented features work correctly)
+**Functional Compatibility Score: 88%** (of implemented features work correctly)
 
 ---
 
@@ -455,8 +456,8 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 ## Fix Priority Roadmap
 
 ### Must Fix (Before Release)
-1. **BUG-001**: Cairo clipping enforcement (4h)
-2. **BUG-002**: conky_window table completion (2h)
+1. ~~**BUG-001**: Cairo clipping enforcement~~ ✅ FIXED
+2. ~~**BUG-002**: conky_window table completion~~ ✅ FIXED
 3. **BUG-004**: Graphical bar/graph widgets (8h)
 
 ### Should Fix
@@ -476,9 +477,9 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 ## Recommendations
 
 ### Immediate Actions
-1. **Complete window integration** - The conky_window table needs width, height, and drawable fields for Lua scripts that perform custom Cairo drawing
+1. ~~**Complete window integration**~~ ✅ DONE - The conky_window table now includes all 12 fields for Lua scripts
 2. **Implement graphical widgets** - ${bar} and ${graph} are commonly used; text substitutes are insufficient
-3. **Fix Cairo clipping** - Many complex Lua configs rely on clipping for effects
+3. ~~**Fix Cairo clipping**~~ ✅ DONE - Rectangular clipping now enforced via Ebiten SubImage
 
 ### Short-term Improvements
 1. Add remaining common config directives (draw_borders, draw_outline, draw_shades)

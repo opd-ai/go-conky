@@ -7,7 +7,14 @@ import (
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/hajimehoshi/ebiten/v2"
 )
+
+// createTestScreen creates a new Ebiten image for testing purposes.
+func createTestScreen(width, height int) *ebiten.Image {
+	return ebiten.NewImage(width, height)
+}
 
 func TestNewCairoRenderer(t *testing.T) {
 	cr := NewCairoRenderer()
@@ -1802,6 +1809,226 @@ func TestCairoRenderer_ClipBoundsSaveRestore(t *testing.T) {
 	x1, y1, x2, y2 = cr.ClipExtents()
 	if x1 != 10 || y1 != 20 || x2 != 110 || y2 != 70 {
 		t.Errorf("Expected (10,20,110,70) after restore, got (%f,%f,%f,%f)", x1, y1, x2, y2)
+	}
+}
+
+// --- Tests for Clipping Enforcement ---
+//
+// These tests verify that the clipping infrastructure is correctly set up.
+// The actual pixel-level clipping is enforced by Ebiten's SubImage functionality,
+// which is tested by the Ebiten project itself. These tests ensure our
+// integration with Ebiten's clipping works correctly.
+
+func TestCairoRenderer_GetClippedScreenNoClip(t *testing.T) {
+	// Test that getClippedScreen returns the original screen when no clip is set
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Access internal method via test
+	cr.mu.Lock()
+	clippedScreen, dx, dy := cr.getClippedScreen()
+	cr.mu.Unlock()
+
+	// Without clip, should return original screen with no offset
+	if clippedScreen != screen {
+		t.Error("Expected original screen when no clip is set")
+	}
+	if dx != 0 || dy != 0 {
+		t.Errorf("Expected offset (0,0) with no clip, got (%f,%f)", dx, dy)
+	}
+}
+
+func TestCairoRenderer_GetClippedScreenWithClip(t *testing.T) {
+	// Test that getClippedScreen returns a SubImage when clip is set
+	cr := NewCairoRenderer()
+	screen := createTestScreen(200, 200)
+	cr.SetScreen(screen)
+
+	// Set a clip region
+	cr.Rectangle(50, 50, 100, 100)
+	cr.Clip()
+
+	// Access internal method
+	cr.mu.Lock()
+	clippedScreen, dx, dy := cr.getClippedScreen()
+	cr.mu.Unlock()
+
+	// With clip, should return a different image (SubImage) with correct offset
+	if clippedScreen == screen {
+		t.Error("Expected SubImage when clip is set, but got original screen")
+	}
+	if clippedScreen == nil {
+		t.Fatal("Clipped screen should not be nil")
+	}
+	if dx != 50 || dy != 50 {
+		t.Errorf("Expected offset (50,50) for clip at (50,50), got (%f,%f)", dx, dy)
+	}
+
+	// Verify SubImage bounds
+	bounds := clippedScreen.Bounds()
+	if bounds.Min.X != 50 || bounds.Min.Y != 50 {
+		t.Errorf("Expected SubImage min (50,50), got (%d,%d)", bounds.Min.X, bounds.Min.Y)
+	}
+	if bounds.Max.X != 150 || bounds.Max.Y != 150 {
+		t.Errorf("Expected SubImage max (150,150), got (%d,%d)", bounds.Max.X, bounds.Max.Y)
+	}
+}
+
+func TestCairoRenderer_AdjustVerticesForClip(t *testing.T) {
+	// Test that adjustVerticesForClip correctly offsets vertex positions
+	cr := NewCairoRenderer()
+
+	// Create test vertices
+	vertices := []ebiten.Vertex{
+		{DstX: 100, DstY: 100},
+		{DstX: 150, DstY: 100},
+		{DstX: 150, DstY: 150},
+		{DstX: 100, DstY: 150},
+	}
+
+	// Apply offset (simulating clip at 50,50)
+	cr.mu.Lock()
+	cr.adjustVerticesForClip(vertices, 50, 50)
+	cr.mu.Unlock()
+
+	// Verify vertices are offset
+	expected := []struct{ x, y float32 }{
+		{50, 50},
+		{100, 50},
+		{100, 100},
+		{50, 100},
+	}
+
+	for i, exp := range expected {
+		if vertices[i].DstX != exp.x || vertices[i].DstY != exp.y {
+			t.Errorf("Vertex %d: expected (%f,%f), got (%f,%f)",
+				i, exp.x, exp.y, vertices[i].DstX, vertices[i].DstY)
+		}
+	}
+}
+
+func TestCairoRenderer_AdjustVerticesForClipNoOffset(t *testing.T) {
+	// Test that adjustVerticesForClip does nothing when offset is zero
+	cr := NewCairoRenderer()
+
+	// Create test vertices
+	vertices := []ebiten.Vertex{
+		{DstX: 100, DstY: 100},
+		{DstX: 150, DstY: 150},
+	}
+
+	// Apply zero offset
+	cr.mu.Lock()
+	cr.adjustVerticesForClip(vertices, 0, 0)
+	cr.mu.Unlock()
+
+	// Verify vertices are unchanged
+	if vertices[0].DstX != 100 || vertices[0].DstY != 100 {
+		t.Errorf("Vertex 0 should be unchanged, got (%f,%f)", vertices[0].DstX, vertices[0].DstY)
+	}
+	if vertices[1].DstX != 150 || vertices[1].DstY != 150 {
+		t.Errorf("Vertex 1 should be unchanged, got (%f,%f)", vertices[1].DstX, vertices[1].DstY)
+	}
+}
+
+func TestCairoRenderer_ClipIntegrationDrawOperations(t *testing.T) {
+	// Test that draw operations can be called with clip set (no panics/errors)
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Set a clip region
+	cr.Rectangle(25, 25, 50, 50)
+	cr.Clip()
+
+	// Verify drawing operations work with clip
+	// (These will use the clipped SubImage internally)
+	cr.SetSourceRGBA(1, 0, 0, 1)
+
+	// Fill
+	cr.Rectangle(0, 0, 100, 100)
+	cr.Fill()
+
+	// Stroke
+	cr.MoveTo(0, 50)
+	cr.LineTo(100, 50)
+	cr.Stroke()
+
+	// StrokePreserve and FillPreserve
+	cr.Rectangle(10, 10, 80, 80)
+	cr.StrokePreserve()
+	cr.FillPreserve()
+
+	// Paint
+	cr.Paint()
+	cr.PaintWithAlpha(0.5)
+
+	// If we got here without panics, the integration works
+}
+
+func TestCairoRenderer_ClipResetRestoresFullDrawArea(t *testing.T) {
+	// Test that ResetClip properly clears clip state
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Set and reset clip
+	cr.Rectangle(25, 25, 50, 50)
+	cr.Clip()
+	cr.ResetClip()
+
+	// Verify clip is reset
+	if cr.HasClip() {
+		t.Error("Expected no clip after ResetClip()")
+	}
+
+	// Verify getClippedScreen returns original screen
+	cr.mu.Lock()
+	clippedScreen, dx, dy := cr.getClippedScreen()
+	cr.mu.Unlock()
+
+	if clippedScreen != screen {
+		t.Error("Expected original screen after ResetClip()")
+	}
+	if dx != 0 || dy != 0 {
+		t.Errorf("Expected offset (0,0) after ResetClip(), got (%f,%f)", dx, dy)
+	}
+}
+
+func TestCairoRenderer_ClipSaveRestoreIntegration(t *testing.T) {
+	// Test that Save/Restore properly preserves clip state
+	cr := NewCairoRenderer()
+	screen := createTestScreen(100, 100)
+	cr.SetScreen(screen)
+
+	// Save initial state (no clip)
+	cr.Save()
+
+	// Set clip
+	cr.Rectangle(25, 25, 50, 50)
+	cr.Clip()
+
+	// Verify clip is set
+	cr.mu.Lock()
+	_, dx1, dy1 := cr.getClippedScreen()
+	cr.mu.Unlock()
+	if dx1 != 25 || dy1 != 25 {
+		t.Errorf("Expected clip offset (25,25), got (%f,%f)", dx1, dy1)
+	}
+
+	// Restore to no-clip state
+	cr.Restore()
+
+	// Verify clip is cleared
+	cr.mu.Lock()
+	clippedScreen, dx2, dy2 := cr.getClippedScreen()
+	cr.mu.Unlock()
+	if clippedScreen != screen {
+		t.Error("Expected original screen after Restore()")
+	}
+	if dx2 != 0 || dy2 != 0 {
+		t.Errorf("Expected offset (0,0) after Restore(), got (%f,%f)", dx2, dy2)
 	}
 }
 

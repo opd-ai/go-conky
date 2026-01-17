@@ -1216,7 +1216,12 @@ func (cr *CairoRenderer) Stroke() {
 	opts := cr.buildStrokeOptions()
 	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, opts)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 		Blend:     cr.getEbitenBlend(),
 	})
@@ -1237,7 +1242,12 @@ func (cr *CairoRenderer) Fill() {
 
 	vertices, indices := cr.path.AppendVerticesAndIndicesForFilling(nil, nil)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 		FillRule:  cr.getEbitenFillRule(),
 		Blend:     cr.getEbitenBlend(),
@@ -1259,7 +1269,12 @@ func (cr *CairoRenderer) FillPreserve() {
 
 	vertices, indices := cr.path.AppendVerticesAndIndicesForFilling(nil, nil)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 		FillRule:  cr.getEbitenFillRule(),
 		Blend:     cr.getEbitenBlend(),
@@ -1279,13 +1294,19 @@ func (cr *CairoRenderer) StrokePreserve() {
 	opts := cr.buildStrokeOptions()
 	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, opts)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 		Blend:     cr.getEbitenBlend(),
 	})
 }
 
 // Paint fills the entire surface with the current color.
+// When a clip region is set, only the clipped area is filled.
 // This is equivalent to cairo_paint.
 func (cr *CairoRenderer) Paint() {
 	cr.mu.Lock()
@@ -1295,10 +1316,13 @@ func (cr *CairoRenderer) Paint() {
 		return
 	}
 
-	cr.screen.Fill(cr.currentColor)
+	// Get clipped screen for painting
+	screen, _, _ := cr.getClippedScreen()
+	screen.Fill(cr.currentColor)
 }
 
 // PaintWithAlpha fills the entire surface with the current color at the given alpha.
+// When a clip region is set, only the clipped area is filled.
 // This is equivalent to cairo_paint_with_alpha.
 func (cr *CairoRenderer) PaintWithAlpha(alpha float64) {
 	cr.mu.Lock()
@@ -1310,7 +1334,10 @@ func (cr *CairoRenderer) PaintWithAlpha(alpha float64) {
 
 	clr := cr.currentColor
 	clr.A = clampToByte(alpha)
-	cr.screen.Fill(clr)
+
+	// Get clipped screen for painting
+	screen, _, _ := cr.getClippedScreen()
+	screen.Fill(clr)
 }
 
 // --- Convenience Drawing Functions ---
@@ -1483,6 +1510,49 @@ func (cr *CairoRenderer) setVertexColors(vertices []ebiten.Vertex) {
 	}
 }
 
+// getClippedScreen returns the screen to draw on, applying clipping if set.
+// If there is a clip region, it returns a SubImage representing the clipped area.
+// Otherwise, it returns the original screen.
+// Also returns the offset (dx, dy) that needs to be applied to vertex coordinates.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) getClippedScreen() (screen *ebiten.Image, dx, dy float32) {
+	if !cr.hasClip || cr.screen == nil {
+		return cr.screen, 0, 0
+	}
+
+	// Create a rectangle from the clip bounds
+	clipRect := image.Rect(
+		int(cr.clipMinX),
+		int(cr.clipMinY),
+		int(cr.clipMaxX),
+		int(cr.clipMaxY),
+	)
+
+	// SubImage returns an image.Image, but for Ebiten images it's always *ebiten.Image
+	subImg := cr.screen.SubImage(clipRect)
+	if subImg == nil {
+		// Fallback if SubImage fails (shouldn't happen for valid Ebiten images)
+		return cr.screen, 0, 0
+	}
+
+	// Type assert to *ebiten.Image (safe per Ebiten documentation)
+	return subImg.(*ebiten.Image), cr.clipMinX, cr.clipMinY
+}
+
+// adjustVerticesForClip offsets vertex positions by the clip origin.
+// When drawing to a SubImage, we need to adjust vertex positions since the
+// SubImage coordinate system starts at (0,0) for the clip region.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) adjustVerticesForClip(vertices []ebiten.Vertex, dx, dy float32) {
+	if dx == 0 && dy == 0 {
+		return
+	}
+	for i := range vertices {
+		vertices[i].DstX -= dx
+		vertices[i].DstY -= dy
+	}
+}
+
 // --- Unlocked Internal Methods ---
 //
 // These internal methods perform path and drawing operations without acquiring the mutex.
@@ -1630,7 +1700,12 @@ func (cr *CairoRenderer) strokeUnlocked() {
 	opts := cr.buildStrokeOptions()
 	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, opts)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 		Blend:     cr.getEbitenBlend(),
 	})
@@ -1648,7 +1723,12 @@ func (cr *CairoRenderer) fillUnlocked() {
 
 	vertices, indices := cr.path.AppendVerticesAndIndicesForFilling(nil, nil)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
 		FillRule:  cr.getEbitenFillRule(),
 		Blend:     cr.getEbitenBlend(),
@@ -2085,25 +2165,22 @@ func (cr *CairoRenderer) Transform(m *CairoMatrix) {
 
 // --- Clipping Functions ---
 //
-// IMPORTANT: Clipping is currently a partial implementation.
-// The clip region is tracked (stored in clipPath/hasClip) but NOT enforced
-// during drawing operations. This means calling Clip() will record the clip
-// region for API compatibility, but subsequent drawing will NOT be restricted
-// to the clip area.
+// Clipping is enforced for rectangular clip regions using Ebiten's SubImage
+// functionality. When a clip is set, drawing operations use a SubImage
+// representing the clipped rectangular area, which naturally restricts
+// drawing to that region.
 //
-// Full clipping support would require either:
-// - Using Ebiten's SubImage for rectangular clips only
-// - Implementing stencil buffer or alpha mask clipping for arbitrary paths
-//
-// For now, scripts that use clipping will execute without errors, but the
-// visual clipping effect will not be applied.
+// Limitations:
+// - Only rectangular clipping is supported (based on the path's bounding box)
+// - Non-rectangular paths (arcs, curves) are clipped by their bounding rectangle
+// - Clip intersection is not implemented; each Clip() call replaces the previous clip
 
 // Clip establishes a new clip region by intersecting the current clip region
 // with the current path and clears the path.
 // This is equivalent to cairo_clip.
 //
-// WARNING: Clipping is NOT currently enforced during drawing operations.
-// The clip region is recorded but drawing will not be restricted to the clip area.
+// Note: Clipping is enforced for the bounding rectangle of the path. Non-rectangular
+// paths are clipped by their bounding box, not their exact shape.
 func (cr *CairoRenderer) Clip() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
@@ -2136,10 +2213,10 @@ func (cr *CairoRenderer) Clip() {
 // ClipPreserve establishes a new clip region without clearing the current path.
 // This is equivalent to cairo_clip_preserve.
 //
-// WARNING: Clipping is NOT currently enforced during drawing operations.
-// The clip region is recorded but drawing will not be restricted to the clip area.
+// Note: Clipping is enforced for the bounding rectangle of the path. Non-rectangular
+// paths are clipped by their bounding box, not their exact shape.
 //
-// Note: Since Ebiten's vector.Path cannot be copied, we store the current path
+// Since Ebiten's vector.Path cannot be copied, we store the current path
 // as the clip path and create a fresh path for continued drawing. The path state
 // (current point, etc.) is preserved but the path data is now isolated.
 func (cr *CairoRenderer) ClipPreserve() {
