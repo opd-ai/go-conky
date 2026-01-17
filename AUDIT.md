@@ -4,7 +4,7 @@
 - **Date**: 2026-01-17 (Updated)
 - **Tests**: 2194 total (including subtests), all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
-- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed), 4 low
+- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed), 4 low (1 fixed)
 - **Implemented Compatibility**: ~90% (of implemented features work correctly)
 - **Overall Feature Coverage**: ~52%
 
@@ -387,14 +387,15 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ### Low Priority
 
-**BUG-008: ${tcp_portmon} returns stub value**
+**BUG-008: ${tcp_portmon} returns stub value** ✅ FIXED
 - **Severity**: Low
 - **Feature**: ${tcp_portmon}
-- **Reproduce**: Use ${tcp_portmon 1 65535 count}
-- **Expected**: TCP connection count
-- **Actual**: Returns "0"
-- **Location**: internal/lua/api.go:1459
-- **Fix**: Implement proper TCP port monitoring
+- **Status**: FIXED - Now returns proper TCP connection data
+- **Solution**: Implemented resolveTCPPortMon() using existing TCP monitoring from monitor package.
+  Supports all Conky tcp_portmon items: count, lip, lport, lservice, rip, rport, rservice, rhost.
+  Added TCP(), TCPCountInRange(), and TCPConnectionByIndex() methods to SystemDataProvider interface.
+- **Tests**: TestParseTCPPortMonVariables covers count, IPs, ports, services, and edge cases.
+- **Location**: internal/lua/api.go
 
 **BUG-009: ${stockquote} not implemented**
 - **Severity**: Low
@@ -484,7 +485,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 4. **BUG-007**: Additional config directives (16h ongoing)
 
 ### Can Defer
-1. **BUG-008**: tcp_portmon (2h)
+1. ~~**BUG-008**: tcp_portmon~~ ✅ FIXED
 2. **BUG-009**: stockquote - document as unsupported
 3. **BUG-010**: apcupsd - document as unsupported
 4. **BUG-011**: Template variables (4h)
@@ -665,6 +666,12 @@ The Go Conky implementation demonstrates solid architecture and good test covera
 **Expected**: ESSID, signal quality, bitrate
 **Result**: ✅ PASS - Wireless stats parsed
 **Evidence**: TestWirelessInfoParser passes
+
+### TEST: TCP Port Monitoring
+**Action**: Parse ${tcp_portmon} variable with various items
+**Expected**: Returns count, IPs, ports, and service names for TCP connections
+**Result**: ✅ PASS - TCP port monitoring fully functional
+**Evidence**: TestParseTCPPortMonVariables passes with 9 test cases covering count, lip, lport, lservice, rip, rport, edge cases
 
 ---
 

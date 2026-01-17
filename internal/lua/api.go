@@ -43,6 +43,9 @@ type SystemDataProvider interface {
 	MailTotalUnseen() int
 	MailTotalMessages() int
 	Weather(stationID string) monitor.WeatherStats
+	TCP() monitor.TCPStats
+	TCPCountInRange(minPort, maxPort int) int
+	TCPConnectionByIndex(minPort, maxPort, index int) *monitor.TCPConnection
 }
 
 // execCacheEntry stores cached output from execi commands.
@@ -1528,9 +1531,115 @@ func (api *ConkyAPI) resolveWirelessMode(args []string) string {
 	return "Managed"
 }
 
-// resolveTCPPortMon monitors TCP connections (stub).
-func (api *ConkyAPI) resolveTCPPortMon(_ []string) string {
-	return "0"
+// resolveTCPPortMon monitors TCP connections in a port range.
+// Syntax: ${tcp_portmon port_begin port_end item [index]}
+// Items: count, lip, lport, lservice, rip, rport, rservice, rhost
+func (api *ConkyAPI) resolveTCPPortMon(args []string) string {
+	// Minimum args: port_begin, port_end, item
+	if len(args) < 3 {
+		return "0"
+	}
+
+	minPort, err := strconv.Atoi(args[0])
+	if err != nil {
+		return "0"
+	}
+
+	maxPort, err := strconv.Atoi(args[1])
+	if err != nil {
+		return "0"
+	}
+
+	item := strings.ToLower(args[2])
+
+	// count doesn't need an index
+	if item == "count" {
+		count := api.sysProvider.TCPCountInRange(minPort, maxPort)
+		return strconv.Itoa(count)
+	}
+
+	// All other items require an index
+	if len(args) < 4 {
+		return "0"
+	}
+
+	index, err := strconv.Atoi(args[3])
+	if err != nil {
+		return "0"
+	}
+
+	conn := api.sysProvider.TCPConnectionByIndex(minPort, maxPort, index)
+	if conn == nil {
+		return ""
+	}
+
+	switch item {
+	case "lip":
+		return conn.LocalIP
+	case "lport":
+		return strconv.Itoa(conn.LocalPort)
+	case "lservice":
+		return portToService(conn.LocalPort)
+	case "rip":
+		return conn.RemoteIP
+	case "rport":
+		return strconv.Itoa(conn.RemotePort)
+	case "rservice":
+		return portToService(conn.RemotePort)
+	case "rhost":
+		// Return remote IP as hostname (DNS lookup could be added)
+		return conn.RemoteIP
+	default:
+		return ""
+	}
+}
+
+// portToService maps well-known port numbers to service names.
+func portToService(port int) string {
+	services := map[int]string{
+		20:   "ftp-data",
+		21:   "ftp",
+		22:   "ssh",
+		23:   "telnet",
+		25:   "smtp",
+		53:   "domain",
+		67:   "bootps",
+		68:   "bootpc",
+		69:   "tftp",
+		80:   "http",
+		110:  "pop3",
+		119:  "nntp",
+		123:  "ntp",
+		143:  "imap",
+		161:  "snmp",
+		162:  "snmptrap",
+		194:  "irc",
+		389:  "ldap",
+		443:  "https",
+		445:  "microsoft-ds",
+		465:  "smtps",
+		514:  "syslog",
+		587:  "submission",
+		636:  "ldaps",
+		993:  "imaps",
+		995:  "pop3s",
+		1080: "socks",
+		1433: "ms-sql-s",
+		1521: "oracle",
+		3306: "mysql",
+		3389: "ms-wbt-server",
+		5432: "postgresql",
+		5900: "vnc",
+		6379: "redis",
+		8080: "http-proxy",
+		8443: "https-alt",
+		9200: "elasticsearch",
+		27017: "mongodb",
+	}
+	if name, ok := services[port]; ok {
+		return name
+	}
+	return strconv.Itoa(port)
 }
 
 // resolveIfExisting checks if a file or path exists.

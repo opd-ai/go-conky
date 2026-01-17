@@ -2107,10 +2107,8 @@ func TestParseWirelessVariables(t *testing.T) {
 
 // TestParseTCPPortMonVariables tests TCP port monitor variable parsing.
 // NOTE: TCP port monitoring is currently a stub implementation.
-// This test is skipped because resolveTCPPortMon always returns "0".
-// TODO: Implement TCP port monitoring and un-skip this test.
+// TestParseTCPPortMonVariables tests TCP port monitoring variable parsing.
 func TestParseTCPPortMonVariables(t *testing.T) {
-	t.Skip("TCP port monitoring is not yet implemented (stub returns '0')")
 	runtime, err := New(DefaultConfig())
 	if err != nil {
 		t.Fatalf("failed to create runtime: %v", err)
@@ -2131,7 +2129,7 @@ func TestParseTCPPortMonVariables(t *testing.T) {
 		{
 			name:     "tcp portmon count in range",
 			template: "${tcp_portmon 1 1024 count}",
-			expected: "2", // SSH port 22 and HTTP port 80
+			expected: "3", // SSH port 22, HTTP port 80, and HTTPS port 443
 		},
 		{
 			name:     "tcp portmon count all ports",
