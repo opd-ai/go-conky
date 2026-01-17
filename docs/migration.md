@@ -268,6 +268,90 @@ print(f"{info.get('regularMarketPrice', 'N/A')}")
 
 Usage: `${execi 300 python3 ~/.config/conky/scripts/stock_yf.py AAPL}`
 
+### APCUPSD (UPS Monitoring)
+
+The `${apcupsd_*}` variables are **not implemented** in Conky-Go. APCUPSD is a daemon for monitoring APC UPS (Uninterruptible Power Supply) devices, and implementing a full client would require:
+
+- Network communication with the APCUPSD daemon (NIS protocol)
+- Handling various UPS models and their different data formats
+- Maintaining connection state and reconnection logic
+- Complex parsing of the apcaccess output format
+
+**Unsupported Variables:**
+- `${apcupsd}` - General UPS status
+- `${apcupsd_model}` - UPS model name
+- `${apcupsd_status}` - UPS status (ONLINE/ONBATT)
+- `${apcupsd_linev}` - Line voltage
+- `${apcupsd_load}` - UPS load percentage
+- `${apcupsd_charge}` - Battery charge percentage
+- `${apcupsd_timeleft}` - Estimated runtime on battery
+- `${apcupsd_temp}` - UPS internal temperature
+- And other apcupsd_* variants
+
+**Recommended Approach:** Use `${execi}` with `apcaccess` (the APCUPSD command-line client):
+
+```bash
+# Show UPS model
+${execi 60 apcaccess -p MODEL 2>/dev/null || echo "N/A"}
+
+# Show UPS status (ONLINE, ONBATT, etc.)
+${execi 10 apcaccess -p STATUS 2>/dev/null || echo "N/A"}
+
+# Show line voltage
+${execi 30 apcaccess -p LINEV 2>/dev/null | cut -d' ' -f1}
+
+# Show load percentage
+${execi 30 apcaccess -p LOADPCT 2>/dev/null | cut -d' ' -f1}
+
+# Show battery charge
+${execi 30 apcaccess -p BCHARGE 2>/dev/null | cut -d' ' -f1}
+
+# Show time remaining on battery
+${execi 30 apcaccess -p TIMELEFT 2>/dev/null | cut -d' ' -f1}
+
+# Show UPS temperature
+${execi 60 apcaccess -p ITEMP 2>/dev/null | cut -d' ' -f1}
+```
+
+**Example Configuration Section:**
+
+```
+# UPS Monitoring (requires apcupsd and apcaccess)
+${color grey}UPS Status:${color}
+ Model:    ${execi 300 apcaccess -p MODEL 2>/dev/null || echo "N/A"}
+ Status:   ${execi 10 apcaccess -p STATUS 2>/dev/null || echo "N/A"}
+ Load:     ${execi 30 apcaccess -p LOADPCT 2>/dev/null | cut -d' ' -f1}%
+ Battery:  ${execi 30 apcaccess -p BCHARGE 2>/dev/null | cut -d' ' -f1}%
+ Runtime:  ${execi 30 apcaccess -p TIMELEFT 2>/dev/null}
+```
+
+**Alternative: Create a Helper Script:**
+
+```bash
+#!/bin/bash
+# ~/.config/conky/scripts/ups.sh
+# Usage: ups.sh <field>
+# Fields: model, status, linev, load, charge, timeleft, temp
+
+FIELD="${1:-status}"
+VALUE=$(apcaccess -p "$FIELD" 2>/dev/null)
+
+if [ -z "$VALUE" ]; then
+    echo "N/A"
+else
+    echo "$VALUE" | cut -d' ' -f1
+fi
+```
+
+Usage: `${execi 30 ~/.config/conky/scripts/ups.sh load}%`
+
+**Why Not Implemented:**
+1. **Niche Use Case**: Most users don't have APC UPS devices
+2. **Dependency**: Requires APCUPSD daemon to be running
+3. **Network Protocol**: Would need to implement NIS (Network Information Server) protocol
+4. **Maintenance Burden**: Different UPS models report different data fields
+5. **Simple Alternative**: `apcaccess` command provides all needed data via `${execi}`
+
 ### Formatting
 
 | Variable | Description |

@@ -2765,7 +2765,7 @@ func TestTemplateVariables(t *testing.T) {
 		{
 			name: "template with one argument",
 			templates: [10]string{
-				"", // template0
+				"",               // template0
 				"Core \\1 usage", // template1
 			},
 			input:    "${template1 5}",
@@ -2799,10 +2799,10 @@ func TestTemplateVariables(t *testing.T) {
 			contains: []string{"Memory used:"},
 		},
 		{
-			name: "undefined template returns empty",
+			name:      "undefined template returns empty",
 			templates: [10]string{}, // all empty
-			input:    "${template5}",
-			contains: []string{},
+			input:     "${template5}",
+			contains:  []string{},
 		},
 		{
 			name: "template9 works",
@@ -2956,6 +2956,115 @@ func TestTemplateArgumentSubstitution(t *testing.T) {
 			result := api.Parse(input)
 			if result != tt.expected {
 				t.Errorf("Parse(%q) with template %q = %q, want %q", input, tt.template, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestUnsupportedVariables tests that intentionally unsupported variables
+// return "N/A" and are documented as such in docs/migration.md
+func TestUnsupportedVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		// Stock quote - not implemented; requires external API keys
+		{
+			name:     "stockquote returns N/A",
+			template: "${stockquote AAPL}",
+			expected: "N/A",
+		},
+		// APCUPSD - not implemented; requires APCUPSD daemon and NIS protocol
+		{
+			name:     "apcupsd returns N/A",
+			template: "${apcupsd}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_model returns N/A",
+			template: "${apcupsd_model}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_status returns N/A",
+			template: "${apcupsd_status}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_linev returns N/A",
+			template: "${apcupsd_linev}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_load returns N/A",
+			template: "${apcupsd_load}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_charge returns N/A",
+			template: "${apcupsd_charge}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_timeleft returns N/A",
+			template: "${apcupsd_timeleft}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_temp returns N/A",
+			template: "${apcupsd_temp}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_battv returns N/A",
+			template: "${apcupsd_battv}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_cable returns N/A",
+			template: "${apcupsd_cable}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_driver returns N/A",
+			template: "${apcupsd_driver}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_upsmode returns N/A",
+			template: "${apcupsd_upsmode}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_name returns N/A",
+			template: "${apcupsd_name}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_hostname returns N/A",
+			template: "${apcupsd_hostname}",
+			expected: "N/A",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
 			}
 		})
 	}

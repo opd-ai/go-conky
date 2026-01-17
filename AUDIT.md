@@ -4,7 +4,7 @@
 - **Date**: 2026-01-17 (Updated)
 - **Tests**: 2200+ total (including subtests), all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
-- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed), 4 low (2 fixed)
+- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed), 4 low (4 fixed/documented)
 - **Implemented Compatibility**: ~90% (of implemented features work correctly)
 - **Overall Feature Coverage**: ~52%
 
@@ -398,23 +398,24 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 - **Tests**: TestParseTCPPortMonVariables covers count, IPs, ports, services, and edge cases.
 - **Location**: internal/lua/api.go
 
-**BUG-009: ${stockquote} not implemented**
+**BUG-009: ${stockquote} not implemented** ✅ DOCUMENTED
 - **Severity**: Low
 - **Feature**: ${stockquote}
-- **Reproduce**: Use ${stockquote AAPL}
-- **Expected**: Stock quote data
-- **Actual**: Returns "N/A"
-- **Location**: internal/lua/api.go:542
-- **Fix**: Document as intentionally not implemented (requires API keys)
+- **Status**: DOCUMENTED - Intentionally not implemented; documented as unsupported with workaround
+- **Reason**: Stock data APIs require API keys, have usage limits, and their terms of service change frequently
+- **Workaround**: Use `${execi}` with custom scripts (examples provided in docs/migration.md)
+- **Documentation**: See "Stock Quotes" section in docs/migration.md
+- **Location**: internal/lua/api.go
 
-**BUG-010: apcupsd variables return empty**
+**BUG-010: apcupsd variables return empty** ✅ DOCUMENTED
 - **Severity**: Low
 - **Feature**: ${apcupsd_*}
-- **Reproduce**: Use ${apcupsd_model}
-- **Expected**: UPS model info
-- **Actual**: Returns empty string
-- **Location**: internal/lua/api.go:516-520
-- **Fix**: Implement apcupsd client or document as not supported
+- **Status**: DOCUMENTED - Intentionally not implemented; documented as unsupported with workaround
+- **Reason**: APCUPSD requires NIS protocol implementation, daemon dependency, and complex UPS model handling
+- **Workaround**: Use `${execi}` with apcaccess command (examples provided in docs/migration.md)
+- **Documentation**: See "APCUPSD (UPS Monitoring)" section in docs/migration.md
+- **Variables**: Returns "N/A" for all apcupsd_* variants (model, status, linev, load, charge, timeleft, temp, etc.)
+- **Location**: internal/lua/api.go
 
 **BUG-011: Template variables not resolved** ✅ FIXED
 - **Severity**: Low
@@ -495,8 +496,8 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ### Can Defer
 1. ~~**BUG-008**: tcp_portmon~~ ✅ FIXED
-2. **BUG-009**: stockquote - document as unsupported
-3. **BUG-010**: apcupsd - document as unsupported
+2. ~~**BUG-009**: stockquote~~ ✅ DOCUMENTED as unsupported (see docs/migration.md)
+3. ~~**BUG-010**: apcupsd~~ ✅ DOCUMENTED as unsupported (see docs/migration.md)
 4. ~~**BUG-011**: Template variables~~ ✅ FIXED
 
 ---
@@ -526,7 +527,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
    - Platform package needs more test coverage
 
 ### Documentation Needs
-1. Document which features are intentionally unsupported (stockquote, apcupsd)
+1. ~~Document which features are intentionally unsupported (stockquote, apcupsd)~~ ✅ DONE - See docs/migration.md
 2. Add migration guide for features with different behavior
 3. Document Cairo function coverage and differences from real Cairo
 

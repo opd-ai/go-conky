@@ -559,13 +559,13 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "nvidia_name":
 		return api.resolveNvidia([]string{"name"})
 
-	// Apcupsd (UPS) stubs
-	case "apcupsd":
-		return ""
-	case "apcupsd_model":
-		return ""
-	case "apcupsd_status":
-		return ""
+	// Apcupsd (UPS) stubs - not implemented; requires APCUPSD daemon and NIS protocol.
+	// Users should use ${execi} with apcaccess command. See docs/migration.md.
+	case "apcupsd", "apcupsd_model", "apcupsd_status", "apcupsd_linev",
+		"apcupsd_load", "apcupsd_charge", "apcupsd_timeleft", "apcupsd_temp",
+		"apcupsd_battv", "apcupsd_cable", "apcupsd_driver", "apcupsd_upsmode",
+		"apcupsd_name", "apcupsd_hostname":
+		return "N/A"
 
 	// IMAP/POP3/mail variables
 	case "imap_unseen":
