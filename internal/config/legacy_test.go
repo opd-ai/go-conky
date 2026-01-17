@@ -738,3 +738,72 @@ func TestLegacyParserDisplayDirectivesInvalidValues(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyParserARGBSettings(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expectedVisual bool
+		expectedValue  int
+	}{
+		{
+			name:           "argb visual enabled",
+			input:          "own_window_argb_visual yes",
+			expectedVisual: true,
+			expectedValue:  255, // default
+		},
+		{
+			name:           "argb visual disabled",
+			input:          "own_window_argb_visual no",
+			expectedVisual: false,
+			expectedValue:  255, // default
+		},
+		{
+			name:           "argb value set",
+			input:          "own_window_argb_value 128",
+			expectedVisual: false, // default
+			expectedValue:  128,
+		},
+		{
+			name: "both argb settings",
+			input: `own_window_argb_visual yes
+own_window_argb_value 200`,
+			expectedVisual: true,
+			expectedValue:  200,
+		},
+		{
+			name:           "argb value zero (fully transparent)",
+			input:          "own_window_argb_value 0",
+			expectedVisual: false,
+			expectedValue:  0,
+		},
+		{
+			name:           "argb value clamped to max",
+			input:          "own_window_argb_value 300",
+			expectedVisual: false,
+			expectedValue:  255, // clamped
+		},
+		{
+			name:           "argb value clamped to min",
+			input:          "own_window_argb_value -10",
+			expectedVisual: false,
+			expectedValue:  0, // clamped
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewLegacyParser()
+			cfg, err := p.Parse([]byte(tt.input))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+			if cfg.Window.ARGBVisual != tt.expectedVisual {
+				t.Errorf("expected ARGBVisual=%v, got %v", tt.expectedVisual, cfg.Window.ARGBVisual)
+			}
+			if cfg.Window.ARGBValue != tt.expectedValue {
+				t.Errorf("expected ARGBValue=%d, got %d", tt.expectedValue, cfg.Window.ARGBValue)
+			}
+		})
+	}
+}

@@ -43,14 +43,16 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | border_inner_margin | ✅ PASS | Inner margin parsed |
 | border_outer_margin | ✅ PASS | Outer margin parsed |
 | stippled_borders | ✅ PASS | Stippled border option parsed |
+| own_window_argb_visual | ✅ PASS | ARGB transparency parsing |
+| own_window_argb_value | ✅ PASS | Alpha value (0-255) parsing |
 
-**Config Directives Implemented: 41 of 150+ (~27%)**
+**Config Directives Implemented: 43 of 150+ (~29%)**
 
 #### Missing Configuration Directives
 | Directive | Priority | Notes |
 |-----------|----------|-------|
-| own_window_argb_visual | HIGH | ARGB transparency not implemented |
-| own_window_argb_value | HIGH | Alpha value for ARGB |
+| own_window_argb_visual | ✅ DONE | ARGB transparency - parsing implemented |
+| own_window_argb_value | ✅ DONE | Alpha value for ARGB (0-255) - parsing implemented |
 | draw_borders | ✅ DONE | Border drawing - parsing implemented |
 | draw_outline | ✅ DONE | Text outline - parsing implemented |
 | draw_shades | ✅ DONE | Text shadow - parsing implemented |
@@ -339,14 +341,20 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 ### Medium Priority
 
-**BUG-003: ARGB transparency not implemented**
+**BUG-003: ARGB transparency not implemented** ⚠️ PARTIAL
 - **Severity**: Medium
 - **Feature**: own_window_argb_visual
 - **Reproduce**: Set own_window_argb_visual=true
 - **Expected**: 32-bit visual with alpha channel
-- **Actual**: Config directive parsed but effect not applied
+- **Actual**: Config directives `own_window_argb_visual` and `own_window_argb_value` are now parsed and stored. Effect not yet applied at rendering layer.
 - **Location**: Window management layer
-- **Fix**: Requires X11-specific implementation or Ebiten enhancement
+- **Status**: Config parsing complete. Rendering effect requires X11-specific implementation or Ebiten enhancement.
+- **Progress**:
+  - ✅ Added `ARGBVisual` (bool) and `ARGBValue` (int 0-255) fields to `WindowConfig`
+  - ✅ Implemented parsing in both legacy.go and lua.go
+  - ✅ Added validation with warnings for misconfigured settings
+  - ✅ Comprehensive tests for parsing and validation
+  - ⏳ Rendering layer integration pending (requires compositor support)
 
 **BUG-004: Graphical bars not implemented** ✅ FIXED
 - **Severity**: Medium
@@ -464,13 +472,13 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 | Category | Target | Implemented | Broken | Missing | Score |
 |----------|--------|-------------|--------|---------|-------|
-| Config Directives | 150 | 42 | 0 | 108 | 28% |
+| Config Directives | 150 | 44 | 0 | 106 | 29% |
 | Cairo Functions | 180 | 104 | 0 | 76 | 58% |
 | Lua Integration | 12 | 12 | 0 | 0 | 100% |
 | Display Objects | 200 | 124 | 3 | 73 | 62% |
 | Window Management | 20 | 10 | 2 | 8 | 50% |
 | System Monitoring | 30 | 28 | 0 | 2 | 93% |
-| **Overall** | **592** | **320** | **5** | **267** | **54%** |
+| **Overall** | **592** | **322** | **5** | **265** | **54%** |
 
 **Functional Compatibility Score: 90%** (of implemented features work correctly)
 
@@ -749,6 +757,17 @@ The Go Conky implementation demonstrates solid architecture and good test covera
   - Clipping interaction
   - Concurrent access safety
   - Edge cases (zero size, negative positions, outside screen bounds)
+
+### TEST: ARGB Configuration Parsing
+**Action**: Parse own_window_argb_visual and own_window_argb_value in both legacy and Lua configs
+**Expected**: Boolean for visual, integer 0-255 for value with clamping
+**Result**: ✅ PASS - All parsing and validation works correctly
+**Evidence**: TestLegacyParserARGBSettings, TestLuaParserARGBSettings, TestValidatorARGBSettings pass with 19 test cases covering:
+  - Enabling/disabling ARGB visual
+  - Setting alpha values (0-255)
+  - Value clamping for out-of-range values
+  - Combined settings
+  - Validation warnings for misconfigured settings
 
 ---
 

@@ -97,6 +97,20 @@ func (p *LegacyParser) parseDirective(cfg *Config, line string, lineNum int) err
 		cfg.Window.OwnWindow = parseBool(value)
 	case "own_window_transparent":
 		cfg.Window.Transparent = parseBool(value)
+	case "own_window_argb_visual":
+		cfg.Window.ARGBVisual = parseBool(value)
+	case "own_window_argb_value":
+		val, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid own_window_argb_value: %w", lineNum, err)
+		}
+		// Clamp value to 0-255 range
+		if val < 0 {
+			val = 0
+		} else if val > 255 {
+			val = 255
+		}
+		cfg.Window.ARGBValue = val
 
 	// Window type
 	case "own_window_type":

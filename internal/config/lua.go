@@ -155,6 +155,19 @@ func (p *LuaConfigParser) extractConfigTable(cfg *Config, table *rt.Table) error
 	if val := getTableBool(table, "own_window_transparent"); val != nil {
 		cfg.Window.Transparent = *val
 	}
+	if val := getTableBool(table, "own_window_argb_visual"); val != nil {
+		cfg.Window.ARGBVisual = *val
+	}
+	if val := getTableInt(table, "own_window_argb_value"); val != nil {
+		// Clamp value to 0-255 range
+		v := *val
+		if v < 0 {
+			v = 0
+		} else if v > 255 {
+			v = 255
+		}
+		cfg.Window.ARGBValue = v
+	}
 
 	// Numeric settings
 	if val := getTableFloat(table, "update_interval"); val != nil {

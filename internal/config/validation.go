@@ -136,6 +136,18 @@ func (v *Validator) validateWindow(wc *WindowConfig, result *ValidationResult) {
 				fmt.Sprintf("unknown hint at index %d: %d", i, hint))
 		}
 	}
+
+	// Validate ARGB settings
+	if wc.ARGBValue < 0 || wc.ARGBValue > 255 {
+		result.AddError("window.argb_value",
+			fmt.Sprintf("must be between 0 and 255, got %d", wc.ARGBValue))
+	}
+
+	// Warn if ARGB value is set but ARGB visual is not enabled
+	if wc.ARGBValue < 255 && !wc.ARGBVisual {
+		result.AddWarning("window.argb_value",
+			"ARGB value set but own_window_argb_visual is not enabled")
+	}
 }
 
 // validateDisplay validates DisplayConfig settings.

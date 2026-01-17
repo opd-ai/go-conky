@@ -689,3 +689,70 @@ func TestVariablePatternMatching(t *testing.T) {
 		})
 	}
 }
+
+func TestValidatorARGBSettings(t *testing.T) {
+	tests := []struct {
+		name          string
+		argbVisual    bool
+		argbValue     int
+		wantErrors    bool
+		wantWarnings  bool
+	}{
+		{
+			name:         "valid settings - disabled",
+			argbVisual:   false,
+			argbValue:    255,
+			wantErrors:   false,
+			wantWarnings: false,
+		},
+		{
+			name:         "valid settings - enabled with full opacity",
+			argbVisual:   true,
+			argbValue:    255,
+			wantErrors:   false,
+			wantWarnings: false,
+		},
+		{
+			name:         "valid settings - enabled with transparency",
+			argbVisual:   true,
+			argbValue:    128,
+			wantErrors:   false,
+			wantWarnings: false,
+		},
+		{
+			name:         "warning - argb value set but visual disabled",
+			argbVisual:   false,
+			argbValue:    128,
+			wantErrors:   false,
+			wantWarnings: true,
+		},
+		{
+			name:         "valid - fully transparent with argb enabled",
+			argbVisual:   true,
+			argbValue:    0,
+			wantErrors:   false,
+			wantWarnings: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Window.ARGBVisual = tt.argbVisual
+			cfg.Window.ARGBValue = tt.argbValue
+
+			v := NewValidator()
+			result := v.Validate(&cfg)
+
+			hasErrors := len(result.Errors) > 0
+			hasWarnings := len(result.Warnings) > 0
+
+			if hasErrors != tt.wantErrors {
+				t.Errorf("expected hasErrors=%v, got %v; errors: %v", tt.wantErrors, hasErrors, result.Errors)
+			}
+			if hasWarnings != tt.wantWarnings {
+				t.Errorf("expected hasWarnings=%v, got %v; warnings: %v", tt.wantWarnings, hasWarnings, result.Warnings)
+			}
+		})
+	}
+}

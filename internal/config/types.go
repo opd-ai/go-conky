@@ -30,6 +30,13 @@ type WindowConfig struct {
 	Type WindowType
 	// Transparent enables window transparency.
 	Transparent bool
+	// ARGBVisual enables 32-bit ARGB visual for true transparency.
+	// Requires a compositor (e.g., compton, picom) to be running.
+	ARGBVisual bool
+	// ARGBValue sets the alpha value for ARGB transparency (0-255).
+	// 0 is fully transparent, 255 is fully opaque.
+	// Only effective when ARGBVisual is true.
+	ARGBValue int
 	// Hints contains window manager hints (undecorated, below, sticky, etc.).
 	Hints []WindowHint
 	// Width is the minimum window width in pixels.

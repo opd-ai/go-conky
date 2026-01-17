@@ -640,3 +640,91 @@ conky.text = [[Test line]]
 		t.Errorf("BorderOuterMargin default = %v, want 5", cfg.Display.BorderOuterMargin)
 	}
 }
+
+func TestLuaParserARGBSettings(t *testing.T) {
+	tests := []struct {
+		name           string
+		luaCode        string
+		expectedVisual bool
+		expectedValue  int
+	}{
+		{
+			name: "argb visual enabled",
+			luaCode: `conky.config = {
+    own_window_argb_visual = true
+}`,
+			expectedVisual: true,
+			expectedValue:  255, // default
+		},
+		{
+			name: "argb visual disabled",
+			luaCode: `conky.config = {
+    own_window_argb_visual = false
+}`,
+			expectedVisual: false,
+			expectedValue:  255, // default
+		},
+		{
+			name: "argb value set",
+			luaCode: `conky.config = {
+    own_window_argb_value = 128
+}`,
+			expectedVisual: false, // default
+			expectedValue:  128,
+		},
+		{
+			name: "both argb settings",
+			luaCode: `conky.config = {
+    own_window_argb_visual = true,
+    own_window_argb_value = 200
+}`,
+			expectedVisual: true,
+			expectedValue:  200,
+		},
+		{
+			name: "argb value zero (fully transparent)",
+			luaCode: `conky.config = {
+    own_window_argb_value = 0
+}`,
+			expectedVisual: false,
+			expectedValue:  0,
+		},
+		{
+			name: "argb value clamped to max",
+			luaCode: `conky.config = {
+    own_window_argb_value = 300
+}`,
+			expectedVisual: false,
+			expectedValue:  255, // clamped
+		},
+		{
+			name: "argb value clamped to min",
+			luaCode: `conky.config = {
+    own_window_argb_value = -10
+}`,
+			expectedVisual: false,
+			expectedValue:  0, // clamped
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := NewLuaConfigParser()
+			if err != nil {
+				t.Fatalf("NewLuaConfigParser failed: %v", err)
+			}
+			defer p.Close()
+
+			cfg, err := p.Parse([]byte(tt.luaCode))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+			if cfg.Window.ARGBVisual != tt.expectedVisual {
+				t.Errorf("expected ARGBVisual=%v, got %v", tt.expectedVisual, cfg.Window.ARGBVisual)
+			}
+			if cfg.Window.ARGBValue != tt.expectedValue {
+				t.Errorf("expected ARGBValue=%d, got %d", tt.expectedValue, cfg.Window.ARGBValue)
+			}
+		})
+	}
+}

@@ -36,6 +36,8 @@ func defaultWindowConfig() WindowConfig {
 		OwnWindow:   true,
 		Type:        WindowTypeNormal,
 		Transparent: false,
+		ARGBVisual:  false,
+		ARGBValue:   255, // Fully opaque by default
 		Hints:       nil,
 		Width:       DefaultWidth,
 		Height:      DefaultHeight,
