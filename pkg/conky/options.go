@@ -35,6 +35,11 @@ type Options struct {
 	// Logger sets a custom logger for debug/info messages.
 	// If nil, no logging is performed.
 	Logger Logger
+
+	// Metrics sets a custom metrics collector for operational metrics.
+	// If nil, DefaultMetrics() is used.
+	// Metrics can be exposed via /debug/vars by calling Metrics.RegisterExpvar().
+	Metrics *Metrics
 }
 
 // DefaultOptions returns Options with sensible defaults.

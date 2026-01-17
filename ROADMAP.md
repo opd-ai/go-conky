@@ -2274,7 +2274,7 @@ The SSH host key verification has been implemented with the following features:
 **Acceptance Criteria**:
 - [x] Integrate structured logging throughout the application
 - [x] Add request/operation correlation IDs
-- [ ] Implement metrics collection for key operations
+- [x] Implement metrics collection for key operations
 - [x] Create health check mechanism
 
 **Implementation Summary**:
@@ -2326,6 +2326,37 @@ logger.Info("operation started", "user", "alice")
 handler := conky.NewCorrelatedSlogHandler(slog.NewJSONHandler(os.Stdout, nil))
 slogger := slog.New(handler)
 slogger.InfoContext(ctx, "operation completed")
+```
+
+Metrics collection has been implemented in `pkg/conky/metrics.go`:
+- `Metrics` type for thread-safe metrics collection using atomic operations
+- Counters: starts, stops, restarts, config reloads, update cycles, errors, events, Lua executions, remote commands
+- Gauges: running state, active monitors count
+- Latency tracking: update, Lua, and render operation latencies with average calculation
+- `Snapshot()` returns a point-in-time copy of all metrics for inspection
+- `RegisterExpvar()` exposes metrics via Go's `/debug/vars` HTTP endpoint
+- `DefaultMetrics()` provides a global singleton for convenience
+- Integrated into `conkyImpl` lifecycle (Start, Stop, Restart, ReloadConfig, errors, events)
+- `Metrics` field added to `Options` struct for custom metrics injection
+- `Metrics()` method added to `Conky` interface for runtime access
+- Full test coverage in `pkg/conky/metrics_test.go`
+
+**Usage Example**:
+```go
+// Use default metrics
+opts := conky.DefaultOptions()
+c, _ := conky.New("/path/to/config", &opts)
+
+// Access metrics after running
+c.Start()
+defer c.Stop()
+
+snap := c.Metrics().Snapshot()
+fmt.Printf("Starts: %d, Errors: %d\n", snap.Starts, snap.ErrorsTotal)
+
+// Expose via HTTP (requires net/http server)
+c.Metrics().RegisterExpvar()
+// Metrics now available at /debug/vars
 ```
 
 ### Phase 2: Performance & Reliability (Medium Priority)
@@ -2470,7 +2501,7 @@ The circuit breaker pattern has been implemented in `pkg/conky/circuitbreaker.go
 - [x] Structured logging implementation (pkg/conky/slog.go - SlogAdapter, DefaultLogger, JSONLogger, NopLogger)
 - [x] Health check mechanism (pkg/conky/health.go - HealthCheck, HealthStatus, ComponentHealth)
 - [x] Correlation IDs for operation tracing (pkg/conky/correlation.go - CorrelationID, CorrelatedLogger, CorrelatedSlogHandler)
-- [ ] Application metrics collection (NEEDS IMPLEMENTATION)
+- [x] Application metrics collection (pkg/conky/metrics.go - Metrics, MetricsSnapshot, expvar integration)
 
 ### Testing Requirements
 - [x] Unit tests for configuration parsing
@@ -2588,10 +2619,11 @@ deployment platforms (Kubernetes, Docker, cloud providers) rather than applicati
    - ~~Add request/operation correlation IDs~~ ✅ COMPLETED - CorrelationID in pkg/conky/correlation.go
    - ~~Implement circuit breaker for remote connections~~ ✅ COMPLETED - CircuitBreaker in pkg/conky/circuitbreaker.go
    - ~~Add health check mechanism~~ ✅ COMPLETED - Health() method in pkg/conky/health.go
+   - ~~Implement metrics collection~~ ✅ COMPLETED - Metrics in pkg/conky/metrics.go with expvar integration
    - Increase test coverage for critical paths
 
 3. **Medium-term Actions** (Next Quarter):
-   - Complete observability stack (metrics collection)
+   - ~~Complete observability stack (metrics collection)~~ ✅ COMPLETED
    - Create operational documentation
    - Performance optimization based on benchmarks
    - Add circuit breaker for ALSA audio integration (optional enhancement)
@@ -2603,4 +2635,5 @@ deployment platforms (Kubernetes, Docker, cloud providers) rather than applicati
 *Updated 2026-01-16: SSH host key verification implemented*
 *Updated 2026-01-17: Circuit breaker pattern implemented for SSH remote connections*
 *Updated 2026-01-17: Correlation IDs implemented for operation tracing*
+*Updated 2026-01-17: Metrics collection implemented with expvar integration*
 ~~~~

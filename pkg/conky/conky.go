@@ -59,6 +59,11 @@ type Conky interface {
 	// Health returns a health check result for the Conky instance.
 	// This can be used for monitoring, alerting, and debugging.
 	Health() HealthCheck
+
+	// Metrics returns the metrics collector for this instance.
+	// Use Metrics().Snapshot() for a point-in-time copy of all metrics.
+	// Use Metrics().RegisterExpvar() to expose metrics via /debug/vars.
+	Metrics() *Metrics
 }
 
 // New creates a new Conky instance from a configuration file on disk.

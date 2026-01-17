@@ -31,6 +31,7 @@ type conkyImpl struct {
 	// Components
 	monitor    *monitor.SystemMonitor
 	gameRunner *gameRunner // For hot-reload support
+	metrics    *Metrics    // Metrics collector
 
 	// State
 	running     atomic.Bool
@@ -84,12 +85,19 @@ func (c *conkyImpl) Start() error {
 	c.running.Store(true)
 	c.startTime = time.Now()
 
+	// Update metrics
+	c.metrics.IncrementStarts()
+	c.metrics.SetRunning(true)
+	c.metrics.SetActiveMonitors(1)
+
 	// Start update loop in goroutine (non-blocking)
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
 		defer c.cleanup()
 		defer c.running.Store(false)
+		defer c.metrics.SetRunning(false)
+		defer c.metrics.SetActiveMonitors(0)
 
 		if c.opts.Headless {
 			// Headless mode: just wait for context cancellation
@@ -145,6 +153,7 @@ func (c *conkyImpl) Stop() error {
 
 	select {
 	case <-done:
+		c.metrics.IncrementStops()
 		return nil
 	case <-time.After(timeout):
 		err := fmt.Errorf("shutdown timeout after %v: some goroutines did not stop", timeout)
@@ -183,6 +192,7 @@ func (c *conkyImpl) Restart() error {
 		return wrappedErr
 	}
 
+	c.metrics.IncrementRestarts()
 	c.emitEvent(EventRestarted, "Instance restarted")
 	return nil
 }
@@ -219,6 +229,7 @@ func (c *conkyImpl) ReloadConfig() error {
 		c.applyConfigToGame(gameRunner.game, newCfg, oldCfg)
 	}
 
+	c.metrics.IncrementConfigReloads()
 	c.emitEvent(EventConfigReloaded, "Configuration reloaded in-place")
 	return nil
 }
@@ -310,6 +321,13 @@ func (c *conkyImpl) initComponents() error {
 		return fmt.Errorf("configuration is nil")
 	}
 
+	// Initialize metrics (use provided or default)
+	if c.opts.Metrics != nil {
+		c.metrics = c.opts.Metrics
+	} else {
+		c.metrics = DefaultMetrics()
+	}
+
 	// Determine update interval
 	interval := c.cfg.Display.UpdateInterval
 	if c.opts.UpdateInterval > 0 {
@@ -361,6 +379,11 @@ func (c *conkyImpl) notifyError(err error) {
 	// Store the error for Status() retrieval
 	c.lastError.Store(err)
 
+	// Update metrics
+	if c.metrics != nil {
+		c.metrics.IncrementErrors()
+	}
+
 	c.mu.RLock()
 	handler := c.errorHandler
 	logger := c.opts.Logger
@@ -386,6 +409,11 @@ func (c *conkyImpl) notifyError(err error) {
 
 // emitEvent sends an event to the event handler if configured.
 func (c *conkyImpl) emitEvent(eventType EventType, message string) {
+	// Update metrics
+	if c.metrics != nil {
+		c.metrics.IncrementEventsEmitted()
+	}
+
 	c.mu.RLock()
 	handler := c.eventHandler
 	c.mu.RUnlock()
@@ -506,4 +534,9 @@ func (c *conkyImpl) Health() HealthCheck {
 		Components: components,
 		Message:    message,
 	}
+}
+
+// Metrics returns the metrics collector for this instance.
+func (c *conkyImpl) Metrics() *Metrics {
+	return c.metrics
 }
