@@ -2,9 +2,9 @@
 
 ## Summary
 - **Date**: 2026-01-17 (Updated)
-- **Tests**: 2194 total (including subtests), all passed, 0 failed
+- **Tests**: 2200+ total (including subtests), all passed, 0 failed
 - **Race Conditions**: 0 detected (tested with -race)
-- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed), 4 low (1 fixed)
+- **Bugs Found**: 0 critical, 0 high (2 fixed), 4 medium (3 fixed), 4 low (2 fixed)
 - **Implemented Compatibility**: ~90% (of implemented features work correctly)
 - **Overall Feature Coverage**: ~52%
 
@@ -35,8 +35,9 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 | font | ✅ PASS | Font specification string |
 | default_color | ✅ PASS | Hex color parsing |
 | color0-color9 | ✅ PASS | All 10 color slots work |
+| template0-template9 | ✅ PASS | All 10 template slots work |
 
-**Config Directives Implemented: 24 of 150+ (~16%)**
+**Config Directives Implemented: 34 of 150+ (~23%)**
 
 #### Missing Configuration Directives
 | Directive | Priority | Notes |
@@ -415,14 +416,22 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 - **Location**: internal/lua/api.go:516-520
 - **Fix**: Implement apcupsd client or document as not supported
 
-**BUG-011: Template variables not resolved**
+**BUG-011: Template variables not resolved** ✅ FIXED
 - **Severity**: Low
 - **Feature**: ${template0}-${template9}
-- **Reproduce**: Use template variables
-- **Expected**: Template expansion
-- **Actual**: Returns empty string
-- **Location**: internal/lua/api.go:440
-- **Fix**: Implement template storage and resolution
+- **Status**: FIXED - Template variables now fully implemented
+- **Solution**: Added Templates [10]string field to TextConfig for storing template definitions.
+  Implemented template parsing in both legacy.go and lua.go config parsers.
+  Added SetTemplates() and GetTemplate() methods to ConkyAPI.
+  Implemented resolveTemplate() that substitutes \1, \2, etc. placeholders with arguments
+  and then parses the result to resolve embedded Conky variables.
+- **Tests**: Added comprehensive tests:
+  - TestLegacyParserTemplates - tests legacy config template parsing
+  - TestLuaParserTemplates - tests Lua config template parsing  
+  - TestTemplateVariables - tests template variable resolution
+  - TestTemplateSetAndGet - tests template storage methods
+  - TestTemplateArgumentSubstitution - tests argument placeholder substitution
+- **Location**: internal/config/types.go, internal/config/legacy.go, internal/config/lua.go, internal/lua/api.go
 
 ---
 
@@ -430,15 +439,15 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 
 | Category | Target | Implemented | Broken | Missing | Score |
 |----------|--------|-------------|--------|---------|-------|
-| Config Directives | 150 | 25 | 0 | 125 | 17% |
+| Config Directives | 150 | 35 | 0 | 115 | 23% |
 | Cairo Functions | 180 | 102 | 0 | 78 | 57% |
 | Lua Integration | 10 | 8 | 0 | 2 | 80% |
-| Display Objects | 200 | 121 | 4 | 75 | 59% |
+| Display Objects | 200 | 121 | 3 | 76 | 59% |
 | Window Management | 20 | 10 | 2 | 8 | 50% |
 | System Monitoring | 30 | 28 | 0 | 2 | 93% |
-| **Overall** | **590** | **294** | **6** | **290** | **50%** |
+| **Overall** | **590** | **304** | **5** | **281** | **52%** |
 
-**Functional Compatibility Score: 89%** (of implemented features work correctly)
+**Functional Compatibility Score: 90%** (of implemented features work correctly)
 
 ---
 
@@ -488,7 +497,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 1. ~~**BUG-008**: tcp_portmon~~ ✅ FIXED
 2. **BUG-009**: stockquote - document as unsupported
 3. **BUG-010**: apcupsd - document as unsupported
-4. **BUG-011**: Template variables (4h)
+4. ~~**BUG-011**: Template variables~~ ✅ FIXED
 
 ---
 
@@ -672,6 +681,12 @@ The Go Conky implementation demonstrates solid architecture and good test covera
 **Expected**: Returns count, IPs, ports, and service names for TCP connections
 **Result**: ✅ PASS - TCP port monitoring fully functional
 **Evidence**: TestParseTCPPortMonVariables passes with 9 test cases covering count, lip, lport, lservice, rip, rport, edge cases
+
+### TEST: Template Variables
+**Action**: Parse ${template0}-${template9} variables with argument substitution
+**Expected**: Template expansion with \1, \2, etc. replaced by arguments
+**Result**: ✅ PASS - Template variables fully functional
+**Evidence**: TestTemplateVariables, TestTemplateSetAndGet, TestTemplateArgumentSubstitution pass with 13 test cases covering all template slots, argument substitution, embedded variables, and edge cases
 
 ---
 

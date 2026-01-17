@@ -67,6 +67,7 @@ type ConkyAPI struct {
 	sysProvider  SystemDataProvider
 	execCache    map[string]*execCacheEntry
 	scrollStates map[string]*scrollState
+	templates    [10]string // template0-template9 definitions
 	mu           sync.RWMutex
 }
 
@@ -94,6 +95,24 @@ func (api *ConkyAPI) SetSystemDataProvider(provider SystemDataProvider) {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 	api.sysProvider = provider
+}
+
+// SetTemplates sets the template0-template9 definitions.
+// Templates can use \1, \2, etc. as argument placeholders.
+func (api *ConkyAPI) SetTemplates(templates [10]string) {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	api.templates = templates
+}
+
+// GetTemplate returns the template at the given index (0-9).
+func (api *ConkyAPI) GetTemplate(index int) string {
+	if index < 0 || index > 9 {
+		return ""
+	}
+	api.mu.RLock()
+	defer api.mu.RUnlock()
+	return api.templates[index]
 }
 
 // registerFunctions registers all Conky API functions in the Lua environment.
@@ -448,10 +467,26 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		return "" // Lua function calls handled separately
 	case "lua_parse":
 		return "" // Lua function calls handled separately
-	case "template0", "template1", "template2", "template3",
-		"template4", "template5", "template6", "template7",
-		"template8", "template9":
-		return "" // Templates resolved during config parsing
+	case "template0":
+		return api.resolveTemplate(0, args)
+	case "template1":
+		return api.resolveTemplate(1, args)
+	case "template2":
+		return api.resolveTemplate(2, args)
+	case "template3":
+		return api.resolveTemplate(3, args)
+	case "template4":
+		return api.resolveTemplate(4, args)
+	case "template5":
+		return api.resolveTemplate(5, args)
+	case "template6":
+		return api.resolveTemplate(6, args)
+	case "template7":
+		return api.resolveTemplate(7, args)
+	case "template8":
+		return api.resolveTemplate(8, args)
+	case "template9":
+		return api.resolveTemplate(9, args)
 
 	// Pre/post text markers
 	case "pre_exec":
@@ -1823,6 +1858,26 @@ func (api *ConkyAPI) resolveScroll(args []string) string {
 	}
 
 	return string(doubledRunes[start:end])
+}
+
+// resolveTemplate resolves a template variable by index with argument substitution.
+// Templates are defined as template0-template9 in the config and can contain
+// \1, \2, etc. placeholders that are replaced with the provided arguments.
+func (api *ConkyAPI) resolveTemplate(index int, args []string) string {
+	template := api.GetTemplate(index)
+	if template == "" {
+		return ""
+	}
+
+	// Substitute \1, \2, etc. with the provided arguments
+	result := template
+	for i, arg := range args {
+		placeholder := fmt.Sprintf("\\%d", i+1)
+		result = strings.ReplaceAll(result, placeholder, arg)
+	}
+
+	// Parse the result to resolve any embedded Conky variables
+	return api.Parse(result)
 }
 
 // padRight pads a string with spaces to reach the desired length.

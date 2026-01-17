@@ -240,6 +240,28 @@ func (p *LegacyParser) parseDirective(cfg *Config, line string, lineNum int) err
 		}
 		cfg.Colors.Color9 = c
 
+	// Template definitions (template0-template9)
+	case "template0":
+		cfg.Text.Templates[0] = value
+	case "template1":
+		cfg.Text.Templates[1] = value
+	case "template2":
+		cfg.Text.Templates[2] = value
+	case "template3":
+		cfg.Text.Templates[3] = value
+	case "template4":
+		cfg.Text.Templates[4] = value
+	case "template5":
+		cfg.Text.Templates[5] = value
+	case "template6":
+		cfg.Text.Templates[6] = value
+	case "template7":
+		cfg.Text.Templates[7] = value
+	case "template8":
+		cfg.Text.Templates[8] = value
+	case "template9":
+		cfg.Text.Templates[9] = value
+
 	default:
 		// Unknown directives are silently ignored for forward compatibility
 	}

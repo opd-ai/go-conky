@@ -2722,3 +2722,241 @@ func TestPadRight(t *testing.T) {
 		})
 	}
 }
+
+// TestTemplateVariables tests the template0-template9 variable resolution.
+func TestTemplateVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	mockProvider := &mockSystemDataProvider{
+		cpu: monitor.CPUStats{
+			UsagePercent: 42.5,
+			Cores:        []float64{42.5},
+		},
+		memory: monitor.MemoryStats{
+			Total:     16 * 1024 * 1024 * 1024, // 16 GiB
+			Used:      8 * 1024 * 1024 * 1024,  // 8 GiB
+			Available: 8 * 1024 * 1024 * 1024,
+		},
+	}
+
+	api, err := NewConkyAPI(runtime, mockProvider)
+	if err != nil {
+		t.Fatalf("Failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		templates [10]string
+		input     string
+		contains  []string
+	}{
+		{
+			name: "simple template without args",
+			templates: [10]string{
+				"Hello World", // template0
+			},
+			input:    "${template0}",
+			contains: []string{"Hello World"},
+		},
+		{
+			name: "template with one argument",
+			templates: [10]string{
+				"", // template0
+				"Core \\1 usage", // template1
+			},
+			input:    "${template1 5}",
+			contains: []string{"Core 5 usage"},
+		},
+		{
+			name: "template with multiple arguments",
+			templates: [10]string{
+				"", "", // template0, template1
+				"\\1 is \\2 and \\3", // template2
+			},
+			input:    "${template2 CPU fast efficient}",
+			contains: []string{"CPU is fast and efficient"},
+		},
+		{
+			name: "template with embedded variables",
+			templates: [10]string{
+				"", "", "", // template0-2
+				"CPU: ${cpu}%", // template3
+			},
+			input:    "${template3}",
+			contains: []string{"CPU:", "%"},
+		},
+		{
+			name: "template with argument in variable",
+			templates: [10]string{
+				"", "", "", "", // template0-3
+				"Memory used: ${mem}", // template4
+			},
+			input:    "${template4}",
+			contains: []string{"Memory used:"},
+		},
+		{
+			name: "undefined template returns empty",
+			templates: [10]string{}, // all empty
+			input:    "${template5}",
+			contains: []string{},
+		},
+		{
+			name: "template9 works",
+			templates: [10]string{
+				"", "", "", "", "", "", "", "", "", // template0-8
+				"Last template: \\1", // template9
+			},
+			input:    "${template9 works}",
+			contains: []string{"Last template: works"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			api.SetTemplates(tt.templates)
+			result := api.Parse(tt.input)
+
+			for _, expected := range tt.contains {
+				if !strings.Contains(result, expected) {
+					t.Errorf("Parse(%q) = %q, expected to contain %q", tt.input, result, expected)
+				}
+			}
+
+			// For undefined template, result should be empty
+			if len(tt.contains) == 0 && result != "" {
+				t.Errorf("Parse(%q) = %q, expected empty string", tt.input, result)
+			}
+		})
+	}
+}
+
+// TestTemplateSetAndGet tests the SetTemplates and GetTemplate methods.
+func TestTemplateSetAndGet(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, nil)
+	if err != nil {
+		t.Fatalf("Failed to create API: %v", err)
+	}
+
+	// Initially all templates should be empty
+	for i := 0; i < 10; i++ {
+		if got := api.GetTemplate(i); got != "" {
+			t.Errorf("GetTemplate(%d) = %q, expected empty", i, got)
+		}
+	}
+
+	// Set templates
+	templates := [10]string{
+		"template0 content",
+		"template1 content",
+		"template2 content",
+		"", "", "", "", "", "",
+		"template9 content",
+	}
+	api.SetTemplates(templates)
+
+	// Verify templates are set
+	if got := api.GetTemplate(0); got != "template0 content" {
+		t.Errorf("GetTemplate(0) = %q, expected %q", got, "template0 content")
+	}
+	if got := api.GetTemplate(1); got != "template1 content" {
+		t.Errorf("GetTemplate(1) = %q, expected %q", got, "template1 content")
+	}
+	if got := api.GetTemplate(9); got != "template9 content" {
+		t.Errorf("GetTemplate(9) = %q, expected %q", got, "template9 content")
+	}
+
+	// Test out of bounds
+	if got := api.GetTemplate(-1); got != "" {
+		t.Errorf("GetTemplate(-1) = %q, expected empty", got)
+	}
+	if got := api.GetTemplate(10); got != "" {
+		t.Errorf("GetTemplate(10) = %q, expected empty", got)
+	}
+}
+
+// TestTemplateArgumentSubstitution tests argument placeholder substitution.
+func TestTemplateArgumentSubstitution(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, &mockSystemDataProvider{})
+	if err != nil {
+		t.Fatalf("Failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		args     []string
+		expected string
+	}{
+		{
+			name:     "no placeholders",
+			template: "Static text",
+			args:     []string{"ignored"},
+			expected: "Static text",
+		},
+		{
+			name:     "single placeholder",
+			template: "Value: \\1",
+			args:     []string{"42"},
+			expected: "Value: 42",
+		},
+		{
+			name:     "multiple same placeholder",
+			template: "\\1 and \\1 again",
+			args:     []string{"test"},
+			expected: "test and test again",
+		},
+		{
+			name:     "multiple different placeholders",
+			template: "\\1, \\2, \\3",
+			args:     []string{"a", "b", "c"},
+			expected: "a, b, c",
+		},
+		{
+			name:     "placeholder without matching arg",
+			template: "Has \\5 placeholder",
+			args:     []string{"only one"},
+			expected: "Has \\5 placeholder",
+		},
+		{
+			name:     "no args with placeholder",
+			template: "Needs \\1",
+			args:     []string{},
+			expected: "Needs \\1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			templates := [10]string{tt.template}
+			api.SetTemplates(templates)
+
+			// Build the input string with args
+			input := "${template0"
+			for _, arg := range tt.args {
+				input += " " + arg
+			}
+			input += "}"
+
+			result := api.Parse(input)
+			if result != tt.expected {
+				t.Errorf("Parse(%q) with template %q = %q, want %q", input, tt.template, result, tt.expected)
+			}
+		})
+	}
+}

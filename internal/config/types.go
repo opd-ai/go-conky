@@ -62,6 +62,9 @@ type DisplayConfig struct {
 type TextConfig struct {
 	// Template contains the text template lines.
 	Template []string
+	// Templates contains the template0-template9 definitions.
+	// Templates can use \1, \2, etc. as argument placeholders.
+	Templates [10]string
 }
 
 // ColorConfig holds color definitions.

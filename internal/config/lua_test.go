@@ -500,3 +500,51 @@ func TestLuaConfigParserClose(t *testing.T) {
 		t.Errorf("Second Close failed: %v", err)
 	}
 }
+
+// TestLuaParserTemplates tests parsing of template0-template9 in Lua config.
+func TestLuaParserTemplates(t *testing.T) {
+content := []byte(`
+conky.config = {
+    template0 = "Hello World",
+    template1 = "Core \\1 usage: ${cpu \\1}%",
+    template2 = "FS \\1 is \\2% full",
+    template9 = "Last template with arg \\1",
+}
+conky.text = [[Test]]
+`)
+
+parser, err := NewLuaConfigParser()
+if err != nil {
+t.Fatalf("NewLuaConfigParser failed: %v", err)
+}
+defer parser.Close()
+
+cfg, err := parser.Parse(content)
+if err != nil {
+t.Fatalf("Parse failed: %v", err)
+}
+
+tests := []struct {
+index    int
+expected string
+}{
+{0, "Hello World"},
+{1, "Core \\1 usage: ${cpu \\1}%"},
+{2, "FS \\1 is \\2% full"},
+{3, ""},
+{4, ""},
+{5, ""},
+{6, ""},
+{7, ""},
+{8, ""},
+{9, "Last template with arg \\1"},
+}
+
+for _, tt := range tests {
+t.Run("template"+string(rune('0'+tt.index)), func(t *testing.T) {
+if cfg.Text.Templates[tt.index] != tt.expected {
+t.Errorf("Templates[%d] = %q, want %q", tt.index, cfg.Text.Templates[tt.index], tt.expected)
+}
+})
+}
+}

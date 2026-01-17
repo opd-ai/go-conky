@@ -210,6 +210,9 @@ func (p *LuaConfigParser) extractConfigTable(cfg *Config, table *rt.Table) error
 		return err
 	}
 
+	// Template definitions (template0-template9)
+	p.extractTemplates(cfg, table)
+
 	return nil
 }
 
@@ -335,4 +338,18 @@ func getTableInt(table *rt.Table, key string) *int {
 	}
 
 	return nil
+}
+
+// extractTemplates extracts template0-template9 from the conky.config table.
+func (p *LuaConfigParser) extractTemplates(cfg *Config, table *rt.Table) {
+	templateKeys := []string{
+		"template0", "template1", "template2", "template3", "template4",
+		"template5", "template6", "template7", "template8", "template9",
+	}
+
+	for i, key := range templateKeys {
+		if val := getTableString(table, key); val != nil {
+			cfg.Text.Templates[i] = *val
+		}
+	}
 }
