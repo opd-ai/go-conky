@@ -2703,3 +2703,30 @@ func TestCairoRenderer_AppendPath_WithArc(t *testing.T) {
 		t.Errorf("AppendPath with arc should create at least 3 segments, got %d", len(copied))
 	}
 }
+
+// TestCairoRenderer_ConvenienceFunctionsConcurrency tests that the atomic convenience
+// drawing functions can be called safely from multiple goroutines without race conditions.
+func TestCairoRenderer_ConvenienceFunctionsConcurrency(t *testing.T) {
+	cr := NewCairoRenderer()
+	var wg sync.WaitGroup
+
+	// Run multiple goroutines calling convenience drawing functions
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				// Call each convenience function with varying parameters
+				x := float64(id*10 + j)
+				y := float64(id*5 + j)
+				cr.DrawLine(x, y, x+10, y+10)
+				cr.DrawRectangle(x, y, 20, 15)
+				cr.FillRectangle(x+5, y+5, 10, 10)
+				cr.DrawCircle(x+25, y+25, 5)
+				cr.FillCircle(x+30, y+30, 3)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}

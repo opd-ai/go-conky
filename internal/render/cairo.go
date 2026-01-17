@@ -1492,14 +1492,7 @@ func (cr *CairoRenderer) setVertexColors(vertices []ebiten.Vertex) {
 // newPathUnlocked clears the current path without acquiring the mutex.
 // This must be called while holding the mutex.
 func (cr *CairoRenderer) newPathUnlocked() {
-	cr.path = &vector.Path{}
-	cr.pathSegments = make([]PathSegment, 0)
-	cr.hasPath = false
-	cr.pathBoundsInit = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.clearPathUnlocked()
 }
 
 // moveToUnlocked begins a new sub-path at the given point without acquiring the mutex.
