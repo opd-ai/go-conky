@@ -111,6 +111,12 @@ func (p *LegacyParser) parseDirective(cfg *Config, line string, lineNum int) err
 			val = 255
 		}
 		cfg.Window.ARGBValue = val
+	case "own_window_colour", "own_window_color":
+		c, err := parseColor(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid own_window_colour: %w", lineNum, err)
+		}
+		cfg.Window.BackgroundColour = c
 
 	// Window type
 	case "own_window_type":

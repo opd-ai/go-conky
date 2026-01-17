@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"image/color"
+	"strings"
 	"time"
 )
 
@@ -49,6 +50,13 @@ type WindowConfig struct {
 	Y int
 	// Alignment specifies window alignment on screen.
 	Alignment Alignment
+	// BackgroundMode specifies how the window background is rendered.
+	// Default is BackgroundModeSolid.
+	BackgroundMode BackgroundMode
+	// BackgroundColour is the custom background color when BackgroundMode is solid.
+	// This corresponds to the own_window_colour Conky setting.
+	// If not set (zero value), uses the default semi-transparent black.
+	BackgroundColour color.RGBA
 }
 
 // DisplayConfig holds display and rendering settings.
@@ -296,4 +304,47 @@ func ParseAlignment(s string) (Alignment, error) {
 // For detailed validation results including warnings, use NewValidator().Validate().
 func (c *Config) Validate() error {
 	return ValidateConfig(c)
+}
+
+// BackgroundMode specifies how the window background is rendered.
+type BackgroundMode int
+
+const (
+	// BackgroundModeSolid draws a solid background color.
+	// This is the default mode when transparency is not enabled.
+	BackgroundModeSolid BackgroundMode = iota
+	// BackgroundModeNone draws no background (fully transparent).
+	// Useful for true transparency with a compositor.
+	BackgroundModeNone
+	// BackgroundModeTransparent is an alias for BackgroundModeNone.
+	// It indicates the window should be fully transparent.
+	BackgroundModeTransparent
+)
+
+// String returns the string representation of a BackgroundMode.
+func (bm BackgroundMode) String() string {
+	switch bm {
+	case BackgroundModeSolid:
+		return "solid"
+	case BackgroundModeNone:
+		return "none"
+	case BackgroundModeTransparent:
+		return "transparent"
+	default:
+		return "unknown"
+	}
+}
+
+// ParseBackgroundMode parses a string into a BackgroundMode.
+func ParseBackgroundMode(s string) (BackgroundMode, error) {
+	switch strings.ToLower(s) {
+	case "solid", "":
+		return BackgroundModeSolid, nil
+	case "none":
+		return BackgroundModeNone, nil
+	case "transparent":
+		return BackgroundModeTransparent, nil
+	default:
+		return BackgroundModeSolid, fmt.Errorf("unknown background mode: %s", s)
+	}
 }

@@ -30,6 +30,10 @@ type Config struct {
 	// 0 is fully transparent, 255 is fully opaque.
 	// Only effective when ARGBVisual is true.
 	ARGBValue int
+	// BackgroundMode specifies how the window background is rendered.
+	// BackgroundModeSolid (default) draws a solid color.
+	// BackgroundModeNone draws no background (fully transparent).
+	BackgroundMode BackgroundMode
 	// Undecorated removes window decorations (title bar, borders) when true.
 	// Corresponds to the "undecorated" window hint in Conky configuration.
 	Undecorated bool
@@ -82,6 +86,7 @@ func DefaultConfig() Config {
 		Transparent:       false,
 		ARGBVisual:        false,
 		ARGBValue:         255, // Fully opaque by default
+		BackgroundMode:    BackgroundModeSolid,
 		Undecorated:       false,
 		Floating:          false,
 		WindowX:           -1, // Use system default position

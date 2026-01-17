@@ -351,3 +351,66 @@ func TestConfigCopy(t *testing.T) {
 	// Note: slices are not deep copied by value copy
 	// This is expected Go behavior
 }
+
+func TestBackgroundModeString(t *testing.T) {
+	tests := []struct {
+		mode BackgroundMode
+		want string
+	}{
+		{BackgroundModeSolid, "solid"},
+		{BackgroundModeNone, "none"},
+		{BackgroundModeTransparent, "transparent"},
+		{BackgroundMode(999), "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := tt.mode.String(); got != tt.want {
+				t.Errorf("BackgroundMode.String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseBackgroundMode(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    BackgroundMode
+		wantErr bool
+	}{
+		{"solid", BackgroundModeSolid, false},
+		{"Solid", BackgroundModeSolid, false},
+		{"SOLID", BackgroundModeSolid, false},
+		{"none", BackgroundModeNone, false},
+		{"None", BackgroundModeNone, false},
+		{"NONE", BackgroundModeNone, false},
+		{"transparent", BackgroundModeTransparent, false},
+		{"Transparent", BackgroundModeTransparent, false},
+		{"", BackgroundModeSolid, false}, // Empty defaults to solid
+		{"invalid", BackgroundModeSolid, true},
+		{"gradient", BackgroundModeSolid, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ParseBackgroundMode(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseBackgroundMode(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ParseBackgroundMode(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultConfigHasBackgroundMode(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Window.BackgroundMode != BackgroundModeSolid {
+		t.Errorf("Default BackgroundMode = %v, want BackgroundModeSolid", cfg.Window.BackgroundMode)
+	}
+	if cfg.Window.BackgroundColour != DefaultBackgroundColour {
+		t.Errorf("Default BackgroundColour = %v, want %v", cfg.Window.BackgroundColour, DefaultBackgroundColour)
+	}
+}

@@ -45,40 +45,45 @@ const outlineOffset = 1.0
 
 // Game implements ebiten.Game interface and handles rendering.
 type Game struct {
-	config       Config
-	textRenderer TextRendererInterface
-	dataProvider DataProvider
-	errorHandler ErrorHandler
-	lastUpdate   time.Time
-	lines        []TextLine
-	mu           sync.RWMutex
-	running      bool
-	ctx          context.Context
-	imageCache   *ImageCache // Cache for loaded images
+	config             Config
+	textRenderer       TextRendererInterface
+	dataProvider       DataProvider
+	errorHandler       ErrorHandler
+	lastUpdate         time.Time
+	lines              []TextLine
+	mu                 sync.RWMutex
+	running            bool
+	ctx                context.Context
+	imageCache         *ImageCache          // Cache for loaded images
+	backgroundRenderer BackgroundRenderer   // Handles background drawing
 }
 
 // NewGame creates a new Game instance with the provided configuration.
 func NewGame(config Config) *Game {
+	bgRenderer := NewBackgroundRenderer(config.BackgroundMode, config.BackgroundColor, config.ARGBVisual, config.ARGBValue)
 	return &Game{
-		config:       config,
-		textRenderer: NewTextRenderer(),
-		errorHandler: DefaultErrorHandler,
-		lastUpdate:   time.Now(),
-		lines:        make([]TextLine, 0),
-		imageCache:   NewImageCache(),
+		config:             config,
+		textRenderer:       NewTextRenderer(),
+		errorHandler:       DefaultErrorHandler,
+		lastUpdate:         time.Now(),
+		lines:              make([]TextLine, 0),
+		imageCache:         NewImageCache(),
+		backgroundRenderer: bgRenderer,
 	}
 }
 
 // NewGameWithRenderer creates a new Game instance with a custom text renderer.
 // This is useful for testing.
 func NewGameWithRenderer(config Config, renderer TextRendererInterface) *Game {
+	bgRenderer := NewBackgroundRenderer(config.BackgroundMode, config.BackgroundColor, config.ARGBVisual, config.ARGBValue)
 	return &Game{
-		config:       config,
-		textRenderer: renderer,
-		errorHandler: DefaultErrorHandler,
-		lastUpdate:   time.Now(),
-		lines:        make([]TextLine, 0),
-		imageCache:   NewImageCache(),
+		config:             config,
+		textRenderer:       renderer,
+		errorHandler:       DefaultErrorHandler,
+		lastUpdate:         time.Now(),
+		lines:              make([]TextLine, 0),
+		imageCache:         NewImageCache(),
+		backgroundRenderer: bgRenderer,
 	}
 }
 
@@ -162,21 +167,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
-	// Apply background color with ARGB transparency if enabled
-	bgColor := g.config.BackgroundColor
-	if g.config.ARGBVisual {
-		// Apply ARGBValue to background alpha (clamp to 0-255)
-		argbAlpha := g.config.ARGBValue
-		if argbAlpha < 0 {
-			argbAlpha = 0
-		} else if argbAlpha > 255 {
-			argbAlpha = 255
-		}
-		bgColor.A = uint8(argbAlpha)
-	}
-
-	// Clear screen with background color
-	screen.Fill(bgColor)
+	// Draw background using the configured background renderer
+	g.backgroundRenderer.Draw(screen)
 
 	// Draw borders if enabled
 	if g.config.DrawBorders {

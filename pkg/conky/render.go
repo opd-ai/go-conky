@@ -43,6 +43,8 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	windowHints := c.cfg.Window.Hints
 	windowX := c.cfg.Window.X
 	windowY := c.cfg.Window.Y
+	bgMode := c.cfg.Window.BackgroundMode
+	bgColour := c.cfg.Window.BackgroundColour
 	ctx := c.ctx
 	c.mu.RUnlock()
 
@@ -60,9 +62,15 @@ func (gr *gameRunner) run(c *conkyImpl) {
 		interval = defaultUpdateInterval
 	}
 
-	// Background color: use semi-transparent black by default
+	// Background color: use custom colour if set, otherwise use semi-transparent black
 	// When ARGBVisual is enabled, the ARGBValue will override the alpha channel
 	bgColor := color.RGBA{R: 0, G: 0, B: 0, A: defaultBackgroundAlpha}
+	if bgColour != (color.RGBA{}) {
+		bgColor = bgColour
+	}
+
+	// Convert config.BackgroundMode to render.BackgroundMode
+	renderBgMode := configToRenderBackgroundMode(bgMode)
 
 	// Default text color is white if not specified in config
 	if textColor == (color.RGBA{}) {
@@ -82,6 +90,7 @@ func (gr *gameRunner) run(c *conkyImpl) {
 		Transparent:     transparent,
 		ARGBVisual:      argbVisual,
 		ARGBValue:       argbValue,
+		BackgroundMode:  renderBgMode,
 		Undecorated:     undecorated,
 		Floating:        floating,
 		WindowX:         windowX,
@@ -117,6 +126,16 @@ func (gr *gameRunner) run(c *conkyImpl) {
 		if err != render.ErrGameTerminated {
 			c.notifyError(fmt.Errorf("render loop error: %w", err))
 		}
+	}
+}
+
+// configToRenderBackgroundMode converts config.BackgroundMode to render.BackgroundMode.
+func configToRenderBackgroundMode(mode config.BackgroundMode) render.BackgroundMode {
+	switch mode {
+	case config.BackgroundModeNone, config.BackgroundModeTransparent:
+		return render.BackgroundModeNone
+	default:
+		return render.BackgroundModeSolid
 	}
 }
 

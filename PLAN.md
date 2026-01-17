@@ -100,17 +100,28 @@ The go-conky project uses **Ebitengine v2** (`github.com/hajimehoshi/ebiten/v2`)
 **Objective:** Support multiple background transparency modes matching original Conky behavior
 
 **Tasks:**
-1. Implement `own_window_colour` support for custom background colors
+1. ✅ Implement `own_window_colour` support for custom background colors
 2. Add pseudo-transparency mode (screenshot-based background) as fallback
 3. Support gradient backgrounds with alpha channels
-4. Create `BackgroundRenderer` interface for extensibility
-5. Add `none` background mode (fully transparent, no fill)
+4. ✅ Create `BackgroundRenderer` interface for extensibility
+5. ✅ Add `none` background mode (fully transparent, no fill)
 6. Add visual tests comparing output with reference screenshots
+
+**Implementation Summary (Tasks 1, 4, 5):**
+- Added `BackgroundMode` type to `config/types.go` with `BackgroundModeSolid`, `BackgroundModeNone`, and `BackgroundModeTransparent` modes
+- Added `BackgroundColour` field to `WindowConfig` for custom background colors
+- Added `ParseBackgroundMode()` function for string parsing
+- Created `BackgroundRenderer` interface in `render/background.go` with `Draw()` and `Mode()` methods
+- Implemented `SolidBackground` renderer with ARGB support
+- Implemented `NoneBackground` renderer for fully transparent backgrounds
+- Added `own_window_colour` and `own_window_color` (US spelling) parsing to legacy parser
+- Wired `BackgroundMode` through `render.Config` and `Game` struct
+- Added comprehensive tests in `render/background_test.go`, `config/types_test.go`, and `config/legacy_test.go`
 
 **Dependencies:**
 - `image` standard library for screenshot handling (pseudo-transparency)
 
-**Estimated Complexity:** Medium
+**Completed (Tasks 1, 4, 5):** 2026-01-17
 
 ---
 
@@ -181,6 +192,9 @@ All changes are additive and backward compatible. Existing configurations withou
 - [x] `own_window_argb_visual yes` enables 32-bit ARGB visual
 - [x] Window hints (undecorated, above, skip_taskbar, skip_pager) applied via Ebiten
 - [x] Window position configurable via gap_x/gap_y settings
+- [x] `own_window_colour` configures custom background color
+- [x] BackgroundRenderer interface enables extensible background modes
+- [x] `none` background mode fully implemented
 - [ ] No performance regression on existing functionality (< 5% impact)
 - [ ] Fallback to solid background when compositor unavailable
 - [ ] Documentation covers setup for major compositors
@@ -195,7 +209,7 @@ All changes are additive and backward compatible. Existing configurations withou
 | Phase 1 | Week 1 | Critical | Core transparency | ✅ COMPLETED |
 | Phase 2 | Week 1-2 | Critical | Alpha value support | ✅ COMPLETED |
 | Phase 3 | Week 2-3 | Important | Window hints | ✅ COMPLETED |
-| Phase 4 | Week 3-4 | Nice-to-have | Background modes | Pending |
+| Phase 4 | Week 3-4 | Nice-to-have | Background modes | ⏳ PARTIAL (3/6 tasks) |
 | Phase 5 | Week 4 | Important | Testing/docs | Pending |
 
 **Total Estimated Timeline:** 4 weeks
@@ -206,10 +220,16 @@ All changes are additive and backward compatible. Existing configurations withou
 
 | File | Changes | Status |
 |------|---------|--------|
-| `internal/render/types.go` | Added `Transparent`, `ARGBVisual`, `ARGBValue`, `Undecorated`, `Floating`, `WindowX`, `WindowY`, `SkipTaskbar`, `SkipPager` fields | ✅ Done |
-| `internal/render/game.go` | Call `SetScreenTransparent()`, `SetWindowDecorated()`, `SetWindowFloating()`, `SetWindowPosition()`, apply ARGB alpha in `Draw()` | ✅ Done |
-| `pkg/conky/render.go` | Wire config values to render.Config, add `parseWindowHints()` function | ✅ Done |
-| `internal/render/types_test.go` | Added ARGB and window hints configuration tests | ✅ Done |
+| `internal/render/types.go` | Added `Transparent`, `ARGBVisual`, `ARGBValue`, `BackgroundMode`, `Undecorated`, `Floating`, `WindowX`, `WindowY`, `SkipTaskbar`, `SkipPager` fields | ✅ Done |
+| `internal/render/game.go` | Call `SetScreenTransparent()`, `SetWindowDecorated()`, `SetWindowFloating()`, `SetWindowPosition()`, use `BackgroundRenderer` in `Draw()` | ✅ Done |
+| `internal/render/background.go` | New file: `BackgroundRenderer` interface, `SolidBackground`, `NoneBackground` implementations | ✅ Done |
+| `internal/render/background_test.go` | New file: Comprehensive tests for background rendering | ✅ Done |
+| `internal/config/types.go` | Added `BackgroundMode` type, `BackgroundColour` field to `WindowConfig`, `ParseBackgroundMode()` function | ✅ Done |
+| `internal/config/defaults.go` | Added `DefaultBackgroundColour`, updated `defaultWindowConfig()` | ✅ Done |
+| `internal/config/legacy.go` | Added `own_window_colour` and `own_window_color` parsing | ✅ Done |
+| `pkg/conky/render.go` | Wire config values to render.Config, add `configToRenderBackgroundMode()` function | ✅ Done |
+| `internal/render/types_test.go` | Added ARGB, window hints, and background mode tests | ✅ Done |
+| `internal/config/legacy_test.go` | Added `own_window_colour` parsing tests | ✅ Done |
 | `pkg/conky/render_test.go` | Added `parseWindowHints()` unit tests | ✅ Done |
 | `internal/render/game_test.go` | Added ARGB transparency tests | ✅ Done |
 | `internal/config/validation.go` | ARGBValue range validation | Already exists |

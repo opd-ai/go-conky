@@ -27,23 +27,27 @@ var (
 	DefaultGrey = color.RGBA{R: 128, G: 128, B: 128, A: 255}
 	// TransparentColor represents fully transparent.
 	TransparentColor = color.RGBA{R: 0, G: 0, B: 0, A: 0}
+	// DefaultBackgroundColour is the default semi-transparent black background.
+	DefaultBackgroundColour = color.RGBA{R: 0, G: 0, B: 0, A: 200}
 )
 
 // defaultWindowConfig returns a WindowConfig with sensible default values.
 // It is used by DefaultConfig and DefaultWindowConfig to avoid duplicating logic.
 func defaultWindowConfig() WindowConfig {
 	return WindowConfig{
-		OwnWindow:   true,
-		Type:        WindowTypeNormal,
-		Transparent: false,
-		ARGBVisual:  false,
-		ARGBValue:   255, // Fully opaque by default
-		Hints:       nil,
-		Width:       DefaultWidth,
-		Height:      DefaultHeight,
-		X:           0,
-		Y:           0,
-		Alignment:   AlignmentTopLeft,
+		OwnWindow:        true,
+		Type:             WindowTypeNormal,
+		Transparent:      false,
+		ARGBVisual:       false,
+		ARGBValue:        255, // Fully opaque by default
+		Hints:            nil,
+		Width:            DefaultWidth,
+		Height:           DefaultHeight,
+		X:                0,
+		Y:                0,
+		Alignment:        AlignmentTopLeft,
+		BackgroundMode:   BackgroundModeSolid,
+		BackgroundColour: DefaultBackgroundColour,
 	}
 }
 

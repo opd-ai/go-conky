@@ -807,3 +807,57 @@ own_window_argb_value 200`,
 		})
 	}
 }
+
+func TestLegacyParserOwnWindowColour(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected color.RGBA
+		wantErr  bool
+	}{
+		{
+			name:     "own_window_colour hex",
+			input:    "own_window_colour 1a2b3c",
+			expected: color.RGBA{R: 0x1a, G: 0x2b, B: 0x3c, A: 255},
+			wantErr:  false,
+		},
+		{
+			name:     "own_window_colour with hash",
+			input:    "own_window_colour #ff5500",
+			expected: color.RGBA{R: 255, G: 85, B: 0, A: 255},
+			wantErr:  false,
+		},
+		{
+			name:     "own_window_colour named",
+			input:    "own_window_colour black",
+			expected: color.RGBA{R: 0, G: 0, B: 0, A: 255},
+			wantErr:  false,
+		},
+		{
+			name:     "own_window_color US spelling",
+			input:    "own_window_color white",
+			expected: color.RGBA{R: 255, G: 255, B: 255, A: 255},
+			wantErr:  false,
+		},
+		{
+			name:     "own_window_colour invalid",
+			input:    "own_window_colour gggggg",
+			expected: color.RGBA{},
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewLegacyParser()
+			cfg, err := p.Parse([]byte(tt.input))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && cfg.Window.BackgroundColour != tt.expected {
+				t.Errorf("BackgroundColour = %v, want %v", cfg.Window.BackgroundColour, tt.expected)
+			}
+		})
+	}
+}
