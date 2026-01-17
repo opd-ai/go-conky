@@ -14,7 +14,7 @@ This audit compares the documented functionality in README.md and supporting doc
 | Category | Count | Resolved |
 |----------|-------|----------|
 | **CRITICAL BUG** | 0 | 0 |
-| **FUNCTIONAL MISMATCH** | 4 | 3 |
+| **FUNCTIONAL MISMATCH** | 4 | 4 |
 | **DOCUMENTATION ISSUE** | 1 | 1 |
 | **MISSING FEATURE** | 4 | 0 |
 | **EDGE CASE BUG** | 3 | 3 |
@@ -29,6 +29,7 @@ This audit compares the documented functionality in README.md and supporting doc
 - ✅ Fixed `Sysname` to use `runtime.GOOS` for platform-aware OS name detection
 - ✅ Implemented `CopyPath` to return actual path segments instead of empty slice
 - ✅ Fixed `RelMoveTo`, `RelLineTo`, `RelCurveTo` to default to (0,0) when there's no current point
+- ✅ Implemented `SetFillRule` and `SetOperator` to properly control fill rule and compositing mode
 
 ---
 
@@ -93,34 +94,33 @@ func (cr *CairoRenderer) Clip() {
 
 ---
 
-### FUNCTIONAL MISMATCH: SetFillRule and SetOperator Are No-Ops
+### ~~FUNCTIONAL MISMATCH: SetFillRule and SetOperator Are No-Ops~~ [RESOLVED]
 
-**File:** internal/render/cairo.go:751-771  
+**File:** internal/render/cairo.go:778-829  
 **Severity:** Low  
-**Description:** The `SetFillRule` and `SetOperator` functions accept parameters but are no-op implementations, always returning default values. The comments document this as intentional for Cairo compatibility, but users may expect these to affect rendering.
+**Status:** ✅ RESOLVED - SetFillRule and SetOperator now properly control fill rule and compositing.
+
+**Description:** The `SetFillRule` and `SetOperator` functions previously were no-op implementations that ignored their parameters.
+
+**Resolution:** 
+- Added `fillRule` and `operator` fields to `CairoRenderer` struct
+- Updated `SetFillRule` to store the fill rule (0=WINDING, 1=EVEN_ODD) with clamping
+- Updated `GetFillRule` to return the stored fill rule
+- Updated `SetOperator` to store the operator (0-12 Cairo operators) with clamping
+- Updated `GetOperator` to return the stored operator
+- Added `getEbitenFillRule()` helper to convert Cairo fill rule to `ebiten.FillRule`
+- Added `getEbitenBlend()` helper to convert Cairo operator to `ebiten.Blend`
+- Updated `Fill`, `FillPreserve`, `Stroke`, `StrokePreserve` to use fill rule and blend mode
+- Updated `Save`/`Restore` to preserve fill rule and operator state
+- Updated `NewCairoRenderer` to set default values (fillRule=0, operator=2)
+- Fixed Lua bindings to properly extract renderer from both `CairoContext` and `sharedContext`
+- Updated test cases in `cairo_test.go` and `cairo_bindings_test.go`
 
 **Expected Behavior:** `cairo_set_fill_rule()` should affect how paths are filled (winding vs even-odd). `cairo_set_operator()` should control compositing operations.
 
-**Actual Behavior:** Both functions silently ignore their input parameters. `GetFillRule()` always returns 0 (WINDING), `GetOperator()` always returns 2 (OVER).
-
-**Impact:** Scripts that rely on even-odd fill rule or alternative compositing operators will produce incorrect visual output.
-
-**Reproduction:** Set fill rule to EVEN_ODD and fill a self-intersecting path.
-
-**Code Reference:**
-```go
-// SetFillRule sets the fill rule for fill operations.
-// This is a no-op placeholder for Cairo compatibility.
-func (cr *CairoRenderer) SetFillRule(_ int) {
-    // Ebiten's vector package uses even-odd fill rule by default
-}
-
-// SetOperator sets the compositing operator.
-// This is a no-op placeholder for Cairo compatibility.
-func (cr *CairoRenderer) SetOperator(_ int) {
-    // Ebiten uses its own blend modes
-}
-```
+**Actual Behavior:** Now properly stores and applies fill rule and operator values:
+- Fill rule maps: WINDING (0) → `ebiten.FillRuleNonZero`, EVEN_ODD (1) → `ebiten.FillRuleEvenOdd`
+- Operator maps Cairo operators (0-12) to corresponding Ebiten blend modes
 
 ---
 
