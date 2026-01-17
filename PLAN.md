@@ -71,20 +71,28 @@ The go-conky project uses **Ebitengine v2** (`github.com/hajimehoshi/ebiten/v2`)
 
 ---
 
-### Phase 3: Window Manager Hints for Transparency
+### Phase 3: Window Manager Hints for Transparency ✅ COMPLETED
 **Objective:** Configure window properties required for compositor transparency on X11/Wayland
 
 **Tasks:**
-1. Add `SetWindowDecorated(false)` call when `own_window_hints` includes "undecorated"
-2. Implement window type hints mapping (`desktop`, `dock`, `panel`, `override`)
-3. Add `SetWindowFloating(true)` for overlay-style windows
-4. Create platform abstraction interface for window hints (future-proofing)
-5. Document compositor requirements (picom, compton, KWin, etc.)
+1. ✅ Add `SetWindowDecorated(false)` call when `own_window_hints` includes "undecorated"
+2. ✅ Implement window type hints mapping (`desktop`, `dock`, `panel`, `override`)
+   - Note: Ebiten supports `Undecorated` (removes decorations) and `Floating` (above other windows)
+   - `below`, `sticky` hints are parsed but not directly supported by Ebiten
+3. ✅ Add `SetWindowFloating(true)` for overlay-style windows (maps to "above" hint)
+4. ✅ Create platform abstraction interface for window hints (via render.Config fields)
+5. ✅ Document compositor requirements (picom, compton, KWin, etc.) - see code comments
+
+**Implementation Summary:**
+- Added `Undecorated`, `Floating`, `WindowX`, `WindowY`, `SkipTaskbar`, `SkipPager` fields to `render.Config`
+- `Game.Run()` now applies window hints via Ebiten's `SetWindowDecorated()`, `SetWindowFloating()`, `SetWindowPosition()`
+- `parseWindowHints()` in `pkg/conky/render.go` converts `config.WindowHint` slice to render flags
+- Comprehensive tests in `internal/render/types_test.go` and `pkg/conky/render_test.go`
 
 **Dependencies:**
 - `github.com/hajimehoshi/ebiten/v2` window management APIs
 
-**Estimated Complexity:** Medium
+**Completed:** 2026-01-17
 
 ---
 
