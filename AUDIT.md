@@ -391,17 +391,22 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 - **Location**: internal/lua/api.go
 
 **BUG-007: Limited config directives**
-**BUG-007: Limited config directives** ⚠️ PARTIAL
+**BUG-007: Limited config directives** ✅ FIXED
 - **Severity**: Medium
-- **Feature**: Configuration parsing
-- **Status**: PARTIALLY ADDRESSED - Added 7 new config directives for border/display settings
-- **Implemented**: draw_borders, draw_outline, draw_shades, border_width, border_inner_margin, 
+- **Feature**: Configuration parsing and rendering
+- **Status**: FIXED - Config directives parsed AND rendering effects implemented
+- **Config Parsing**: draw_borders, draw_outline, draw_shades, border_width, border_inner_margin, 
   border_outer_margin, stippled_borders
-- **Note**: Directives are parsed and stored in config; rendering behavior requires separate 
-  implementation in the rendering layer.
-- **Remaining**: own_window_argb_visual, own_window_argb_value, xftfont, use_xft, override_utf8_locale
-- **Location**: internal/config/types.go, internal/config/legacy.go, internal/config/lua.go
-- **Tests**: TestLegacyParserDisplayDirectives, TestLuaParserDisplayDirectives
+- **Rendering Implementation**: 
+  - Added display effect fields to render.Config struct (DrawBorders, DrawOutline, DrawShades, BorderWidth, BorderInnerMargin, BorderOuterMargin, StippledBorders, BorderColor, OutlineColor, ShadeColor)
+  - Implemented drawBorders() for solid and stippled border rendering around content area
+  - Implemented drawTextWithEffects() for text shade (drop shadow) and outline effects
+  - Text outlines render text 4 times at diagonal offsets in outline color
+  - Text shades render text once at offset in shade color before main text
+  - All effects use sensible default colors when not specified
+- **Remaining**: own_window_argb_visual, own_window_argb_value, xftfont, use_xft, override_utf8_locale (low priority)
+- **Location**: internal/config/types.go, internal/config/legacy.go, internal/config/lua.go, internal/render/types.go, internal/render/game.go
+- **Tests**: TestLegacyParserDisplayDirectives, TestLuaParserDisplayDirectives, TestDrawTextWithShade, TestDrawTextWithOutline, TestDrawBorders, TestDrawStippledBorders, TestTextEffectsDefaultColors, TestDefaultConfigDisplayEffects
 
 ### Low Priority
 
@@ -530,7 +535,7 @@ This audit evaluates the Go Conky implementation for functional correctness and 
 1. ~~Add remaining common config directives (draw_borders, draw_outline, draw_shades)~~ ✅ DONE - Parsing implemented
 2. ~~Implement ${lua} and ${lua_parse} for advanced script integration~~ ✅ DONE - Lua function calls working
 3. Add ${image} support for PNG/SVG display
-4. Implement rendering effects for draw_borders, draw_outline, draw_shades in render layer
+4. ~~Implement rendering effects for draw_borders, draw_outline, draw_shades in render layer~~ ✅ DONE - Rendering implemented
 
 ### Architecture Observations
 1. **Strengths**: 

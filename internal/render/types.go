@@ -19,16 +19,46 @@ type Config struct {
 	UpdateInterval time.Duration
 	// BackgroundColor is the window background color.
 	BackgroundColor color.RGBA
+	// DrawBorders enables drawing a border around the content area.
+	DrawBorders bool
+	// DrawOutline enables drawing an outline (stroke) around text.
+	DrawOutline bool
+	// DrawShades enables drawing a drop shadow behind text.
+	DrawShades bool
+	// BorderWidth is the width of borders in pixels.
+	BorderWidth int
+	// BorderInnerMargin is the inner margin between border and content in pixels.
+	BorderInnerMargin int
+	// BorderOuterMargin is the outer margin between window edge and border in pixels.
+	BorderOuterMargin int
+	// StippledBorders enables stippled (dashed) border effect.
+	StippledBorders bool
+	// BorderColor is the color for borders. If zero value, uses a contrasting color.
+	BorderColor color.RGBA
+	// OutlineColor is the color for text outlines. If zero value, uses black.
+	OutlineColor color.RGBA
+	// ShadeColor is the color for text shadows. If zero value, uses dark gray.
+	ShadeColor color.RGBA
 }
 
 // DefaultConfig returns a Config with sensible default values.
 func DefaultConfig() Config {
 	return Config{
-		Width:           400,
-		Height:          300,
-		Title:           "conky-go",
-		UpdateInterval:  time.Second,
-		BackgroundColor: color.RGBA{R: 0, G: 0, B: 0, A: 200},
+		Width:             400,
+		Height:            300,
+		Title:             "conky-go",
+		UpdateInterval:    time.Second,
+		BackgroundColor:   color.RGBA{R: 0, G: 0, B: 0, A: 200},
+		DrawBorders:       false,
+		DrawOutline:       false,
+		DrawShades:        false,
+		BorderWidth:       1,
+		BorderInnerMargin: 5,
+		BorderOuterMargin: 5,
+		StippledBorders:   false,
+		BorderColor:       color.RGBA{R: 255, G: 255, B: 255, A: 255},
+		OutlineColor:      color.RGBA{R: 0, G: 0, B: 0, A: 255},
+		ShadeColor:        color.RGBA{R: 0, G: 0, B: 0, A: 128},
 	}
 }
 

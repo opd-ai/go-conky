@@ -567,3 +567,329 @@ func TestDrawGraphWidget(t *testing.T) {
 		})
 	}
 }
+
+// Test text effects configuration
+func TestConfigTextEffects(t *testing.T) {
+	config := DefaultConfig()
+
+	// Test default values
+	if config.DrawBorders {
+		t.Error("DrawBorders should be false by default")
+	}
+	if config.DrawOutline {
+		t.Error("DrawOutline should be false by default")
+	}
+	if config.DrawShades {
+		t.Error("DrawShades should be false by default")
+	}
+	if config.BorderWidth != 1 {
+		t.Errorf("BorderWidth should be 1 by default, got %d", config.BorderWidth)
+	}
+	if config.BorderInnerMargin != 5 {
+		t.Errorf("BorderInnerMargin should be 5 by default, got %d", config.BorderInnerMargin)
+	}
+	if config.BorderOuterMargin != 5 {
+		t.Errorf("BorderOuterMargin should be 5 by default, got %d", config.BorderOuterMargin)
+	}
+	if config.StippledBorders {
+		t.Error("StippledBorders should be false by default")
+	}
+}
+
+// Test text rendering with shade effect
+func TestDrawTextWithShade(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawShades = true
+	config.ShadeColor = color.RGBA{R: 50, G: 50, B: 50, A: 128}
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(100, 100)
+	defer screen.Deallocate()
+
+	// Draw text with shade enabled
+	game.drawTextWithEffects(screen, "Test", 10, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+
+	// Should have called DrawText twice: once for shade, once for main text
+	renderer.mu.RLock()
+	calls := renderer.drawTextCalls
+	renderer.mu.RUnlock()
+
+	if calls != 2 {
+		t.Errorf("Expected 2 DrawText calls (shade + main), got %d", calls)
+	}
+}
+
+// Test text rendering with outline effect
+func TestDrawTextWithOutline(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawOutline = true
+	config.OutlineColor = color.RGBA{R: 0, G: 0, B: 0, A: 255}
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(100, 100)
+	defer screen.Deallocate()
+
+	// Draw text with outline enabled
+	game.drawTextWithEffects(screen, "Test", 10, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+
+	// Should have called DrawText 5 times: 4 for outline + 1 for main text
+	renderer.mu.RLock()
+	calls := renderer.drawTextCalls
+	renderer.mu.RUnlock()
+
+	if calls != 5 {
+		t.Errorf("Expected 5 DrawText calls (4 outline + main), got %d", calls)
+	}
+}
+
+// Test text rendering with both shade and outline
+func TestDrawTextWithShadeAndOutline(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawShades = true
+	config.DrawOutline = true
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(100, 100)
+	defer screen.Deallocate()
+
+	game.drawTextWithEffects(screen, "Test", 10, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+
+	// Should have called DrawText 6 times: 1 shade + 4 outline + 1 main
+	renderer.mu.RLock()
+	calls := renderer.drawTextCalls
+	renderer.mu.RUnlock()
+
+	if calls != 6 {
+		t.Errorf("Expected 6 DrawText calls (shade + 4 outline + main), got %d", calls)
+	}
+}
+
+// Test text rendering with no effects
+func TestDrawTextWithNoEffects(t *testing.T) {
+	config := DefaultConfig()
+	// Default: no effects enabled
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(100, 100)
+	defer screen.Deallocate()
+
+	game.drawTextWithEffects(screen, "Test", 10, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+
+	// Should have called DrawText exactly once
+	renderer.mu.RLock()
+	calls := renderer.drawTextCalls
+	renderer.mu.RUnlock()
+
+	if calls != 1 {
+		t.Errorf("Expected 1 DrawText call, got %d", calls)
+	}
+}
+
+// Test border drawing
+func TestDrawBorders(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawBorders = true
+	config.BorderWidth = 2
+	config.BorderColor = color.RGBA{R: 255, G: 0, B: 0, A: 255}
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(400, 300)
+	defer screen.Deallocate()
+
+	// Should not panic
+	game.drawBorders(screen)
+}
+
+// Test stippled border drawing
+func TestDrawStippledBorders(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawBorders = true
+	config.StippledBorders = true
+	config.BorderWidth = 1
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(400, 300)
+	defer screen.Deallocate()
+
+	// Should not panic
+	game.drawBorders(screen)
+}
+
+// Test border with zero width
+func TestDrawBordersZeroWidth(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawBorders = true
+	config.BorderWidth = 0 // Should default to 1
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(400, 300)
+	defer screen.Deallocate()
+
+	// Should not panic and should use default width of 1
+	game.drawBorders(screen)
+}
+
+// Test border with large margins
+func TestDrawBordersLargeMargins(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawBorders = true
+	config.BorderOuterMargin = 300 // Larger than half of height
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(400, 300)
+	defer screen.Deallocate()
+
+	// Should not panic even with unreasonable margins
+	game.drawBorders(screen)
+}
+
+// Test Draw method includes borders when enabled
+func TestGameDrawWithBorders(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawBorders = true
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(400, 300)
+	defer screen.Deallocate()
+
+	// Should not panic
+	game.Draw(screen)
+}
+
+// Test drawLineWithWidgets uses text effects
+func TestDrawLineWithWidgetsUsesEffects(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawShades = true
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(100, 100)
+	defer screen.Deallocate()
+
+	line := TextLine{Text: "Hello", X: 10, Y: 20, Color: color.RGBA{R: 255, G: 255, B: 255, A: 255}}
+	game.drawLineWithWidgets(screen, line)
+
+	// Should have called DrawText twice (shade + main)
+	renderer.mu.RLock()
+	calls := renderer.drawTextCalls
+	renderer.mu.RUnlock()
+
+	if calls != 2 {
+		t.Errorf("Expected 2 DrawText calls with shade enabled, got %d", calls)
+	}
+}
+
+// Test abs32 helper function
+func TestAbs32(t *testing.T) {
+	tests := []struct {
+		input    float32
+		expected float32
+	}{
+		{5.0, 5.0},
+		{-5.0, 5.0},
+		{0.0, 0.0},
+		{-0.0, 0.0},
+		{3.14, 3.14},
+		{-3.14, 3.14},
+	}
+
+	for _, tt := range tests {
+		result := abs32(tt.input)
+		if result != tt.expected {
+			t.Errorf("abs32(%f) = %f, want %f", tt.input, result, tt.expected)
+		}
+	}
+}
+
+// Test drawStippledLine with various inputs
+func TestDrawStippledLine(t *testing.T) {
+	config := DefaultConfig()
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(200, 200)
+	defer screen.Deallocate()
+
+	clr := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+
+	tests := []struct {
+		name                string
+		x1, y1, x2, y2      float32
+		strokeWidth         float32
+		dashLen, gapLen     float32
+	}{
+		{"horizontal line", 10, 10, 100, 10, 1, 4, 2},
+		{"vertical line", 10, 10, 10, 100, 1, 4, 2},
+		{"diagonal line", 10, 10, 100, 100, 1, 4, 2},
+		{"zero length", 50, 50, 50, 50, 1, 4, 2},
+		{"thick stroke", 10, 10, 100, 10, 3, 4, 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Should not panic
+			game.drawStippledLine(screen, tt.x1, tt.y1, tt.x2, tt.y2, tt.strokeWidth, clr, tt.dashLen, tt.gapLen, tt.dashLen+tt.gapLen)
+		})
+	}
+}
+
+// Test default color fallbacks for effects
+func TestTextEffectsDefaultColors(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawShades = true
+	config.DrawOutline = true
+	// Leave ShadeColor and OutlineColor as zero values
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(100, 100)
+	defer screen.Deallocate()
+
+	// Should not panic and should use default colors
+	game.drawTextWithEffects(screen, "Test", 10, 20, color.RGBA{R: 255, G: 255, B: 255, A: 255})
+
+	renderer.mu.RLock()
+	calls := renderer.drawTextCalls
+	renderer.mu.RUnlock()
+
+	// 1 shade + 4 outline + 1 main = 6
+	if calls != 6 {
+		t.Errorf("Expected 6 DrawText calls, got %d", calls)
+	}
+}
+
+// Test border color fallback
+func TestBorderColorFallback(t *testing.T) {
+	config := DefaultConfig()
+	config.DrawBorders = true
+	// Leave BorderColor as zero value
+
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	screen := ebiten.NewImage(400, 300)
+	defer screen.Deallocate()
+
+	// Should not panic and should use default white color
+	game.drawBorders(screen)
+}

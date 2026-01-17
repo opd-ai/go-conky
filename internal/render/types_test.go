@@ -148,3 +148,89 @@ func TestConfigValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultConfigDisplayEffects(t *testing.T) {
+	config := DefaultConfig()
+
+	// Test new display effect defaults
+	if config.DrawBorders {
+		t.Error("DrawBorders should be false by default")
+	}
+	if config.DrawOutline {
+		t.Error("DrawOutline should be false by default")
+	}
+	if config.DrawShades {
+		t.Error("DrawShades should be false by default")
+	}
+	if config.BorderWidth != 1 {
+		t.Errorf("BorderWidth = %d, want 1", config.BorderWidth)
+	}
+	if config.BorderInnerMargin != 5 {
+		t.Errorf("BorderInnerMargin = %d, want 5", config.BorderInnerMargin)
+	}
+	if config.BorderOuterMargin != 5 {
+		t.Errorf("BorderOuterMargin = %d, want 5", config.BorderOuterMargin)
+	}
+	if config.StippledBorders {
+		t.Error("StippledBorders should be false by default")
+	}
+
+	// Test default colors
+	if config.BorderColor != (color.RGBA{R: 255, G: 255, B: 255, A: 255}) {
+		t.Errorf("BorderColor = %v, want white", config.BorderColor)
+	}
+	if config.OutlineColor != (color.RGBA{R: 0, G: 0, B: 0, A: 255}) {
+		t.Errorf("OutlineColor = %v, want black", config.OutlineColor)
+	}
+	if config.ShadeColor != (color.RGBA{R: 0, G: 0, B: 0, A: 128}) {
+		t.Errorf("ShadeColor = %v, want dark gray with 50%% alpha", config.ShadeColor)
+	}
+}
+
+func TestConfigDisplayEffectsCustomValues(t *testing.T) {
+	config := Config{
+		Width:             800,
+		Height:            600,
+		DrawBorders:       true,
+		DrawOutline:       true,
+		DrawShades:        true,
+		BorderWidth:       3,
+		BorderInnerMargin: 10,
+		BorderOuterMargin: 15,
+		StippledBorders:   true,
+		BorderColor:       color.RGBA{R: 255, G: 0, B: 0, A: 255},
+		OutlineColor:      color.RGBA{R: 0, G: 255, B: 0, A: 255},
+		ShadeColor:        color.RGBA{R: 0, G: 0, B: 255, A: 200},
+	}
+
+	if !config.DrawBorders {
+		t.Error("DrawBorders should be true")
+	}
+	if !config.DrawOutline {
+		t.Error("DrawOutline should be true")
+	}
+	if !config.DrawShades {
+		t.Error("DrawShades should be true")
+	}
+	if config.BorderWidth != 3 {
+		t.Errorf("BorderWidth = %d, want 3", config.BorderWidth)
+	}
+	if config.BorderInnerMargin != 10 {
+		t.Errorf("BorderInnerMargin = %d, want 10", config.BorderInnerMargin)
+	}
+	if config.BorderOuterMargin != 15 {
+		t.Errorf("BorderOuterMargin = %d, want 15", config.BorderOuterMargin)
+	}
+	if !config.StippledBorders {
+		t.Error("StippledBorders should be true")
+	}
+	if config.BorderColor.R != 255 {
+		t.Errorf("BorderColor.R = %d, want 255", config.BorderColor.R)
+	}
+	if config.OutlineColor.G != 255 {
+		t.Errorf("OutlineColor.G = %d, want 255", config.OutlineColor.G)
+	}
+	if config.ShadeColor.B != 255 {
+		t.Errorf("ShadeColor.B = %d, want 255", config.ShadeColor.B)
+	}
+}

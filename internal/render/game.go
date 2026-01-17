@@ -37,6 +37,12 @@ type TextRendererInterface interface {
 	FontSize() float64
 }
 
+// shadeOffset is the pixel offset for drop shadows.
+const shadeOffset = 1.0
+
+// outlineOffset is the pixel offset for text outlines.
+const outlineOffset = 1.0
+
 // Game implements ebiten.Game interface and handles rendering.
 type Game struct {
 	config       Config
@@ -156,6 +162,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Clear screen with background color
 	screen.Fill(g.config.BackgroundColor)
 
+	// Draw borders if enabled
+	if g.config.DrawBorders {
+		g.drawBorders(screen)
+	}
+
 	// Render all text lines with inline widget support
 	for _, line := range g.lines {
 		g.drawLineWithWidgets(screen, line)
@@ -164,9 +175,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 // drawLineWithWidgets renders a text line, handling inline widget markers.
 func (g *Game) drawLineWithWidgets(screen *ebiten.Image, line TextLine) {
-	// Fast path: if no widget markers, just draw text
+	// Fast path: if no widget markers, just draw text with effects
 	if !ContainsWidgetMarker(line.Text) {
-		g.textRenderer.DrawText(screen, line.Text, line.X, line.Y, line.Color)
+		g.drawTextWithEffects(screen, line.Text, line.X, line.Y, line.Color)
 		return
 	}
 
@@ -180,12 +191,141 @@ func (g *Game) drawLineWithWidgets(screen *ebiten.Image, line TextLine) {
 			g.drawInlineWidget(screen, seg.Widget, x, line.Y, line.Color)
 			x += seg.Widget.Width
 		} else {
-			// Render text segment
-			g.textRenderer.DrawText(screen, seg.Text, x, line.Y, line.Color)
+			// Render text segment with effects
+			g.drawTextWithEffects(screen, seg.Text, x, line.Y, line.Color)
 			textWidth, _ := g.textRenderer.MeasureText(seg.Text)
 			x += textWidth
 		}
 	}
+}
+
+// drawTextWithEffects renders text with optional shade (shadow) and outline effects.
+func (g *Game) drawTextWithEffects(screen *ebiten.Image, text string, x, y float64, clr color.RGBA) {
+	// Draw shade (drop shadow) first if enabled
+	if g.config.DrawShades {
+		shadeColor := g.config.ShadeColor
+		if shadeColor.A == 0 && shadeColor.R == 0 && shadeColor.G == 0 && shadeColor.B == 0 {
+			// Use default shade color if not set
+			shadeColor = color.RGBA{R: 0, G: 0, B: 0, A: 128}
+		}
+		g.textRenderer.DrawText(screen, text, x+shadeOffset, y+shadeOffset, shadeColor)
+	}
+
+	// Draw outline if enabled (draw text 4 times with offset)
+	if g.config.DrawOutline {
+		outlineColor := g.config.OutlineColor
+		if outlineColor.A == 0 && outlineColor.R == 0 && outlineColor.G == 0 && outlineColor.B == 0 {
+			// Use default outline color if not set
+			outlineColor = color.RGBA{R: 0, G: 0, B: 0, A: 255}
+		}
+		// Draw text at 4 diagonal offsets to create outline effect
+		g.textRenderer.DrawText(screen, text, x-outlineOffset, y-outlineOffset, outlineColor)
+		g.textRenderer.DrawText(screen, text, x+outlineOffset, y-outlineOffset, outlineColor)
+		g.textRenderer.DrawText(screen, text, x-outlineOffset, y+outlineOffset, outlineColor)
+		g.textRenderer.DrawText(screen, text, x+outlineOffset, y+outlineOffset, outlineColor)
+	}
+
+	// Draw the main text on top
+	g.textRenderer.DrawText(screen, text, x, y, clr)
+}
+
+// drawBorders draws borders around the content area.
+func (g *Game) drawBorders(screen *ebiten.Image) {
+	borderWidth := float32(g.config.BorderWidth)
+	if borderWidth <= 0 {
+		borderWidth = 1
+	}
+
+	outerMargin := float32(g.config.BorderOuterMargin)
+
+	borderColor := g.config.BorderColor
+	if borderColor.A == 0 && borderColor.R == 0 && borderColor.G == 0 && borderColor.B == 0 {
+		// Use white as default border color
+		borderColor = color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	}
+
+	// Calculate border rectangle
+	x := outerMargin
+	y := outerMargin
+	width := float32(g.config.Width) - 2*outerMargin
+	height := float32(g.config.Height) - 2*outerMargin
+
+	if width <= 0 || height <= 0 {
+		return // Border margins are too large
+	}
+
+	if g.config.StippledBorders {
+		// Draw stippled (dashed) border
+		g.drawStippledRect(screen, x, y, width, height, borderWidth, borderColor)
+	} else {
+		// Draw solid border using vector.StrokeRect
+		vector.StrokeRect(screen, x, y, width, height, borderWidth, borderColor, false)
+	}
+}
+
+// drawStippledRect draws a dashed rectangle border.
+func (g *Game) drawStippledRect(screen *ebiten.Image, x, y, width, height, strokeWidth float32, clr color.RGBA) {
+	// Dash pattern: 4 pixels on, 2 pixels off
+	dashLen := float32(4)
+	gapLen := float32(2)
+	segmentLen := dashLen + gapLen
+
+	// Draw top edge
+	g.drawStippledLine(screen, x, y, x+width, y, strokeWidth, clr, dashLen, gapLen, segmentLen)
+	// Draw bottom edge
+	g.drawStippledLine(screen, x, y+height, x+width, y+height, strokeWidth, clr, dashLen, gapLen, segmentLen)
+	// Draw left edge
+	g.drawStippledLine(screen, x, y, x, y+height, strokeWidth, clr, dashLen, gapLen, segmentLen)
+	// Draw right edge
+	g.drawStippledLine(screen, x+width, y, x+width, y+height, strokeWidth, clr, dashLen, gapLen, segmentLen)
+}
+
+// drawStippledLine draws a dashed line between two points.
+func (g *Game) drawStippledLine(screen *ebiten.Image, x1, y1, x2, y2, strokeWidth float32, clr color.RGBA, dashLen, gapLen, segmentLen float32) {
+	// Calculate direction and length
+	dx := x2 - x1
+	dy := y2 - y1
+	length := float32(0)
+	if dx != 0 {
+		length = abs32(dx)
+	} else {
+		length = abs32(dy)
+	}
+
+	if length == 0 {
+		return
+	}
+
+	// Normalize direction
+	dirX := dx / length
+	dirY := dy / length
+
+	// Draw dashes
+	pos := float32(0)
+	for pos < length {
+		endPos := pos + dashLen
+		if endPos > length {
+			endPos = length
+		}
+
+		// Calculate dash endpoints
+		startX := x1 + dirX*pos
+		startY := y1 + dirY*pos
+		endX := x1 + dirX*endPos
+		endY := y1 + dirY*endPos
+
+		vector.StrokeLine(screen, startX, startY, endX, endY, strokeWidth, clr, false)
+
+		pos += segmentLen
+	}
+}
+
+// abs32 returns the absolute value of a float32.
+func abs32(x float32) float32 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 // drawInlineWidget renders a widget at the specified position.
