@@ -583,6 +583,10 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "weather":
 		return api.resolveWeather(args)
 
+	// Image variable
+	case "image":
+		return api.resolveImage(args)
+
 	// Stock ticker stub - not implemented; requires external API keys.
 	// Users should use ${execi} with custom scripts. See docs/migration.md.
 	case "stockquote":
@@ -2221,6 +2225,66 @@ func (api *ConkyAPI) resolveLua(args []string, parse bool) string {
 	}
 
 	return resultStr
+}
+
+// resolveImage resolves the ${image} variable for embedding images.
+// Syntax: ${image path [-s widthxheight] [-p x,y] [-n]}
+// - path: file path to the image
+// - -s widthxheight: resize to specified dimensions
+// - -p x,y: absolute position from top-left corner
+// - -n: disable caching (for dynamic images)
+// Returns an image marker that the rendering layer will process.
+func (api *ConkyAPI) resolveImage(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	path := args[0]
+	var width, height float64
+	x, y := float64(-1), float64(-1) // -1 means inline
+	noCache := false
+
+	// Parse optional arguments
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "-s":
+			// Size: widthxheight
+			if i+1 < len(args) {
+				i++
+				sizeStr := args[i]
+				parts := strings.Split(sizeStr, "x")
+				if len(parts) == 2 {
+					w, err1 := strconv.ParseFloat(parts[0], 64)
+					h, err2 := strconv.ParseFloat(parts[1], 64)
+					if err1 == nil && err2 == nil {
+						width = w
+						height = h
+					}
+				}
+			}
+		case "-p":
+			// Position: x,y
+			if i+1 < len(args) {
+				i++
+				posStr := args[i]
+				parts := strings.Split(posStr, ",")
+				if len(parts) == 2 {
+					px, err1 := strconv.ParseFloat(parts[0], 64)
+					py, err2 := strconv.ParseFloat(parts[1], 64)
+					if err1 == nil && err2 == nil {
+						x = px
+						y = py
+					}
+				}
+			}
+		case "-n":
+			// No cache
+			noCache = true
+		}
+	}
+
+	return render.EncodeImageMarker(path, width, height, x, y, noCache)
 }
 
 // luaValueToString converts a Lua value to its string representation.

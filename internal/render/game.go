@@ -54,6 +54,7 @@ type Game struct {
 	mu           sync.RWMutex
 	running      bool
 	ctx          context.Context
+	imageCache   *ImageCache // Cache for loaded images
 }
 
 // NewGame creates a new Game instance with the provided configuration.
@@ -64,6 +65,7 @@ func NewGame(config Config) *Game {
 		errorHandler: DefaultErrorHandler,
 		lastUpdate:   time.Now(),
 		lines:        make([]TextLine, 0),
+		imageCache:   NewImageCache(),
 	}
 }
 
@@ -76,6 +78,7 @@ func NewGameWithRenderer(config Config, renderer TextRendererInterface) *Game {
 		errorHandler: DefaultErrorHandler,
 		lastUpdate:   time.Now(),
 		lines:        make([]TextLine, 0),
+		imageCache:   NewImageCache(),
 	}
 }
 
@@ -190,6 +193,13 @@ func (g *Game) drawLineWithWidgets(screen *ebiten.Image, line TextLine) {
 			// Render the widget
 			g.drawInlineWidget(screen, seg.Widget, x, line.Y, line.Color)
 			x += seg.Widget.Width
+		} else if seg.IsImage && seg.Image != nil {
+			// Render the image
+			imgWidth := g.drawImageMarker(screen, seg.Image, x, line.Y)
+			// Only advance x position for inline images (x == -1)
+			if seg.Image.X < 0 {
+				x += imgWidth
+			}
 		} else {
 			// Render text segment with effects
 			g.drawTextWithEffects(screen, seg.Text, x, line.Y, line.Color)
@@ -387,6 +397,76 @@ func (g *Game) drawGraphWidget(screen *ebiten.Image, x, y, width, height, value 
 	// Draw border
 	borderColor := color.RGBA{R: clr.R / 2, G: clr.G / 2, B: clr.B / 2, A: clr.A}
 	vector.StrokeRect(screen, float32(x), float32(y), float32(width), float32(height), 1, borderColor, false)
+}
+
+// drawImageMarker renders an image at the specified position.
+// Returns the width of the rendered image (for inline advancement).
+func (g *Game) drawImageMarker(screen *ebiten.Image, marker *ImageMarker, textX, textY float64) float64 {
+	if marker == nil || marker.Path == "" {
+		return 0
+	}
+
+	// Load image (with optional caching)
+	var img *ebiten.Image
+	var err error
+	if marker.NoCache {
+		// Load without cache
+		loader := NewImageLoader()
+		img, _, _, err = loader.LoadFile(marker.Path)
+		if err != nil {
+			return 0
+		}
+		defer img.Deallocate() // Clean up non-cached image after drawing
+	} else {
+		// Load from cache
+		img, err = g.imageCache.Load(marker.Path)
+		if err != nil {
+			return 0
+		}
+	}
+
+	// Get image dimensions
+	bounds := img.Bounds()
+	origWidth := float64(bounds.Dx())
+	origHeight := float64(bounds.Dy())
+
+	// Calculate display dimensions
+	displayWidth := marker.Width
+	displayHeight := marker.Height
+	if displayWidth <= 0 {
+		displayWidth = origWidth
+	}
+	if displayHeight <= 0 {
+		displayHeight = origHeight
+	}
+
+	// Calculate scale factors
+	scaleX := displayWidth / origWidth
+	scaleY := displayHeight / origHeight
+
+	// Determine position
+	var drawX, drawY float64
+	if marker.X >= 0 && marker.Y >= 0 {
+		// Absolute positioning
+		drawX = marker.X
+		drawY = marker.Y
+	} else {
+		// Inline positioning: align with text baseline
+		lineHeight := g.textRenderer.LineHeight()
+		drawX = textX
+		// Center image vertically relative to text line
+		drawY = textY - lineHeight + (lineHeight-displayHeight)/2
+	}
+
+	// Create draw options
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Scale(scaleX, scaleY)
+	op.GeoM.Translate(drawX, drawY)
+
+	// Draw the image
+	screen.DrawImage(img, op)
+
+	return displayWidth
 }
 
 // Layout implements ebiten.Game.Layout.

@@ -3069,3 +3069,119 @@ func TestUnsupportedVariables(t *testing.T) {
 		})
 	}
 }
+
+func TestParseImageVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		template   string
+		checkPath  string
+		checkWidth float64
+		checkX     float64
+		noCache    bool
+	}{
+		{
+			name:       "basic image",
+			template:   "${image /path/to/image.png}",
+			checkPath:  "/path/to/image.png",
+			checkWidth: 0,
+			checkX:     -1,
+			noCache:    false,
+		},
+		{
+			name:       "image with size",
+			template:   "${image /path/to/image.png -s 100x50}",
+			checkPath:  "/path/to/image.png",
+			checkWidth: 100,
+			checkX:     -1,
+			noCache:    false,
+		},
+		{
+			name:       "image with position",
+			template:   "${image /path/to/image.png -p 10,20}",
+			checkPath:  "/path/to/image.png",
+			checkWidth: 0,
+			checkX:     10,
+			noCache:    false,
+		},
+		{
+			name:       "image with no cache",
+			template:   "${image /dynamic.png -n}",
+			checkPath:  "/dynamic.png",
+			checkWidth: 0,
+			checkX:     -1,
+			noCache:    true,
+		},
+		{
+			name:       "image with all options",
+			template:   "${image /image.png -s 200x100 -p 50,25 -n}",
+			checkPath:  "/image.png",
+			checkWidth: 200,
+			checkX:     50,
+			noCache:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+
+			// The result should be an image marker
+			if !strings.Contains(result, "\x00IMG:") {
+				t.Errorf("expected image marker in result, got %q", result)
+				return
+			}
+
+			// Decode the marker
+			marker := render.DecodeImageMarker(result)
+			if marker == nil {
+				t.Errorf("failed to decode image marker from %q", result)
+				return
+			}
+
+			if marker.Path != tt.checkPath {
+				t.Errorf("Path = %q, want %q", marker.Path, tt.checkPath)
+			}
+			if marker.Width != tt.checkWidth {
+				t.Errorf("Width = %v, want %v", marker.Width, tt.checkWidth)
+			}
+			if marker.X != tt.checkX {
+				t.Errorf("X = %v, want %v", marker.X, tt.checkX)
+			}
+			if marker.NoCache != tt.noCache {
+				t.Errorf("NoCache = %v, want %v", marker.NoCache, tt.noCache)
+			}
+		})
+	}
+}
+
+func TestResolveImageEmptyArgs(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Empty args should return empty string
+	result := api.Parse("${image}")
+	if result != "" {
+		t.Errorf("expected empty string for empty image args, got %q", result)
+	}
+}
