@@ -2268,27 +2268,39 @@ The SSH host key verification has been implemented with the following features:
 
 #### Task 1.3: Observability Foundation
 **Acceptance Criteria**:
-- [ ] Integrate structured logging throughout the application
+- [x] Integrate structured logging throughout the application
 - [ ] Add request/operation correlation IDs
 - [ ] Implement metrics collection for key operations
-- [ ] Create health check mechanism
+- [x] Create health check mechanism
 
-**Implementation Pattern**:
+**Implementation Summary**:
+Structured logging has been implemented via a slog-based adapter in `pkg/conky/slog.go`:
+- `SlogAdapter` wraps `*slog.Logger` to implement the `Logger` interface
+- `DefaultLogger()` returns a text-format logger at Info level
+- `DebugLogger()` returns a debug logger with source location info
+- `JSONLogger()` returns a JSON-format logger for production log aggregation
+- `NopLogger()` returns a no-op logger for disabling logging
+- Full test coverage in `pkg/conky/slog_test.go`
+
+Health check mechanism has been implemented in `pkg/conky/health.go`:
+- `Health()` method added to the `Conky` interface
+- `HealthCheck` struct contains overall status, timestamp, uptime, and component health
+- `HealthStatus` constants: `HealthOK`, `HealthDegraded`, `HealthUnhealthy`
+- `ComponentHealth` provides per-component status (instance, monitor, errors)
+- Helper methods: `IsHealthy()`, `IsDegraded()`, `IsUnhealthy()`
+- Full test coverage in `pkg/conky/health_test.go`
+
+**Usage Example**:
 ```go
-// Structured logging with slog (Go 1.21 or later)
-import "log/slog"
+// Use default structured logger
+opts := conky.DefaultOptions()
+opts.Logger = conky.DefaultLogger()
 
-type ConkyLogger struct {
-    logger *slog.Logger
-}
+// Or use JSON logging for production
+opts.Logger = conky.JSONLogger(os.Stdout, slog.LevelInfo)
 
-func (l *ConkyLogger) Info(msg string, args ...any) {
-    l.logger.Info(msg, args...)
-}
-
-func (l *ConkyLogger) Error(msg string, args ...any) {
-    l.logger.Error(msg, args...)
-}
+// Or integrate with existing slog setup
+opts.Logger = conky.NewSlogAdapter(slog.Default())
 ```
 
 ### Phase 2: Performance & Reliability (Medium Priority)
@@ -2432,8 +2444,8 @@ func (cb *CircuitBreaker) Execute(fn func() error) error {
 - [x] Logger interface defined (pkg/conky/options.go)
 - [x] Event handling for lifecycle events
 - [x] Error handler callbacks
-- [ ] Structured logging implementation (NEEDS IMPLEMENTATION)
-- [ ] Health check endpoints (NEEDS IMPLEMENTATION)
+- [x] Structured logging implementation (pkg/conky/slog.go - SlogAdapter, DefaultLogger, JSONLogger, NopLogger)
+- [x] Health check mechanism (pkg/conky/health.go - HealthCheck, HealthStatus, ComponentHealth)
 - [ ] Application metrics collection (NEEDS IMPLEMENTATION)
 
 ### Testing Requirements
@@ -2471,8 +2483,8 @@ func (cb *CircuitBreaker) Execute(fn func() error) error {
 
 **Alpha → Beta Transition**:
 - ~~All critical security issues resolved~~ ✅ COMPLETED (SSH host key verification implemented)
-- Panic calls replaced with error handling
-- Basic structured logging implemented
+- ~~Panic calls replaced with error handling~~ ✅ N/A (No panics in production code paths)
+- ~~Basic structured logging implemented~~ ✅ COMPLETED (SlogAdapter in pkg/conky/slog.go)
 
 **Beta → Release Candidate**:
 - Circuit breakers implemented for external services
@@ -2545,16 +2557,17 @@ deployment platforms (Kubernetes, Docker, cloud providers) rather than applicati
 
 1. **Immediate Actions** (This Sprint):
    - ~~Address SSH host key verification (security critical)~~ ✅ COMPLETED
-   - Replace panic calls in rendering code
-   - Add structured logging infrastructure
+   - ~~Replace panic calls in rendering code~~ ✅ N/A - No panics in production rendering code (MustParseColor only used in tests)
+   - ~~Add structured logging infrastructure~~ ✅ COMPLETED - SlogAdapter in pkg/conky/slog.go
 
 2. **Short-term Actions** (Next 2 Sprints):
+   - Add request/operation correlation IDs
    - Implement circuit breaker for remote connections
-   - Add health check endpoint
+   - ~~Add health check mechanism~~ ✅ COMPLETED - Health() method in pkg/conky/health.go
    - Increase test coverage for critical paths
 
 3. **Medium-term Actions** (Next Quarter):
-   - Complete observability stack
+   - Complete observability stack (metrics collection)
    - Create operational documentation
    - Performance optimization based on benchmarks
 

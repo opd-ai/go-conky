@@ -16,7 +16,7 @@ This audit compares the documented functionality in README.md and supporting doc
 | **CRITICAL BUG** | 0 | 0 |
 | **FUNCTIONAL MISMATCH** | 4 | 4 |
 | **DOCUMENTATION ISSUE** | 1 | 1 |
-| **MISSING FEATURE** | 4 | 0 |
+| **MISSING FEATURE** | 4 | 3 |
 | **EDGE CASE BUG** | 3 | 3 |
 | **PERFORMANCE ISSUE** | 1 | 1 |
 
@@ -31,6 +31,10 @@ This audit compares the documented functionality in README.md and supporting doc
 - ✅ Fixed `RelMoveTo`, `RelLineTo`, `RelCurveTo` to default to (0,0) when there's no current point
 - ✅ Implemented `SetFillRule` and `SetOperator` to properly control fill rule and compositing mode
 - ✅ Made convenience drawing functions (`DrawLine`, `DrawRectangle`, `FillRectangle`, `DrawCircle`, `FillCircle`) atomic
+- ✅ Implemented structured logging infrastructure (slog adapter in `pkg/conky/slog.go`)
+- ✅ Implemented seamless in-place configuration hot-reloading (`ReloadConfig()` method)
+- ✅ Implemented Nvidia GPU monitoring via nvidia-smi (`${nvidia}` variables now return real GPU data)
+- ✅ Implemented IMAP/POP3 mail monitoring (`${imap_unseen}`, `${pop3_unseen}`, `${new_mails}` variables now work)
 
 ---
 
@@ -141,31 +145,33 @@ func (cr *CairoRenderer) Clip() {
 
 ---
 
-### MISSING FEATURE: Seamless (In-Place) Configuration Hot-Reloading
+### ~~MISSING FEATURE: Seamless (In-Place) Configuration Hot-Reloading~~ [RESOLVED]
 
-**File:** pkg/conky/conky.go (entire file)  
+**File:** pkg/conky/conky.go, pkg/conky/impl.go  
 **Severity:** Medium  
-**Description:** README.md mentions "Configuration hot-reloading is planned" and the Event system includes `EventConfigReloaded`. The current implementation provides configuration reload via the `Restart()` method, which stops the instance, reloads configuration via the `configLoader`, emits `EventConfigReloaded`, and then restarts. However, true in-place hot-reloading without a restart cycle is not yet implemented.
+**Status:** ✅ RESOLVED - Implemented `ReloadConfig()` method for seamless in-place hot-reloading.
 
-**Expected Behavior:** Ability to apply configuration changes at runtime without a full stop/start cycle (i.e., reload configuration in-place while keeping the Conky instance running).
+**Description:** README.md mentions "Configuration hot-reloading is planned" and the Event system includes `EventConfigReloaded`. The current implementation now provides both:
+1. `Restart()` - Full stop/reload/start cycle (with brief interruption)
+2. `ReloadConfig()` - Seamless in-place reload without stopping (NEW)
 
-**Actual Behavior:** Configuration changes are applied by invoking `Restart()`, which stops the running instance, reloads the configuration, emits `EventConfigReloaded`, and starts a new instance. There is no mechanism to reload configuration entirely in-place without restarting.
+**Resolution:**
+- Added `ReloadConfig()` method to the `Conky` interface
+- Implemented in-place configuration reload that:
+  - Reloads configuration from the original source using `configLoader`
+  - Updates the `cfg` field atomically
+  - Updates the render game's text lines and configuration without stopping
+  - Emits `EventConfigReloaded` event
+- Added `SetConfig()` method to `internal/render/Game` for thread-safe config updates
+- Added comprehensive tests for `ReloadConfig()` including:
+  - Basic reload functionality
+  - Error handling when not running
+  - Verification that reloads don't interrupt execution
+  - Concurrent access safety
 
-**Impact:** Users experience a brief interruption when applying configuration changes because the Conky instance must be restarted as part of the reload process, rather than being updated seamlessly in-place.
+**Expected Behavior:** Ability to apply configuration changes at runtime without a full stop/start cycle.
 
-**Reproduction:** Modify the configuration file while the application is running and trigger a `Restart()` (or equivalent). The new configuration will take effect only after the restart cycle completes; there is no API to apply the change without restarting.
-
-**Code Reference:**
-```go
-// status.go defines EventConfigReloaded, which is emitted by Restart() when
-// configuration has been reloaded as part of the stop/reload/start cycle.
-const (
-    // ...
-    // EventConfigReloaded is emitted when configuration is reloaded.
-    EventConfigReloaded
-    // ...
-)
-```
+**Actual Behavior:** The new `ReloadConfig()` method allows seamless hot-reload. The rendering continues uninterrupted while configuration changes take effect immediately.
 
 ---
 
@@ -181,55 +187,66 @@ const (
 
 ---
 
-### MISSING FEATURE: Nvidia GPU Variables Return Empty
+### ~~MISSING FEATURE: Nvidia GPU Variables Return Empty~~ [RESOLVED]
 
-**File:** internal/lua/api.go:471-476  
+**File:** internal/lua/api.go:485-505  
 **Severity:** Low  
-**Description:** The `${nvidia}` and `${nvidiagraph}` variables are handled in the API but always return empty strings. Comments indicate this "Requires nvidia-smi integration."
+**Status:** ✅ RESOLVED - Nvidia GPU monitoring now uses nvidia-smi integration.
+
+**Description:** The `${nvidia}` and `${nvidiagraph}` variables previously always returned empty strings. This has been fixed to query actual GPU data via nvidia-smi.
+
+**Resolution:**
+- Added `GPU()` method to `SystemDataProvider` interface
+- Implemented `resolveNvidia()` function that uses `GPUStats.GetField()` to return GPU metrics
+- Implemented `resolveNvidiaGraph()` function for graph compatibility
+- Added direct variable aliases: `nvidia_temp`, `nvidia_gpu`, `nvidia_fan`, `nvidia_mem`, `nvidia_memused`, `nvidia_memtotal`, `nvidia_driver`, `nvidia_power`, `nvidia_name`
+- Removed skip directive from `TestParseNvidiaVariables` test
+- All 18 nvidia-related test cases now pass
+
+**Supported Fields:**
+- `temp`/`temperature` - GPU temperature
+- `gpuutil`/`gpu`/`utilization` - GPU utilization percentage
+- `memutil`/`mem` - Memory utilization percentage
+- `fan`/`fanspeed` - Fan speed percentage
+- `power`/`powerdraw` - Current power draw
+- `powerlimit` - Power limit
+- `name`/`model` - GPU name
+- `driver`/`driverversion` - Driver version
+- `memused`, `memtotal`, `memfree` - Memory statistics
+- `memperc` - Memory usage percentage
 
 **Expected Behavior:** GPU monitoring variables for Nvidia cards should return actual GPU data.
 
-**Actual Behavior:** Always returns empty string.
-
-**Impact:** Users with Nvidia GPUs cannot monitor GPU stats through Conky variables.
-
-**Reproduction:** Use `${nvidia}` variable in configuration.
-
-**Code Reference:**
-```go
-// Nvidia GPU (stubs for compatibility)
-case "nvidia":
-    return "" // Requires nvidia-smi integration
-case "nvidiagraph":
-    return ""
-```
+**Actual Behavior:** Now returns real GPU data from nvidia-smi when available, or "N/A" if nvidia-smi is not installed.
 
 ---
 
-### MISSING FEATURE: Mail/IMAP/POP3 Variables Always Return "0"
+### ~~MISSING FEATURE: Mail/IMAP/POP3 Variables Always Return "0"~~ [RESOLVED]
 
-**File:** internal/lua/api.go:486-492  
+**File:** internal/monitor/mail.go, internal/lua/api.go  
 **Severity:** Low  
-**Description:** Mail-related variables (`${imap_unseen}`, `${pop3_unseen}`, `${new_mails}`, etc.) are documented as stubs and always return "0".
+**Status:** ✅ RESOLVED - Implemented IMAP and POP3 mail monitoring.
 
-**Expected Behavior:** Mail monitoring should work when properly configured.
+**Description:** Mail-related variables (`${imap_unseen}`, `${pop3_unseen}`, `${new_mails}`, etc.) previously returned "0". This has been fixed with a full IMAP/POP3 monitoring implementation.
 
-**Actual Behavior:** All mail variables return "0" regardless of configuration.
+**Resolution:**
+- Added `MailStats` and `MailAccountStats` types to track mail account statistics
+- Implemented `mailReader` with support for both IMAP and POP3 protocols
+- Added `MailConfig` for configuring mail accounts (host, port, credentials, TLS, folder)
+- Implemented IMAP checking: connects via TLS, authenticates, selects folder, counts EXISTS and SEARCH UNSEEN
+- Implemented POP3 checking: connects via TLS, authenticates, uses STAT to count messages
+- Added caching with configurable check intervals (minimum 60 seconds)
+- Updated `SystemDataProvider` interface with `Mail()`, `MailUnseenCount()`, `MailTotalCount()`, `MailTotalUnseen()`, `MailTotalMessages()`
+- Added `AddMailAccount()` and `RemoveMailAccount()` methods to `SystemMonitor`
+- Implemented variable resolvers: `resolveImapUnseen()`, `resolveImapMessages()`, `resolvePop3Unseen()`, `resolvePop3Used()`, `resolveTotalMails()`
+- Added comprehensive test coverage for mail monitoring and variable resolution
 
-**Impact:** Mail monitoring functionality is not available.
-
-**Reproduction:** Configure IMAP/POP3 settings and use mail variables.
-
-**Code Reference:**
-```go
-// IMAP/POP3/mail stubs
-case "imap_unseen", "imap_messages":
-    return "0"
-case "pop3_unseen", "pop3_used":
-    return "0"
-case "new_mails", "mails":
-    return "0"
-```
+**Supported Variables:**
+- `${imap_unseen}` - Total unseen messages across all accounts, or unseen for specific account with argument
+- `${imap_messages}` - Total messages across all accounts, or total for specific account with argument
+- `${pop3_unseen}` - Same as imap_unseen (POP3 reports all as unseen)
+- `${pop3_used}` - Total messages for POP3 accounts
+- `${new_mails}` / `${mails}` - Total unseen messages, or for specific account with argument
 
 ---
 

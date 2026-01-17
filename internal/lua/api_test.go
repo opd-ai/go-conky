@@ -26,6 +26,7 @@ type mockSystemDataProvider struct {
 	sysInfo    monitor.SystemInfo
 	tcp        monitor.TCPStats
 	gpu        monitor.GPUStats
+	mail       monitor.MailStats
 }
 
 func (m *mockSystemDataProvider) CPU() monitor.CPUStats               { return m.cpu }
@@ -61,7 +62,46 @@ func (m *mockSystemDataProvider) TCPConnectionByIndex(minPort, maxPort, index in
 	}
 	return nil
 }
-func (m *mockSystemDataProvider) GPU() monitor.GPUStats { return m.gpu }
+func (m *mockSystemDataProvider) GPU() monitor.GPUStats   { return m.gpu }
+func (m *mockSystemDataProvider) Mail() monitor.MailStats { return m.mail }
+func (m *mockSystemDataProvider) MailUnseenCount(name string) int {
+	if m.mail.Accounts == nil {
+		return 0
+	}
+	if account, ok := m.mail.Accounts[name]; ok {
+		return account.Unseen
+	}
+	return 0
+}
+func (m *mockSystemDataProvider) MailTotalCount(name string) int {
+	if m.mail.Accounts == nil {
+		return 0
+	}
+	if account, ok := m.mail.Accounts[name]; ok {
+		return account.Total
+	}
+	return 0
+}
+func (m *mockSystemDataProvider) MailTotalUnseen() int {
+	if m.mail.Accounts == nil {
+		return 0
+	}
+	var total int
+	for _, account := range m.mail.Accounts {
+		total += account.Unseen
+	}
+	return total
+}
+func (m *mockSystemDataProvider) MailTotalMessages() int {
+	if m.mail.Accounts == nil {
+		return 0
+	}
+	var total int
+	for _, account := range m.mail.Accounts {
+		total += account.Total
+	}
+	return total
+}
 
 func newMockProvider() *mockSystemDataProvider {
 	return &mockSystemDataProvider{
@@ -1985,7 +2025,6 @@ func TestParseTCPPortMonVariables(t *testing.T) {
 // This test is skipped because resolveNvidiaVariable always returns "".
 // TODO: Implement NVIDIA GPU monitoring and un-skip this test.
 func TestParseNvidiaVariables(t *testing.T) {
-	t.Skip("NVIDIA GPU monitoring is not yet implemented (stub returns '')")
 	runtime, err := New(DefaultConfig())
 	if err != nil {
 		t.Fatalf("failed to create runtime: %v", err)
@@ -2077,6 +2116,166 @@ func TestParseNvidiaVariables(t *testing.T) {
 			name:     "nvidia unknown field",
 			template: "${nvidia unknown}",
 			expected: "",
+		},
+		{
+			name:     "nvidia default (no field)",
+			template: "${nvidia}",
+			expected: "45%",
+		},
+		{
+			name:     "nvidiagraph",
+			template: "${nvidiagraph}",
+			expected: "45",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseMailVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	// Add mail accounts to the mock
+	provider.mail = monitor.MailStats{
+		Accounts: map[string]monitor.MailAccountStats{
+			"gmail": {
+				Name:   "gmail",
+				Type:   "imap",
+				Unseen: 5,
+				Total:  100,
+			},
+			"work": {
+				Name:   "work",
+				Type:   "imap",
+				Unseen: 3,
+				Total:  50,
+			},
+		},
+	}
+
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "imap_unseen total",
+			template: "${imap_unseen}",
+			expected: "8",
+		},
+		{
+			name:     "imap_unseen specific account",
+			template: "${imap_unseen gmail}",
+			expected: "5",
+		},
+		{
+			name:     "imap_unseen work account",
+			template: "${imap_unseen work}",
+			expected: "3",
+		},
+		{
+			name:     "imap_unseen nonexistent account",
+			template: "${imap_unseen nonexistent}",
+			expected: "0",
+		},
+		{
+			name:     "imap_messages total",
+			template: "${imap_messages}",
+			expected: "150",
+		},
+		{
+			name:     "imap_messages specific account",
+			template: "${imap_messages gmail}",
+			expected: "100",
+		},
+		{
+			name:     "pop3_unseen total",
+			template: "${pop3_unseen}",
+			expected: "8",
+		},
+		{
+			name:     "pop3_used total",
+			template: "${pop3_used}",
+			expected: "150",
+		},
+		{
+			name:     "new_mails total",
+			template: "${new_mails}",
+			expected: "8",
+		},
+		{
+			name:     "new_mails specific account",
+			template: "${new_mails gmail}",
+			expected: "5",
+		},
+		{
+			name:     "mails total",
+			template: "${mails}",
+			expected: "8",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseMailVariablesNoAccounts(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	// No mail accounts configured
+
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "imap_unseen no accounts",
+			template: "${imap_unseen}",
+			expected: "0",
+		},
+		{
+			name:     "imap_messages no accounts",
+			template: "${imap_messages}",
+			expected: "0",
+		},
+		{
+			name:     "new_mails no accounts",
+			template: "${new_mails}",
+			expected: "0",
 		},
 	}
 

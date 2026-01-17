@@ -481,3 +481,141 @@ $uptime
 		t.Errorf("Stop failed: %v", err)
 	}
 }
+
+func TestReloadConfig(t *testing.T) {
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	// Start the instance
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Track events
+	var events []Event
+	var eventsMu sync.Mutex
+	eventsCh := make(chan struct{}, 10)
+
+	c.SetEventHandler(func(e Event) {
+		eventsMu.Lock()
+		events = append(events, e)
+		eventsMu.Unlock()
+		eventsCh <- struct{}{}
+	})
+
+	// Drain any existing events
+	for len(eventsCh) > 0 {
+		<-eventsCh
+	}
+	eventsMu.Lock()
+	events = nil
+	eventsMu.Unlock()
+
+	// Reload config
+	if err := c.ReloadConfig(); err != nil {
+		t.Fatalf("ReloadConfig failed: %v", err)
+	}
+
+	// Should still be running
+	if !c.IsRunning() {
+		t.Error("instance should still be running after ReloadConfig()")
+	}
+
+	// Wait for config reload event
+	select {
+	case <-eventsCh:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for config reload event")
+	}
+
+	// Check that we got a config_reloaded event
+	eventsMu.Lock()
+	hasReloadEvent := false
+	for _, e := range events {
+		if e.Type == EventConfigReloaded {
+			hasReloadEvent = true
+			break
+		}
+	}
+	eventsMu.Unlock()
+
+	if !hasReloadEvent {
+		t.Error("expected EventConfigReloaded event")
+	}
+
+	// Clean up
+	if err := c.Stop(); err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+}
+
+func TestReloadConfigWhenNotRunning(t *testing.T) {
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	// ReloadConfig should fail when not running
+	err = c.ReloadConfig()
+	if err == nil {
+		t.Error("ReloadConfig should fail when instance is not running")
+	}
+	if !strings.Contains(err.Error(), "not running") {
+		t.Errorf("error should mention 'not running', got: %v", err)
+	}
+}
+
+func TestReloadConfigNoInterruption(t *testing.T) {
+	// This test verifies that ReloadConfig doesn't interrupt execution
+	// by checking the instance remains running throughout
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Perform multiple reloads in quick succession
+	for i := 0; i < 5; i++ {
+		if !c.IsRunning() {
+			t.Fatalf("instance stopped unexpectedly at reload %d", i)
+		}
+		if err := c.ReloadConfig(); err != nil {
+			t.Fatalf("ReloadConfig %d failed: %v", i, err)
+		}
+		// Verify still running after each reload
+		if !c.IsRunning() {
+			t.Fatalf("instance stopped after reload %d", i)
+		}
+	}
+
+	// Clean up
+	if err := c.Stop(); err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+}

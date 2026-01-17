@@ -28,6 +28,7 @@ type SystemMonitor struct {
 	sysInfoReader     *sysInfoReader
 	tcpReader         *tcpReader
 	gpuReader         *gpuReader
+	mailReader        *mailReader
 	ctx               context.Context
 	cancel            context.CancelFunc
 	wg                sync.WaitGroup
@@ -57,6 +58,7 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		sysInfoReader:     newSysInfoReader(),
 		tcpReader:         newTCPReader(),
 		gpuReader:         newGPUReader(),
+		mailReader:        newMailReader(),
 		ctx:               ctx,
 		cancel:            cancel,
 	}
@@ -320,6 +322,42 @@ func (sm *SystemMonitor) TCPConnectionByIndex(minPort, maxPort, index int) *TCPC
 func (sm *SystemMonitor) GPU() GPUStats {
 	stats, _ := sm.gpuReader.ReadStats()
 	return stats
+}
+
+// Mail returns the current mail statistics.
+func (sm *SystemMonitor) Mail() MailStats {
+	stats, _ := sm.mailReader.ReadStats()
+	return stats
+}
+
+// AddMailAccount adds a mail account for monitoring.
+func (sm *SystemMonitor) AddMailAccount(config MailConfig) error {
+	return sm.mailReader.AddAccount(config)
+}
+
+// RemoveMailAccount removes a mail account from monitoring.
+func (sm *SystemMonitor) RemoveMailAccount(name string) {
+	sm.mailReader.RemoveAccount(name)
+}
+
+// MailUnseenCount returns the unseen message count for an account.
+func (sm *SystemMonitor) MailUnseenCount(name string) int {
+	return sm.mailReader.GetUnseenCount(name)
+}
+
+// MailTotalCount returns the total message count for an account.
+func (sm *SystemMonitor) MailTotalCount(name string) int {
+	return sm.mailReader.GetTotalCount(name)
+}
+
+// MailTotalUnseen returns the sum of unseen messages across all accounts.
+func (sm *SystemMonitor) MailTotalUnseen() int {
+	return sm.mailReader.GetTotalUnseen()
+}
+
+// MailTotalMessages returns the sum of all messages across all accounts.
+func (sm *SystemMonitor) MailTotalMessages() int {
+	return sm.mailReader.GetTotalMessages()
 }
 
 // augmentNetworkStats adds IP address, gateway, nameserver, and wireless information to network stats.

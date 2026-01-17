@@ -169,7 +169,18 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 
 // Config returns the current configuration.
 func (g *Game) Config() Config {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 	return g.config
+}
+
+// SetConfig updates the game configuration in-place.
+// This allows hot-reloading of configuration without stopping the game loop.
+// Note: Window size changes may not take effect until the next window resize.
+func (g *Game) SetConfig(config Config) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.config = config
 }
 
 // Run starts the Ebiten game loop.

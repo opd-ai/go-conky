@@ -105,5 +105,8 @@ func (gr *gameRunner) run(c *conkyImpl) {
 // runRenderLoop creates and runs the Ebiten rendering loop.
 func (c *conkyImpl) runRenderLoop() {
 	gr := newGameRunner()
+	c.mu.Lock()
+	c.gameRunner = gr
+	c.mu.Unlock()
 	gr.run(c)
 }

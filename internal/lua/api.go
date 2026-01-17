@@ -35,6 +35,12 @@ type SystemDataProvider interface {
 	Battery() monitor.BatteryStats
 	Audio() monitor.AudioStats
 	SysInfo() monitor.SystemInfo
+	GPU() monitor.GPUStats
+	Mail() monitor.MailStats
+	MailUnseenCount(name string) int
+	MailTotalCount(name string) int
+	MailTotalUnseen() int
+	MailTotalMessages() int
 }
 
 // execCacheEntry stores cached output from execi commands.
@@ -481,11 +487,29 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		}
 		return "off-line"
 
-	// Nvidia GPU (stubs for compatibility)
+	// Nvidia GPU monitoring
 	case "nvidia":
-		return "" // Requires nvidia-smi integration
+		return api.resolveNvidia(args)
 	case "nvidiagraph":
-		return ""
+		return api.resolveNvidiaGraph(args)
+	case "nvidia_temp":
+		return api.resolveNvidia([]string{"temp"})
+	case "nvidia_gpu":
+		return api.resolveNvidia([]string{"gpuutil"})
+	case "nvidia_fan":
+		return api.resolveNvidia([]string{"fan"})
+	case "nvidia_mem":
+		return api.resolveNvidia([]string{"memutil"})
+	case "nvidia_memused":
+		return api.resolveNvidia([]string{"memused"})
+	case "nvidia_memtotal":
+		return api.resolveNvidia([]string{"memtotal"})
+	case "nvidia_driver":
+		return api.resolveNvidia([]string{"driver"})
+	case "nvidia_power":
+		return api.resolveNvidia([]string{"power"})
+	case "nvidia_name":
+		return api.resolveNvidia([]string{"name"})
 
 	// Apcupsd (UPS) stubs
 	case "apcupsd":
@@ -495,13 +519,17 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "apcupsd_status":
 		return ""
 
-	// IMAP/POP3/mail stubs
-	case "imap_unseen", "imap_messages":
-		return "0"
-	case "pop3_unseen", "pop3_used":
-		return "0"
+	// IMAP/POP3/mail variables
+	case "imap_unseen":
+		return api.resolveImapUnseen(args)
+	case "imap_messages":
+		return api.resolveImapMessages(args)
+	case "pop3_unseen":
+		return api.resolvePop3Unseen(args)
+	case "pop3_used":
+		return api.resolvePop3Used(args)
 	case "new_mails", "mails":
-		return "0"
+		return api.resolveTotalMails(args)
 
 	// Weather stubs
 	case "weather":
@@ -1663,6 +1691,40 @@ func (api *ConkyAPI) resolveACPIFan() string {
 	return "unknown"
 }
 
+// resolveNvidia resolves ${nvidia} variables.
+// Supports various GPU monitoring fields from nvidia-smi.
+// Usage: ${nvidia [field]}
+// Fields: temp, gpuutil, memutil, mem, fan, power, name, driver, memused, memtotal, memfree, memperc
+// Without a field, returns GPU utilization percentage.
+func (api *ConkyAPI) resolveNvidia(args []string) string {
+	gpuStats := api.sysProvider.GPU()
+
+	if !gpuStats.Available {
+		return "N/A"
+	}
+
+	// Default to GPU utilization if no field specified
+	if len(args) == 0 {
+		return gpuStats.GetField("gpuutil")
+	}
+
+	return gpuStats.GetField(args[0])
+}
+
+// resolveNvidiaGraph is a placeholder for ${nvidiagraph} which would render a graph.
+// Graph rendering is not yet implemented; returns the GPU utilization value.
+func (api *ConkyAPI) resolveNvidiaGraph(args []string) string {
+	gpuStats := api.sysProvider.GPU()
+
+	if !gpuStats.Available {
+		return "N/A"
+	}
+
+	// For now, return GPU utilization as a number (without %)
+	// Graphs need to be rendered by the renderer, not as text
+	return strconv.Itoa(gpuStats.UtilGPU)
+}
+
 // formatNumber formats a number with commas for readability.
 func formatNumber(n uint64) string {
 	s := strconv.FormatUint(n, 10)
@@ -1678,4 +1740,57 @@ func formatNumber(n uint64) string {
 		result += string(c)
 	}
 	return result
+}
+
+// resolveImapUnseen resolves the ${imap_unseen} variable.
+// Accepts an optional account name argument.
+// Without argument, returns the total unseen count across all accounts.
+func (api *ConkyAPI) resolveImapUnseen(args []string) string {
+	if len(args) > 0 {
+		// Get unseen count for specific IMAP account
+		return strconv.Itoa(api.sysProvider.MailUnseenCount(args[0]))
+	}
+	// Return total unseen across all accounts
+	return strconv.Itoa(api.sysProvider.MailTotalUnseen())
+}
+
+// resolveImapMessages resolves the ${imap_messages} variable.
+// Accepts an optional account name argument.
+// Without argument, returns the total message count across all accounts.
+func (api *ConkyAPI) resolveImapMessages(args []string) string {
+	if len(args) > 0 {
+		return strconv.Itoa(api.sysProvider.MailTotalCount(args[0]))
+	}
+	return strconv.Itoa(api.sysProvider.MailTotalMessages())
+}
+
+// resolvePop3Unseen resolves the ${pop3_unseen} variable.
+// Accepts an optional account name argument.
+// For POP3, unseen and total are the same since POP3 doesn't track read status.
+func (api *ConkyAPI) resolvePop3Unseen(args []string) string {
+	if len(args) > 0 {
+		return strconv.Itoa(api.sysProvider.MailUnseenCount(args[0]))
+	}
+	return strconv.Itoa(api.sysProvider.MailTotalUnseen())
+}
+
+// resolvePop3Used resolves the ${pop3_used} variable.
+// Accepts an optional account name argument.
+// Returns the total message count for the POP3 account.
+func (api *ConkyAPI) resolvePop3Used(args []string) string {
+	if len(args) > 0 {
+		return strconv.Itoa(api.sysProvider.MailTotalCount(args[0]))
+	}
+	return strconv.Itoa(api.sysProvider.MailTotalMessages())
+}
+
+// resolveTotalMails resolves the ${new_mails} and ${mails} variables.
+// ${new_mails} returns the total unseen count.
+// ${mails} returns the total message count.
+func (api *ConkyAPI) resolveTotalMails(args []string) string {
+	if len(args) > 0 {
+		// First arg could be account name
+		return strconv.Itoa(api.sysProvider.MailUnseenCount(args[0]))
+	}
+	return strconv.Itoa(api.sysProvider.MailTotalUnseen())
 }

@@ -35,6 +35,12 @@ type Conky interface {
 	// Returns an error if restart fails; the instance will be in a stopped state.
 	Restart() error
 
+	// ReloadConfig reloads the configuration in-place without stopping.
+	// This provides seamless hot-reload capability: the rendering continues
+	// uninterrupted while configuration changes take effect.
+	// Returns an error if configuration reload fails; the previous config remains active.
+	ReloadConfig() error
+
 	// IsRunning returns true if the go-conky instance is currently running.
 	IsRunning() bool
 
@@ -49,6 +55,10 @@ type Conky interface {
 
 	// SetEventHandler registers a callback for lifecycle events.
 	SetEventHandler(handler EventHandler)
+
+	// Health returns a health check result for the Conky instance.
+	// This can be used for monitoring, alerting, and debugging.
+	Health() HealthCheck
 }
 
 // New creates a new Conky instance from a configuration file on disk.

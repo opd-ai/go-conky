@@ -156,6 +156,61 @@ func TestGameConfig(t *testing.T) {
 	}
 }
 
+func TestGameSetConfig(t *testing.T) {
+	config := Config{Width: 800, Height: 600, Title: "Initial"}
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	// Verify initial config
+	got := game.Config()
+	if got.Width != 800 {
+		t.Errorf("initial Config().Width = %d, want 800", got.Width)
+	}
+
+	// Update config
+	newConfig := Config{Width: 1024, Height: 768, Title: "Updated"}
+	game.SetConfig(newConfig)
+
+	// Verify updated config
+	got = game.Config()
+	if got.Width != 1024 {
+		t.Errorf("updated Config().Width = %d, want 1024", got.Width)
+	}
+	if got.Height != 768 {
+		t.Errorf("updated Config().Height = %d, want 768", got.Height)
+	}
+	if got.Title != "Updated" {
+		t.Errorf("updated Config().Title = %q, want %q", got.Title, "Updated")
+	}
+}
+
+func TestGameSetConfigConcurrent(t *testing.T) {
+	config := Config{Width: 800, Height: 600, Title: "Initial"}
+	renderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, renderer)
+
+	done := make(chan bool)
+
+	// Concurrent config updates
+	go func() {
+		for i := 0; i < 100; i++ {
+			game.SetConfig(Config{Width: 1024, Height: 768, Title: "Updated"})
+		}
+		done <- true
+	}()
+
+	// Concurrent config reads
+	go func() {
+		for i := 0; i < 100; i++ {
+			_ = game.Config()
+		}
+		done <- true
+	}()
+
+	<-done
+	<-done
+}
+
 // mockDataProvider implements DataProvider for testing
 type mockDataProvider struct {
 	updateCalled bool
