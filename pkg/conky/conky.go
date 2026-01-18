@@ -64,6 +64,12 @@ type Conky interface {
 	// Use Metrics().Snapshot() for a point-in-time copy of all metrics.
 	// Use Metrics().RegisterExpvar() to expose metrics via /debug/vars.
 	Metrics() *Metrics
+
+	// ErrorTracker returns the error tracker for this instance.
+	// Use ErrorTracker().AddCondition() to set up alerting rules.
+	// Use ErrorTracker().SetAlertHandler() to receive alert notifications.
+	// Use ErrorTracker().Stats() for error statistics.
+	ErrorTracker() *ErrorTracker
 }
 
 // New creates a new Conky instance from a configuration file on disk.

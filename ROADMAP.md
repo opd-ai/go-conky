@@ -2480,12 +2480,60 @@ Run with: `go test -fuzz=FuzzLegacyParser -fuzztime=30s ./internal/config/`
 
 **Bug Fix**: Fixed `CorrelatedJSONLogger` which was passing nil writer to JSON handler (now uses os.Stderr).
 
-#### Task 3.2: Error Tracking and Alerting
+#### Task 3.2: Error Tracking and Alerting ✅ COMPLETED
 **Acceptance Criteria**:
-- [ ] Implement error aggregation and categorization
-- [ ] Add error rate monitoring
-- [ ] Create alerting hooks for critical errors
-- [ ] Document error handling patterns
+- [x] Implement error aggregation and categorization
+- [x] Add error rate monitoring
+- [x] Create alerting hooks for critical errors
+- [x] Document error handling patterns
+
+**Implementation Summary**:
+Error tracking and alerting has been implemented in `pkg/conky/errors.go`:
+- `ErrorCategory` enum for categorizing errors (config, lua, render, monitor, remote, io, network)
+- `ErrorSeverity` enum for severity levels (info, warning, error, critical)
+- `CategorizedError` type that wraps errors with category, severity, timestamp, and context metadata
+- `ErrorTracker` type for aggregating errors with:
+  - Configurable retention time and max error limit
+  - `AddCondition()` for setting up alert rules (category filter, severity threshold, count threshold, time window)
+  - `SetAlertHandler()` for receiving alert notifications
+  - `ErrorRate()` and `ErrorRateByCategory()` for rate monitoring
+  - `Stats()` for error statistics
+  - `RecentErrors()` for retrieving recent error history
+  - Thread-safe with atomic counters for category counts
+  - Alert cooldown to prevent alert fatigue
+- `DefaultErrorTracker()` global singleton for convenience
+- Integrated into `Options` struct via `ErrorTracker` field
+- Integrated into `conkyImpl` to automatically track errors
+- Added `ErrorTracker()` method to `Conky` interface
+- Comprehensive test coverage in `pkg/conky/errors_test.go`
+
+**Code Locations**:
+- `pkg/conky/errors.go` - Core implementation
+- `pkg/conky/errors_test.go` - Comprehensive tests
+- `pkg/conky/options.go` - ErrorTracker option
+- `pkg/conky/impl.go` - Integration with conkyImpl
+
+**Usage Example**:
+```go
+// Set up error tracking with alerting
+opts := conky.DefaultOptions()
+tracker := conky.NewErrorTracker(conky.DefaultErrorTrackerConfig())
+
+// Alert when 5 or more critical errors occur within 1 minute
+tracker.AddCondition(conky.AlertCondition{
+    Category:    conky.ErrorCategoryUnknown, // Any category
+    MinSeverity: conky.SeverityCritical,
+    Threshold:   5,
+    Window:      time.Minute,
+})
+
+tracker.SetAlertHandler(func(cond conky.AlertCondition, count int, recent []conky.CategorizedError) {
+    log.Printf("ALERT: %d critical errors in last minute", count)
+})
+
+opts.ErrorTracker = tracker
+c, _ := conky.New("/path/to/config", &opts)
+```
 
 #### Task 3.3: Documentation and Operational Guides
 **Acceptance Criteria**:
@@ -2675,6 +2723,7 @@ deployment platforms (Kubernetes, Docker, cloud providers) rather than applicati
    - ~~Implement circuit breaker for remote connections~~ ✅ COMPLETED - CircuitBreaker in pkg/conky/circuitbreaker.go
    - ~~Add health check mechanism~~ ✅ COMPLETED - Health() method in pkg/conky/health.go
    - ~~Implement metrics collection~~ ✅ COMPLETED - Metrics in pkg/conky/metrics.go with expvar integration
+   - ~~Implement error tracking and alerting~~ ✅ COMPLETED - ErrorTracker in pkg/conky/errors.go
    - Increase test coverage for critical paths
 
 3. **Medium-term Actions** (Next Quarter):
@@ -2691,4 +2740,5 @@ deployment platforms (Kubernetes, Docker, cloud providers) rather than applicati
 *Updated 2026-01-17: Circuit breaker pattern implemented for SSH remote connections*
 *Updated 2026-01-17: Correlation IDs implemented for operation tracing*
 *Updated 2026-01-17: Metrics collection implemented with expvar integration*
+*Updated 2026-01-18: Error tracking and alerting implemented*
 ~~~~

@@ -40,6 +40,12 @@ type Options struct {
 	// If nil, DefaultMetrics() is used.
 	// Metrics can be exposed via /debug/vars by calling Metrics.RegisterExpvar().
 	Metrics *Metrics
+
+	// ErrorTracker sets a custom error tracker for error aggregation and alerting.
+	// If nil, DefaultErrorTracker() is used.
+	// Use ErrorTracker.AddCondition() to set up alerts.
+	// Use ErrorTracker.SetAlertHandler() to receive alert notifications.
+	ErrorTracker *ErrorTracker
 }
 
 // DefaultOptions returns Options with sensible defaults.

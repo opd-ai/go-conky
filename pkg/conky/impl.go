@@ -29,9 +29,10 @@ type conkyImpl struct {
 	configFormat  string // Format for reader-based configs
 
 	// Components
-	monitor    *monitor.SystemMonitor
-	gameRunner *gameRunner // For hot-reload support
-	metrics    *Metrics    // Metrics collector
+	monitor      *monitor.SystemMonitor
+	gameRunner   *gameRunner   // For hot-reload support
+	metrics      *Metrics      // Metrics collector
+	errorTracker *ErrorTracker // Error tracking and alerting
 
 	// State
 	running     atomic.Bool
@@ -328,6 +329,13 @@ func (c *conkyImpl) initComponents() error {
 		c.metrics = DefaultMetrics()
 	}
 
+	// Initialize error tracker (use provided or default)
+	if c.opts.ErrorTracker != nil {
+		c.errorTracker = c.opts.ErrorTracker
+	} else {
+		c.errorTracker = DefaultErrorTracker()
+	}
+
 	// Determine update interval
 	interval := c.cfg.Display.UpdateInterval
 	if c.opts.UpdateInterval > 0 {
@@ -376,12 +384,24 @@ func (c *conkyImpl) getError() error {
 // notifyError stores an error and invokes the error handler if registered.
 // This method should be called when runtime errors occur during operation.
 func (c *conkyImpl) notifyError(err error) {
+	c.notifyCategorizedError(err, ErrorCategoryUnknown, SeverityError)
+}
+
+// notifyCategorizedError stores a categorized error and invokes handlers.
+// This provides more detailed error tracking with category and severity.
+func (c *conkyImpl) notifyCategorizedError(err error, category ErrorCategory, severity ErrorSeverity) {
 	// Store the error for Status() retrieval
 	c.lastError.Store(err)
 
 	// Update metrics
 	if c.metrics != nil {
 		c.metrics.IncrementErrors()
+	}
+
+	// Record to error tracker
+	if c.errorTracker != nil {
+		catErr := NewCategorizedError(err, category, severity)
+		c.errorTracker.Record(catErr)
 	}
 
 	c.mu.RLock()
@@ -541,4 +561,9 @@ func (c *conkyImpl) Health() HealthCheck {
 // Metrics returns the metrics collector for this instance.
 func (c *conkyImpl) Metrics() *Metrics {
 	return c.metrics
+}
+
+// ErrorTracker returns the error tracker for this instance.
+func (c *conkyImpl) ErrorTracker() *ErrorTracker {
+	return c.errorTracker
 }
