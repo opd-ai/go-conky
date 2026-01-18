@@ -1045,6 +1045,23 @@ func formatTime(t time.Time, format string) string {
 	result = strings.ReplaceAll(result, "%u", fmt.Sprintf("%d", (int(t.Weekday())+6)%7+1))
 	result = strings.ReplaceAll(result, "%w", fmt.Sprintf("%d", int(t.Weekday())))
 
+	// ISO 8601 week number and year (%V, %G, %g)
+	isoYear, isoWeek := t.ISOWeek()
+	result = strings.ReplaceAll(result, "%V", fmt.Sprintf("%02d", isoWeek))
+	result = strings.ReplaceAll(result, "%G", fmt.Sprintf("%04d", isoYear))
+	result = strings.ReplaceAll(result, "%g", fmt.Sprintf("%02d", isoYear%100))
+
+	// Week number with Sunday as first day of week (%U)
+	// Week 01 starts on the first Sunday of the year
+	result = strings.ReplaceAll(result, "%U", fmt.Sprintf("%02d", sundayWeekNumber(t)))
+
+	// Week number with Monday as first day of week (%W)
+	// Week 01 starts on the first Monday of the year
+	result = strings.ReplaceAll(result, "%W", fmt.Sprintf("%02d", mondayWeekNumber(t)))
+
+	// Seconds since Unix epoch (%s)
+	result = strings.ReplaceAll(result, "%s", fmt.Sprintf("%d", t.Unix()))
+
 	// Map of strftime specifiers to Go time format values
 	// These are replaced with the formatted time value directly
 	staticReplacements := []struct {
@@ -1093,6 +1110,41 @@ func formatTime(t time.Time, format string) string {
 	result = strings.ReplaceAll(result, "\x00PERCENT\x00", "%")
 
 	return result
+}
+
+// sundayWeekNumber calculates the week number with Sunday as the first day of the week.
+// Week 01 starts on the first Sunday of the year. Days before the first Sunday are week 00.
+func sundayWeekNumber(t time.Time) int {
+	yearStart := time.Date(t.Year(), time.January, 1, 0, 0, 0, 0, t.Location())
+	// Days until first Sunday (0 = Sunday, so we need 0 days if Jan 1 is Sunday)
+	daysUntilFirstSunday := int((7 - yearStart.Weekday()) % 7)
+	firstSunday := yearStart.AddDate(0, 0, daysUntilFirstSunday)
+
+	if t.Before(firstSunday) {
+		return 0
+	}
+	// Days since first Sunday
+	daysSinceFirstSunday := int(t.Sub(firstSunday).Hours() / 24)
+	return (daysSinceFirstSunday / 7) + 1
+}
+
+// mondayWeekNumber calculates the week number with Monday as the first day of the week.
+// Week 01 starts on the first Monday of the year. Days before the first Monday are week 00.
+func mondayWeekNumber(t time.Time) int {
+	yearStart := time.Date(t.Year(), time.January, 1, 0, 0, 0, 0, t.Location())
+	// Days until first Monday (1 = Monday)
+	daysUntilFirstMonday := int((8 - int(yearStart.Weekday())) % 7)
+	if yearStart.Weekday() == time.Monday {
+		daysUntilFirstMonday = 0
+	}
+	firstMonday := yearStart.AddDate(0, 0, daysUntilFirstMonday)
+
+	if t.Before(firstMonday) {
+		return 0
+	}
+	// Days since first Monday
+	daysSinceFirstMonday := int(t.Sub(firstMonday).Hours() / 24)
+	return (daysSinceFirstMonday / 7) + 1
 }
 
 // resolveAddr resolves the ${addr interface} variable.

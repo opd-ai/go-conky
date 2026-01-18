@@ -5,7 +5,7 @@
 - **Date**: 2026-01-17 (Updated: 2026-01-18)
 - **Version Tested**: 0.1.0
 - **Tests**: 2,674+ total, all passed, 0 failed
-- **Bugs**: 0 critical, 0 high (2 resolved), 2 medium (2 resolved), 5 low
+- **Bugs**: 0 critical, 0 high (2 resolved), 2 medium (2 resolved), 4 low (1 resolved)
 - **Compatibility**: ~85%
 
 ## Test Coverage by Package
@@ -362,14 +362,22 @@
 - Location: cmd/conky-go/
 - Fix: Add integration tests for CLI flags
 
-**BUG-009: Some strftime specifiers missing**
+**BUG-009: Some strftime specifiers missing** ✅ RESOLVED
 - Severity: Low
 - Feature: ${time} formatting
 - Reproduce: Use ${time %V} (ISO week number)
 - Expected: Week number displayed
-- Actual: %V not replaced
-- Location: internal/lua/api.go:1024
-- Fix: Add missing strftime specifiers
+- Actual: ✅ All common strftime specifiers now implemented
+- Location: internal/lua/api.go
+- Resolution: Added missing strftime specifiers to formatTime():
+  - %V - ISO 8601 week number (01-53)
+  - %G - ISO 8601 week-based year (4 digits)
+  - %g - ISO 8601 week-based year without century (2 digits)
+  - %U - Week number with Sunday as first day (00-53)
+  - %W - Week number with Monday as first day (00-53)
+  - %s - Seconds since Unix epoch
+  - Added helper functions sundayWeekNumber() and mondayWeekNumber()
+  - Comprehensive tests in TestStrftimeSpecifiers
 
 **BUG-010: Weather data requires external API**
 - Severity: Low
@@ -426,7 +434,7 @@ None - all tests pass, core functionality works
 2. BUG-004: cairo_text_path (4h)
 3. BUG-005: conky_window documentation (1h)
 4. BUG-007/008: Test coverage (8h)
-5. BUG-009: strftime specifiers (2h)
+5. ~~BUG-009: strftime specifiers (2h)~~ ✅ COMPLETED - Added %V, %G, %g, %U, %W, %s
 
 ## Recommendations
 

@@ -1,6 +1,7 @@
 package lua
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -1329,6 +1330,83 @@ func TestParseTimeVariable(t *testing.T) {
 	// Should match pattern YYYY-MM-DD
 	if len(result) != 10 || result[4] != '-' || result[7] != '-' {
 		t.Errorf("expected date in YYYY-MM-DD format, got %q", result)
+	}
+}
+
+func TestStrftimeSpecifiers(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Test %V - ISO week number (01-53)
+	result := api.Parse("${time %V}")
+	if len(result) != 2 {
+		t.Errorf("%%V should produce 2-digit week number, got %q", result)
+	}
+	// Verify it's a valid week number (01-53)
+	weekNum := 0
+	_, err = fmt.Sscanf(result, "%d", &weekNum)
+	if err != nil || weekNum < 1 || weekNum > 53 {
+		t.Errorf("%%V should produce valid ISO week number (01-53), got %q", result)
+	}
+
+	// Test %G - ISO year (4 digits)
+	result = api.Parse("${time %G}")
+	if len(result) != 4 {
+		t.Errorf("%%G should produce 4-digit year, got %q", result)
+	}
+
+	// Test %g - ISO year without century (2 digits)
+	result = api.Parse("${time %g}")
+	if len(result) != 2 {
+		t.Errorf("%%g should produce 2-digit year, got %q", result)
+	}
+
+	// Test %U - Week number (Sunday first, 00-53)
+	result = api.Parse("${time %U}")
+	if len(result) != 2 {
+		t.Errorf("%%U should produce 2-digit week number, got %q", result)
+	}
+	weekNum = 0
+	_, err = fmt.Sscanf(result, "%d", &weekNum)
+	if err != nil || weekNum < 0 || weekNum > 53 {
+		t.Errorf("%%U should produce valid week number (00-53), got %q", result)
+	}
+
+	// Test %W - Week number (Monday first, 00-53)
+	result = api.Parse("${time %W}")
+	if len(result) != 2 {
+		t.Errorf("%%W should produce 2-digit week number, got %q", result)
+	}
+	weekNum = 0
+	_, err = fmt.Sscanf(result, "%d", &weekNum)
+	if err != nil || weekNum < 0 || weekNum > 53 {
+		t.Errorf("%%W should produce valid week number (00-53), got %q", result)
+	}
+
+	// Test %s - Unix timestamp
+	result = api.Parse("${time %s}")
+	if len(result) < 10 {
+		t.Errorf("%%s should produce Unix timestamp (at least 10 digits), got %q", result)
+	}
+	var ts int64
+	_, err = fmt.Sscanf(result, "%d", &ts)
+	if err != nil {
+		t.Errorf("%%s should produce valid integer Unix timestamp, got %q", result)
+	}
+
+	// Test combined format with new specifiers
+	result = api.Parse("${time Week %V of %G}")
+	if !strings.Contains(result, "Week") || !strings.Contains(result, "of") {
+		t.Errorf("expected format 'Week NN of YYYY', got %q", result)
 	}
 }
 
