@@ -28,7 +28,7 @@ var elsePattern = regexp.MustCompile(`\$\{else\}`)
 //   - ${if_up interface}content${else}alternative${endif}
 //   - ${if_existing path}content${endif}
 //   - ${if_running process}content${endif}
-//   - ${if_match value regex}content${endif}
+//   - ${if_match value pattern}content${endif}
 //   - ${if_empty value}content${endif}
 //
 // Conditionals can be nested.
