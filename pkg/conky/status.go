@@ -48,6 +48,8 @@ const (
 	EventConfigReloaded
 	// EventError is emitted when a recoverable error occurs.
 	EventError
+	// EventWarning is emitted when a non-fatal warning condition is detected.
+	EventWarning
 )
 
 // String returns a human-readable representation of the event type.
@@ -63,6 +65,8 @@ func (e EventType) String() string {
 		return "config_reloaded"
 	case EventError:
 		return "error"
+	case EventWarning:
+		return "warning"
 	default:
 		return "unknown"
 	}

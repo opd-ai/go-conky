@@ -46,7 +46,17 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	bgMode := c.cfg.Window.BackgroundMode
 	bgColour := c.cfg.Window.BackgroundColour
 	ctx := c.ctx
+	logger := c.opts.Logger
 	c.mu.RUnlock()
+
+	// Check compositor availability and log warning if transparency may not work
+	if warning := render.CheckTransparencySupport(argbVisual, transparent); warning != "" {
+		if logger != nil {
+			logger.Warn(warning)
+		}
+		// Also emit an event so applications can handle this
+		c.emitEvent(EventWarning, warning)
+	}
 
 	// Apply defaults
 	if width <= 0 {

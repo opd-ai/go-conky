@@ -150,15 +150,27 @@ The go-conky project uses **Ebitengine v2** (`github.com/hajimehoshi/ebiten/v2`)
 **Tasks:**
 1. Create integration tests with transparent window screenshots
 2. Add example configurations demonstrating transparency options
-3. Document compositor requirements for each platform
-4. Add troubleshooting guide for transparency issues
+3. ✅ Document compositor requirements for each platform - docs/transparency.md created
+4. ✅ Add troubleshooting guide for transparency issues - included in docs/transparency.md
 5. Create visual regression test suite
 6. Update README with transparency configuration examples
+
+**Implementation Summary (Tasks 3, 4):**
+- Created comprehensive transparency documentation in docs/transparency.md
+- Documented all transparency modes (ARGB, pseudo, none, solid)
+- Added compositor requirements section with installation instructions
+- Included window hints limitations and workarounds (BUG-001)
+- Added compositor detection warning (BUG-002) via internal/render/compositor_linux.go
+- Added troubleshooting section for common transparency issues
+- Documented platform-specific notes (Linux/X11, Wayland, macOS, Windows)
+- Created compatibility matrix for desktop environments and window managers
 
 **Dependencies:**
 - No additional dependencies
 
 **Estimated Complexity:** Low
+
+**Completed (Tasks 3, 4):** 2026-01-18
 
 ---
 

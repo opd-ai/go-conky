@@ -2,10 +2,10 @@
 
 ## Summary
 
-- **Date**: 2026-01-17 (Updated: 2026-01-17)
+- **Date**: 2026-01-17 (Updated: 2026-01-18)
 - **Version Tested**: 0.1.0
 - **Tests**: 2,674+ total, all passed, 0 failed
-- **Bugs**: 0 critical, 2 high, 3 medium (1 resolved), 5 low
+- **Bugs**: 0 critical, 0 high (2 resolved), 2 medium (2 resolved), 5 low
 - **Compatibility**: ~85%
 
 ## Test Coverage by Package
@@ -268,23 +268,35 @@
 
 ### High Priority
 
-**BUG-001: Window hints not fully enforced on all window managers**
+**BUG-001: Window hints not fully enforced on all window managers** ✅ DOCUMENTED
 - Severity: High
 - Feature: own_window_hints
 - Reproduce: Set `own_window_hints undecorated,below,sticky`
 - Expected: Window stays below, on all desktops, no decorations
 - Actual: Some hints ignored on certain WMs (e.g., XFCE)
 - Location: Ebiten limitation - hints handled by compositor
-- Fix: Document as known limitation; add WM-specific workarounds
+- Resolution: Documented as known limitation with WM-specific workarounds
+  - Created comprehensive documentation in docs/transparency.md
+  - Added workarounds for Openbox, i3, bspwm, and other WMs
+  - Recommended using `own_window_type = 'desktop'` for best compatibility
+  - Provided window manager rule examples
 
-**BUG-002: ARGB transparency requires compositor**
+**BUG-002: ARGB transparency requires compositor** ✅ RESOLVED
 - Severity: High
 - Feature: own_window_argb_visual
 - Reproduce: Set `argb_visual=true, argb_value=128` without compositor
 - Expected: Semi-transparent window
 - Actual: Opaque window with visual artifacts
 - Location: Ebiten/GPU driver interaction
-- Fix: Add fallback to pseudo-transparency; detect compositor availability
+- Resolution: Implemented compositor detection and warning system
+  - Added internal/render/compositor_linux.go for X11 compositor detection
+  - Uses _NET_WM_CM_S0 atom (EWMH standard) for reliable detection
+  - Falls back to process name checking (picom, compton, mutter, etc.)
+  - Added CheckTransparencySupport() function to warn users at startup
+  - Logs warning via Logger.Warn() and emits EventWarning event
+  - Added EventWarning event type for applications to handle
+  - Created docs/transparency.md with setup instructions and troubleshooting
+  - Pseudo-transparency mode available as fallback (already implemented)
 
 ### Medium Priority
 
@@ -405,8 +417,8 @@
 None - all tests pass, core functionality works
 
 ### Should Fix (Before Release)
-1. BUG-001: Window hints documentation (1h)
-2. BUG-002: Compositor detection warning (2h)
+1. ~~BUG-001: Window hints documentation (1h)~~ ✅ COMPLETED - docs/transparency.md created
+2. ~~BUG-002: Compositor detection warning (2h)~~ ✅ COMPLETED - internal/render/compositor_linux.go
 3. ~~BUG-006: Conditional variable parsing (4h)~~ ✅ COMPLETED
 
 ### Can Defer (Post-Release)
