@@ -1397,31 +1397,35 @@ func (api *ConkyAPI) resolveFSType(args []string) string {
 // resolveBattery returns battery status string.
 func (api *ConkyAPI) resolveBattery(args []string) string {
 	batStats := api.sysProvider.Battery()
-	if len(batStats.Batteries) == 0 {
-		return "No battery"
-	}
 
 	batName := "BAT0"
 	if len(args) > 0 {
 		batName = args[0]
 	}
 
+	// Try to find specific battery first
 	if bat, ok := batStats.Batteries[batName]; ok {
 		return fmt.Sprintf("%s %d%%", bat.Status, bat.Capacity)
 	}
 
-	// Return aggregate status
-	status := "Unknown"
-	if batStats.ACOnline {
-		if batStats.IsCharging {
-			status = "Charging"
-		} else {
-			status = "Full"
+	// If a specific battery was requested but not found, or if no batteries exist,
+	// try aggregate status if available (based on ACOnline, IsCharging, IsDischarging, TotalCapacity)
+	hasAggregateInfo := batStats.ACOnline || batStats.IsCharging || batStats.IsDischarging || batStats.TotalCapacity > 0
+	if hasAggregateInfo {
+		status := "Unknown"
+		if batStats.ACOnline {
+			if batStats.IsCharging {
+				status = "Charging"
+			} else {
+				status = "Full"
+			}
+		} else if batStats.IsDischarging {
+			status = "Discharging"
 		}
-	} else if batStats.IsDischarging {
-		status = "Discharging"
+		return fmt.Sprintf("%s %.0f%%", status, batStats.TotalCapacity)
 	}
-	return fmt.Sprintf("%s %.0f%%", status, batStats.TotalCapacity)
+
+	return "No battery"
 }
 
 // resolveBatteryBar returns a graphical bar widget for battery level.

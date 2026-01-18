@@ -312,16 +312,16 @@ func (api *ConkyAPI) evalIfRunning(args []string) bool {
 	procStats := provider.Process()
 	processName := args[0]
 
-	// Check in top CPU processes
+	// Check in top CPU processes (case-sensitive to match original Conky behavior)
 	for _, p := range procStats.TopCPU {
-		if strings.Contains(strings.ToLower(p.Name), strings.ToLower(processName)) {
+		if strings.Contains(p.Name, processName) {
 			return true
 		}
 	}
 
-	// Check in top memory processes
+	// Check in top memory processes (case-sensitive to match original Conky behavior)
 	for _, p := range procStats.TopMem {
-		if strings.Contains(strings.ToLower(p.Name), strings.ToLower(processName)) {
+		if strings.Contains(p.Name, processName) {
 			return true
 		}
 	}
