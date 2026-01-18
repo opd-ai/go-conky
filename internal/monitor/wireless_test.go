@@ -166,10 +166,8 @@ wlan1: 0000   50.  -55.  -92.        0      0      0     0      0        0
 	wlan1, ok := stats["wlan1"]
 	if !ok {
 		t.Error("wlan1 not found in stats")
-	} else {
-		if wlan1.LinkQuality != 50 {
-			t.Errorf("wlan1 LinkQuality = %d, want 50", wlan1.LinkQuality)
-		}
+	} else if wlan1.LinkQuality != 50 {
+		t.Errorf("wlan1 LinkQuality = %d, want 50", wlan1.LinkQuality)
 	}
 }
 

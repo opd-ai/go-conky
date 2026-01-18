@@ -7,17 +7,24 @@ import (
 
 // remoteDarwinNetworkProvider collects network metrics from remote macOS systems via SSH.
 type remoteDarwinNetworkProvider struct {
-	platform *sshPlatform
+	runner commandRunner
 }
 
 func newRemoteDarwinNetworkProvider(p *sshPlatform) *remoteDarwinNetworkProvider {
 	return &remoteDarwinNetworkProvider{
-		platform: p,
+		runner: p,
+	}
+}
+
+// newTestableRemoteDarwinNetworkProviderWithRunner creates a provider with an injectable runner for testing.
+func newTestableRemoteDarwinNetworkProviderWithRunner(runner commandRunner) *remoteDarwinNetworkProvider {
+	return &remoteDarwinNetworkProvider{
+		runner: runner,
 	}
 }
 
 func (n *remoteDarwinNetworkProvider) Interfaces() ([]string, error) {
-	output, err := n.platform.runCommand("netstat -i | tail -n +2 | awk '{print $1}' | sort -u")
+	output, err := n.runner.runCommand("netstat -i | tail -n +2 | awk '{print $1}' | sort -u")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list network interfaces: %w", err)
 	}
@@ -38,7 +45,7 @@ func (n *remoteDarwinNetworkProvider) Interfaces() ([]string, error) {
 func (n *remoteDarwinNetworkProvider) Stats(interfaceName string) (*NetworkStats, error) {
 	// Use shell-escaped interface name
 	cmd := fmt.Sprintf("netstat -ib -I %s | tail -n 1", shellEscape(interfaceName))
-	output, err := n.platform.runCommand(cmd)
+	output, err := n.runner.runCommand(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read network stats for %s: %w", interfaceName, err)
 	}

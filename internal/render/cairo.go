@@ -26,6 +26,54 @@ const (
 	PatternTypeLinear
 	// PatternTypeRadial is a radial gradient pattern.
 	PatternTypeRadial
+	// PatternTypeSurface is a surface (image) pattern.
+	PatternTypeSurface
+)
+
+// CairoFillRule represents the fill rule for fill operations.
+type CairoFillRule int
+
+const (
+	// CairoFillRuleWinding is the non-zero winding rule.
+	// A point is inside the shape if a ray from the point to infinity
+	// crosses a non-zero sum of signed edge crossings.
+	CairoFillRuleWinding CairoFillRule = 0
+	// CairoFillRuleEvenOdd is the even-odd fill rule.
+	// A point is inside the shape if a ray from the point to infinity
+	// crosses an odd number of edges.
+	CairoFillRuleEvenOdd CairoFillRule = 1
+)
+
+// CairoOperator represents the compositing operator.
+type CairoOperator int
+
+const (
+	// CairoOperatorClear clears destination where source is drawn.
+	CairoOperatorClear CairoOperator = 0
+	// CairoOperatorSource replaces destination with source.
+	CairoOperatorSource CairoOperator = 1
+	// CairoOperatorOver draws source over destination (default).
+	CairoOperatorOver CairoOperator = 2
+	// CairoOperatorIn draws source where destination is opaque.
+	CairoOperatorIn CairoOperator = 3
+	// CairoOperatorOut draws source where destination is transparent.
+	CairoOperatorOut CairoOperator = 4
+	// CairoOperatorAtop draws source atop destination.
+	CairoOperatorAtop CairoOperator = 5
+	// CairoOperatorDest ignores source.
+	CairoOperatorDest CairoOperator = 6
+	// CairoOperatorDestOver draws destination over source.
+	CairoOperatorDestOver CairoOperator = 7
+	// CairoOperatorDestIn draws destination where source is opaque.
+	CairoOperatorDestIn CairoOperator = 8
+	// CairoOperatorDestOut draws destination where source is transparent.
+	CairoOperatorDestOut CairoOperator = 9
+	// CairoOperatorDestAtop draws destination atop source.
+	CairoOperatorDestAtop CairoOperator = 10
+	// CairoOperatorXor XORs source and destination.
+	CairoOperatorXor CairoOperator = 11
+	// CairoOperatorAdd adds source and destination.
+	CairoOperatorAdd CairoOperator = 12
 )
 
 // ColorStop represents a color stop in a gradient.
@@ -47,7 +95,9 @@ type CairoPattern struct {
 	colorStops []ColorStop
 	// Extend mode for patterns
 	extend PatternExtend
-	mu     sync.Mutex
+	// For surface patterns: the source surface/image
+	surface *ebiten.Image
+	mu      sync.Mutex
 }
 
 // NewSolidPattern creates a solid color pattern.
@@ -86,6 +136,29 @@ func NewRadialPattern(cx0, cy0, r0, cx1, cy1, r1 float64) *CairoPattern {
 		cy1:         cy1,
 		r1:          r1,
 		colorStops:  make([]ColorStop, 0),
+	}
+}
+
+// NewSurfacePattern creates a surface (image) pattern.
+// This is equivalent to cairo_pattern_create_for_surface.
+func NewSurfacePattern(surface *CairoSurface) *CairoPattern {
+	if surface == nil || surface.IsDestroyed() {
+		return nil
+	}
+	return &CairoPattern{
+		patternType: PatternTypeSurface,
+		surface:     surface.Image(),
+	}
+}
+
+// NewSurfacePatternFromImage creates a surface pattern from an Ebiten image.
+func NewSurfacePatternFromImage(image *ebiten.Image) *CairoPattern {
+	if image == nil {
+		return nil
+	}
+	return &CairoPattern{
+		patternType: PatternTypeSurface,
+		surface:     image,
 	}
 }
 
@@ -188,6 +261,8 @@ func (p *CairoPattern) ColorAtPoint(x, y float64) color.RGBA {
 		return p.linearColorAt(x, y)
 	case PatternTypeRadial:
 		return p.radialColorAt(x, y)
+	case PatternTypeSurface:
+		return p.surfaceColorAt(x, y)
 	default:
 		return color.RGBA{A: 255}
 	}
@@ -222,6 +297,55 @@ func (p *CairoPattern) radialColorAt(x, y float64) color.RGBA {
 	}
 	t := (dist - p.r0) / (p.r1 - p.r0)
 	return p.ColorAt(t)
+}
+
+// surfaceColorAt returns the color at a point for a surface pattern.
+// Note: Due to Ebiten limitations, this function may not work correctly
+// outside of a running game loop. In such cases, it returns an opaque
+// black pixel. For production use, this is called during the draw phase.
+func (p *CairoPattern) surfaceColorAt(x, y float64) color.RGBA {
+	p.mu.Lock()
+	surface := p.surface
+	x0, y0 := p.x0, p.y0
+	p.mu.Unlock()
+
+	if surface == nil {
+		return color.RGBA{A: 255}
+	}
+
+	// Adjust for pattern offset
+	px := int(x - x0)
+	py := int(y - y0)
+
+	// Check bounds
+	bounds := surface.Bounds()
+	if px < bounds.Min.X || px >= bounds.Max.X || py < bounds.Min.Y || py >= bounds.Max.Y {
+		return color.RGBA{} // Transparent outside bounds
+	}
+
+	// Due to Ebiten limitations, reading pixels requires the game loop to be running.
+	// The surfaceColorAt function is primarily used during the Mask operation,
+	// which happens within the game loop's Draw phase. For use cases that require
+	// reading pixel colors outside the game loop, use ReadPixels with proper timing.
+	// Here we use a defer/recover to handle the case when this is called
+	// outside the game loop (e.g., in tests).
+	var result color.RGBA
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Return opaque pixel if we can't read - caller should handle this
+				result = color.RGBA{A: 255}
+			}
+		}()
+		r, g, b, a := surface.At(px, py).RGBA()
+		result = color.RGBA{
+			R: uint8(r >> 8),
+			G: uint8(g >> 8),
+			B: uint8(b >> 8),
+			A: uint8(a >> 8),
+		}
+	}()
+	return result
 }
 
 // PatternExtend represents the extend mode for patterns.
@@ -341,16 +465,27 @@ func (m *CairoMatrix) Rotate(angle float64) {
 	m.YY = newYY
 }
 
-// Multiply multiplies this matrix by another matrix.
+// Multiply combines this matrix with another matrix.
 // The result is stored in this matrix.
-// This computes: this = this * other
+//
+// Following Cairo's convention: the effect is to first apply the receiver
+// matrix, then apply the argument matrix. Mathematically, this requires
+// computing:
+//
+//	result = other * m
+//
+// where transformations are applied in right-to-left order.
+//
+// This ensures that transforming a point p with the result gives:
+//
+//	result(p) = other(m(p)).
 func (m *CairoMatrix) Multiply(other *CairoMatrix) {
-	xx := m.XX*other.XX + m.XY*other.YX
-	xy := m.XX*other.XY + m.XY*other.YY
-	yx := m.YX*other.XX + m.YY*other.YX
-	yy := m.YX*other.XY + m.YY*other.YY
-	x0 := m.XX*other.X0 + m.XY*other.Y0 + m.X0
-	y0 := m.YX*other.X0 + m.YY*other.Y0 + m.Y0
+	xx := other.XX*m.XX + other.XY*m.YX
+	xy := other.XX*m.XY + other.XY*m.YY
+	yx := other.YX*m.XX + other.YY*m.YX
+	yy := other.YX*m.XY + other.YY*m.YY
+	x0 := other.XX*m.X0 + other.XY*m.Y0 + other.X0
+	y0 := other.YX*m.X0 + other.YY*m.Y0 + other.Y0
 	m.XX = xx
 	m.XY = xy
 	m.YX = yx
@@ -429,6 +564,13 @@ type CairoRenderer struct {
 	pathCurrentX float32
 	pathCurrentY float32
 	hasPath      bool
+	// pathSegments tracks all path segments for CopyPath functionality.
+	// This mirrors the operations performed on the vector.Path.
+	pathSegments []PathSegment
+	// Tracks whether path bounds have been initialized.
+	// Separate from hasPath to handle multi-point operations (e.g., Rectangle)
+	// that call expandPathBounds multiple times before setting hasPath = true.
+	pathBoundsInit bool
 	// Path bounding box (tracked during path operations)
 	pathMinX float32
 	pathMinY float32
@@ -460,7 +602,18 @@ type CairoRenderer struct {
 	clipMaxY float32
 	// State stack for save/restore
 	stateStack []cairoState
-	mu         sync.Mutex
+	// Fill rule for fill operations
+	fillRule CairoFillRule
+	// Compositing operator
+	operator CairoOperator
+	// Group rendering state - stack of group surfaces
+	groupStack []*groupState
+	// Source surface for SetSourceSurface
+	sourceSurface   *ebiten.Image
+	sourceSurfaceX  float64
+	sourceSurfaceY  float64
+	hasSourceSurface bool
+	mu              sync.Mutex
 }
 
 // cairoState holds a snapshot of the drawing state for save/restore.
@@ -491,7 +644,30 @@ type cairoState struct {
 	clipMinY float32
 	clipMaxX float32
 	clipMaxY float32
+	// Fill rule for fill operations
+	fillRule CairoFillRule
+	// Compositing operator
+	operator CairoOperator
 }
+
+// groupState holds the state for a push_group operation.
+type groupState struct {
+	surface       *ebiten.Image // The group's temporary surface
+	previousScreen *ebiten.Image // The screen before push_group was called
+	content       CairoContent  // Content type for the group
+}
+
+// CairoContent represents the content type for group surfaces.
+type CairoContent int
+
+const (
+	// CairoContentColor creates a group with RGB content (no alpha).
+	CairoContentColor CairoContent = iota
+	// CairoContentAlpha creates a group with alpha-only content.
+	CairoContentAlpha
+	// CairoContentColorAlpha creates a group with RGBA content (default).
+	CairoContentColorAlpha
+)
 
 // FontSlant represents Cairo font slant styles.
 type FontSlant int
@@ -559,6 +735,7 @@ func NewCairoRenderer() *CairoRenderer {
 		lineJoin:     LineJoinMiter,
 		antialias:    true,
 		path:         &vector.Path{},
+		pathSegments: make([]PathSegment, 0),
 		hasPath:      false,
 		textRenderer: NewTextRenderer(),
 		fontFamily:   "GoMono",
@@ -572,6 +749,8 @@ func NewCairoRenderer() *CairoRenderer {
 		scaleY:       1.0,
 		matrix:       NewIdentityMatrix(),
 		stateStack:   make([]cairoState, 0),
+		fillRule:     CairoFillRuleWinding,
+		operator:     CairoOperatorOver,
 	}
 }
 
@@ -749,25 +928,52 @@ func (cr *CairoRenderer) GetMiterLimit() float64 {
 }
 
 // SetFillRule sets the fill rule for fill operations.
-// This is a no-op placeholder for Cairo compatibility.
-func (cr *CairoRenderer) SetFillRule(_ int) {
-	// Ebiten's vector package uses even-odd fill rule by default
+// rule: 0 = CAIRO_FILL_RULE_WINDING (maps to ebiten.FillRuleNonZero)
+// rule: 1 = CAIRO_FILL_RULE_EVEN_ODD (maps to ebiten.FillRuleEvenOdd)
+func (cr *CairoRenderer) SetFillRule(rule int) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	// Clamp to valid values
+	if rule < int(CairoFillRuleWinding) {
+		rule = int(CairoFillRuleWinding)
+	} else if rule > int(CairoFillRuleEvenOdd) {
+		rule = int(CairoFillRuleEvenOdd)
+	}
+	cr.fillRule = CairoFillRule(rule)
 }
 
 // GetFillRule returns the current fill rule.
+// Returns CairoFillRuleWinding (0) or CairoFillRuleEvenOdd (1).
 func (cr *CairoRenderer) GetFillRule() int {
-	return 0 // CAIRO_FILL_RULE_WINDING
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return int(cr.fillRule)
 }
 
 // SetOperator sets the compositing operator.
-// This is a no-op placeholder for Cairo compatibility.
-func (cr *CairoRenderer) SetOperator(_ int) {
-	// Ebiten uses its own blend modes
+// See CairoOperator* constants for valid values (0-12).
+// Common operators:
+// - CairoOperatorClear: clears destination
+// - CairoOperatorSource: replaces destination
+// - CairoOperatorOver: draws source over destination (default)
+func (cr *CairoRenderer) SetOperator(op int) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	// Clamp to valid range
+	if op < int(CairoOperatorClear) {
+		op = int(CairoOperatorClear)
+	} else if op > int(CairoOperatorAdd) {
+		op = int(CairoOperatorAdd)
+	}
+	cr.operator = CairoOperator(op)
 }
 
 // GetOperator returns the current operator.
+// Returns a CairoOperator value (0-12).
 func (cr *CairoRenderer) GetOperator() int {
-	return 2 // CAIRO_OPERATOR_OVER (default)
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return int(cr.operator)
 }
 
 // --- Path Building Functions ---
@@ -775,12 +981,13 @@ func (cr *CairoRenderer) GetOperator() int {
 // expandPathBounds updates the path bounding box to include the given point.
 // Must be called while holding the mutex.
 func (cr *CairoRenderer) expandPathBounds(x, y float32) {
-	if !cr.hasPath {
+	if !cr.pathBoundsInit {
 		// First point - initialize bounds
 		cr.pathMinX = x
 		cr.pathMinY = y
 		cr.pathMaxX = x
 		cr.pathMaxY = y
+		cr.pathBoundsInit = true
 		return
 	}
 	if x < cr.pathMinX {
@@ -797,17 +1004,26 @@ func (cr *CairoRenderer) expandPathBounds(x, y float32) {
 	}
 }
 
+// initPathAtOrigin initializes the path with a starting point at (0,0).
+// Must be called while holding the mutex.
+// This is used when path operations require a current point but none exists.
+func (cr *CairoRenderer) initPathAtOrigin() {
+	cr.expandPathBounds(0, 0)
+	cr.path.MoveTo(0, 0)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: 0, Y: 0})
+	cr.pathStartX = 0
+	cr.pathStartY = 0
+	cr.pathCurrentX = 0
+	cr.pathCurrentY = 0
+	cr.hasPath = true
+}
+
 // NewPath clears the current path and starts a new one.
 // This is equivalent to cairo_new_path.
 func (cr *CairoRenderer) NewPath() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	cr.path = &vector.Path{}
-	cr.hasPath = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.newPathUnlocked()
 }
 
 // MoveTo begins a new sub-path at the given point.
@@ -817,6 +1033,7 @@ func (cr *CairoRenderer) MoveTo(x, y float64) {
 	defer cr.mu.Unlock()
 	cr.expandPathBounds(float32(x), float32(y))
 	cr.path.MoveTo(float32(x), float32(y))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
 	cr.pathStartX = float32(x)
 	cr.pathStartY = float32(y)
 	cr.pathCurrentX = float32(x)
@@ -832,11 +1049,13 @@ func (cr *CairoRenderer) LineTo(x, y float64) {
 	cr.expandPathBounds(float32(x), float32(y))
 	if !cr.hasPath {
 		cr.path.MoveTo(float32(x), float32(y))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
 		cr.pathStartX = float32(x)
 		cr.pathStartY = float32(y)
 		cr.hasPath = true
 	} else {
 		cr.path.LineTo(float32(x), float32(y))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y})
 	}
 	cr.pathCurrentX = float32(x)
 	cr.pathCurrentY = float32(y)
@@ -849,6 +1068,7 @@ func (cr *CairoRenderer) ClosePath() {
 	defer cr.mu.Unlock()
 	if cr.hasPath {
 		cr.path.Close()
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
 	}
 }
 
@@ -872,19 +1092,33 @@ func (cr *CairoRenderer) Arc(xc, yc, radius, angle1, angle2 float64) {
 	// Move or line to start point
 	if !cr.hasPath {
 		cr.path.MoveTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: startX, Y: startY})
 		cr.pathStartX = float32(startX)
 		cr.pathStartY = float32(startY)
 		cr.hasPath = true
 	} else {
 		cr.path.LineTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: startX, Y: startY})
 	}
 
 	// Add arc using Ebiten's Arc method
 	cr.path.Arc(float32(xc), float32(yc), float32(radius), float32(angle1), float32(angle2), vector.Clockwise)
 
-	// Update current position
+	// Track arc segment
 	endX := xc + radius*math.Cos(angle2)
 	endY := yc + radius*math.Sin(angle2)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type:    PathArc,
+		X:       endX,
+		Y:       endY,
+		CenterX: xc,
+		CenterY: yc,
+		Radius:  radius,
+		Angle1:  angle1,
+		Angle2:  angle2,
+	})
+
+	// Update current position
 	cr.pathCurrentX = float32(endX)
 	cr.pathCurrentY = float32(endY)
 }
@@ -906,42 +1140,61 @@ func (cr *CairoRenderer) ArcNegative(xc, yc, radius, angle1, angle2 float64) {
 	// Move or line to start point
 	if !cr.hasPath {
 		cr.path.MoveTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: startX, Y: startY})
 		cr.pathStartX = float32(startX)
 		cr.pathStartY = float32(startY)
 		cr.hasPath = true
 	} else {
 		cr.path.LineTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: startX, Y: startY})
 	}
 
 	// Add arc in counter-clockwise direction
 	cr.path.Arc(float32(xc), float32(yc), float32(radius), float32(angle1), float32(angle2), vector.CounterClockwise)
 
-	// Update current position
+	// Track arc segment
 	endX := xc + radius*math.Cos(angle2)
 	endY := yc + radius*math.Sin(angle2)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type:    PathArcNegative,
+		X:       endX,
+		Y:       endY,
+		CenterX: xc,
+		CenterY: yc,
+		Radius:  radius,
+		Angle1:  angle1,
+		Angle2:  angle2,
+	})
+
+	// Update current position
 	cr.pathCurrentX = float32(endX)
 	cr.pathCurrentY = float32(endY)
 }
 
 // CurveTo adds a cubic Bézier curve to the path.
 // This is equivalent to cairo_curve_to.
-// If there is no current point, it starts from (0,0) as per Cairo convention.
+// If there is no current point, it starts from (0,0). Note: this differs from
+// the C Cairo API, which reports an error when there is no current point.
 func (cr *CairoRenderer) CurveTo(x1, y1, x2, y2, x3, y3 float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// Cairo starts from (0,0) if no current point exists
-		cr.expandPathBounds(0, 0)
-		cr.path.MoveTo(0, 0)
-		cr.pathStartX = 0
-		cr.pathStartY = 0
-		cr.hasPath = true
+		cr.initPathAtOrigin()
 	}
 	// Expand bounds to include all control points and end point
 	cr.expandPathBounds(float32(x1), float32(y1))
 	cr.expandPathBounds(float32(x2), float32(y2))
 	cr.expandPathBounds(float32(x3), float32(y3))
 	cr.path.CubicTo(float32(x1), float32(y1), float32(x2), float32(y2), float32(x3), float32(y3))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type: PathCurveTo,
+		X:    x3,
+		Y:    y3,
+		X1:   x1,
+		Y1:   y1,
+		X2:   x2,
+		Y2:   y2,
+	})
 	cr.pathCurrentX = float32(x3)
 	cr.pathCurrentY = float32(y3)
 }
@@ -962,6 +1215,13 @@ func (cr *CairoRenderer) Rectangle(x, y, width, height float64) {
 	cr.path.LineTo(float32(x), float32(y+height))
 	cr.path.Close()
 
+	// Track all segments
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y + height})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y + height})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+
 	cr.pathStartX = float32(x)
 	cr.pathStartY = float32(y)
 	cr.pathCurrentX = float32(x)
@@ -973,18 +1233,19 @@ func (cr *CairoRenderer) Rectangle(x, y, width, height float64) {
 
 // RelMoveTo moves the current point by a relative offset.
 // This is equivalent to cairo_rel_move_to.
-// If there is no current point, this function does nothing.
+// If there is no current point, it starts from (0,0). Note: this differs from
+// the C Cairo API, which reports an error when there is no current point.
 func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// Cairo requires a current point for relative moves
-		return
+		cr.initPathAtOrigin()
 	}
 	newX := float64(cr.pathCurrentX) + dx
 	newY := float64(cr.pathCurrentY) + dy
 	cr.expandPathBounds(float32(newX), float32(newY))
 	cr.path.MoveTo(float32(newX), float32(newY))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: newX, Y: newY})
 	cr.pathStartX = float32(newX)
 	cr.pathStartY = float32(newY)
 	cr.pathCurrentX = float32(newX)
@@ -993,31 +1254,32 @@ func (cr *CairoRenderer) RelMoveTo(dx, dy float64) {
 
 // RelLineTo draws a line from the current point by a relative offset.
 // This is equivalent to cairo_rel_line_to.
-// If there is no current point, this function does nothing.
+// If there is no current point, it starts from (0,0). Note: this differs from
+// the C Cairo API, which reports an error when there is no current point.
 func (cr *CairoRenderer) RelLineTo(dx, dy float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// Cairo requires a current point for relative line
-		return
+		cr.initPathAtOrigin()
 	}
 	newX := float64(cr.pathCurrentX) + dx
 	newY := float64(cr.pathCurrentY) + dy
 	cr.expandPathBounds(float32(newX), float32(newY))
 	cr.path.LineTo(float32(newX), float32(newY))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: newX, Y: newY})
 	cr.pathCurrentX = float32(newX)
 	cr.pathCurrentY = float32(newY)
 }
 
 // RelCurveTo adds a cubic Bézier curve relative to the current point.
 // This is equivalent to cairo_rel_curve_to.
-// If there is no current point, this function does nothing.
+// If there is no current point, it starts from (0,0). Note: this differs from
+// the C Cairo API, which reports an error when there is no current point.
 func (cr *CairoRenderer) RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	if !cr.hasPath {
-		// Cairo requires a current point for relative curves
-		return
+		cr.initPathAtOrigin()
 	}
 	curX := float64(cr.pathCurrentX)
 	curY := float64(cr.pathCurrentY)
@@ -1030,6 +1292,15 @@ func (cr *CairoRenderer) RelCurveTo(dx1, dy1, dx2, dy2, dx3, dy3 float64) {
 		float32(curX+dx2), float32(curY+dy2),
 		float32(curX+dx3), float32(curY+dy3),
 	)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type: PathCurveTo,
+		X:    curX + dx3,
+		Y:    curY + dy3,
+		X1:   curX + dx1,
+		Y1:   curY + dy1,
+		X2:   curX + dx2,
+		Y2:   curY + dy2,
+	})
 	cr.pathCurrentX = float32(curX + dx3)
 	cr.pathCurrentY = float32(curY + dy3)
 }
@@ -1049,17 +1320,18 @@ func (cr *CairoRenderer) Stroke() {
 	opts := cr.buildStrokeOptions()
 	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, opts)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
+		Blend:     cr.getEbitenBlend(),
 	})
 
 	// Clear the path after stroking
-	cr.path = &vector.Path{}
-	cr.hasPath = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.clearPathUnlocked()
 }
 
 // Fill fills the current path with the current color.
@@ -1074,17 +1346,19 @@ func (cr *CairoRenderer) Fill() {
 
 	vertices, indices := cr.path.AppendVerticesAndIndicesForFilling(nil, nil)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
+		FillRule:  cr.getEbitenFillRule(),
+		Blend:     cr.getEbitenBlend(),
 	})
 
 	// Clear the path after filling
-	cr.path = &vector.Path{}
-	cr.hasPath = false
-	cr.pathMinX = 0
-	cr.pathMinY = 0
-	cr.pathMaxX = 0
-	cr.pathMaxY = 0
+	cr.clearPathUnlocked()
 }
 
 // FillPreserve fills the current path without clearing it.
@@ -1099,8 +1373,15 @@ func (cr *CairoRenderer) FillPreserve() {
 
 	vertices, indices := cr.path.AppendVerticesAndIndicesForFilling(nil, nil)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
+		FillRule:  cr.getEbitenFillRule(),
+		Blend:     cr.getEbitenBlend(),
 	})
 }
 
@@ -1117,12 +1398,19 @@ func (cr *CairoRenderer) StrokePreserve() {
 	opts := cr.buildStrokeOptions()
 	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, opts)
 	cr.setVertexColors(vertices)
-	cr.screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
 		AntiAlias: cr.antialias,
+		Blend:     cr.getEbitenBlend(),
 	})
 }
 
-// Paint fills the entire surface with the current color.
+// Paint fills the entire surface with the current color or source pattern.
+// When a clip region is set, only the clipped area is filled.
 // This is equivalent to cairo_paint.
 func (cr *CairoRenderer) Paint() {
 	cr.mu.Lock()
@@ -1132,10 +1420,28 @@ func (cr *CairoRenderer) Paint() {
 		return
 	}
 
-	cr.screen.Fill(cr.currentColor)
+	// Get clipped screen for painting
+	screen, clipX, clipY := cr.getClippedScreen()
+
+	// Check if we have a surface pattern to paint
+	if cr.sourcePattern != nil && cr.sourcePattern.patternType == PatternTypeSurface {
+		if cr.sourcePattern.surface != nil {
+			opts := &ebiten.DrawImageOptions{
+				Blend: cr.getEbitenBlend(),
+			}
+			// Apply pattern offset, adjusted for clip region
+			opts.GeoM.Translate(cr.sourcePattern.x0-float64(clipX), cr.sourcePattern.y0-float64(clipY))
+			screen.DrawImage(cr.sourcePattern.surface, opts)
+			return
+		}
+	}
+
+	// Fall back to solid color
+	screen.Fill(cr.currentColor)
 }
 
-// PaintWithAlpha fills the entire surface with the current color at the given alpha.
+// PaintWithAlpha fills the entire surface with the current color or source pattern
+// at the given alpha. When a clip region is set, only the clipped area is filled.
 // This is equivalent to cairo_paint_with_alpha.
 func (cr *CairoRenderer) PaintWithAlpha(alpha float64) {
 	cr.mu.Lock()
@@ -1145,66 +1451,92 @@ func (cr *CairoRenderer) PaintWithAlpha(alpha float64) {
 		return
 	}
 
+	// Get clipped screen for painting
+	screen, clipX, clipY := cr.getClippedScreen()
+
+	// Check if we have a surface pattern to paint
+	if cr.sourcePattern != nil && cr.sourcePattern.patternType == PatternTypeSurface {
+		if cr.sourcePattern.surface != nil {
+			opts := &ebiten.DrawImageOptions{
+				Blend: cr.getEbitenBlend(),
+			}
+			// Apply pattern offset, adjusted for clip region
+			opts.GeoM.Translate(cr.sourcePattern.x0-float64(clipX), cr.sourcePattern.y0-float64(clipY))
+			// Apply alpha via color matrix
+			opts.ColorScale.Scale(1, 1, 1, float32(alpha))
+			screen.DrawImage(cr.sourcePattern.surface, opts)
+			return
+		}
+	}
+
+	// Fall back to solid color with alpha
 	clr := cr.currentColor
 	clr.A = clampToByte(alpha)
-	cr.screen.Fill(clr)
+	screen.Fill(clr)
 }
 
 // --- Convenience Drawing Functions ---
+//
+// These functions provide atomic operations that acquire the lock once and perform
+// all operations under that single lock. This ensures thread-safe atomic drawing
+// operations in concurrent scenarios.
 
 // DrawLine draws a line from (x1,y1) to (x2,y2) with the current color and line width.
-// This is a convenience function that combines MoveTo, LineTo, and Stroke.
-// DrawLine draws a line from (x1,y1) to (x2,y2) with the current color and line width.
-// This is a convenience function that combines MoveTo, LineTo, and Stroke.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, MoveTo, LineTo, and Stroke.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) DrawLine(x1, y1, x2, y2 float64) {
-	cr.NewPath()
-	cr.MoveTo(x1, y1)
-	cr.LineTo(x2, y2)
-	cr.Stroke()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.moveToUnlocked(x1, y1)
+	cr.lineToUnlocked(x2, y2)
+	cr.strokeUnlocked()
 }
 
 // DrawRectangle draws a stroked rectangle.
-// This is a convenience function that combines Rectangle and Stroke.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, Rectangle and Stroke.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) DrawRectangle(x, y, width, height float64) {
-	cr.NewPath()
-	cr.Rectangle(x, y, width, height)
-	cr.Stroke()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.rectangleUnlocked(x, y, width, height)
+	cr.strokeUnlocked()
 }
 
 // FillRectangle draws a filled rectangle.
-// This is a convenience function that combines Rectangle and Fill.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, Rectangle and Fill.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) FillRectangle(x, y, width, height float64) {
-	cr.NewPath()
-	cr.Rectangle(x, y, width, height)
-	cr.Fill()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.rectangleUnlocked(x, y, width, height)
+	cr.fillUnlocked()
 }
 
 // DrawCircle draws a stroked circle.
-// This is a convenience function that combines Arc and Stroke.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, Arc, ClosePath and Stroke.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) DrawCircle(xc, yc, radius float64) {
-	cr.NewPath()
-	cr.Arc(xc, yc, radius, 0, 2*math.Pi)
-	cr.ClosePath()
-	cr.Stroke()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.arcUnlocked(xc, yc, radius, 0, 2*math.Pi)
+	cr.closePathUnlocked()
+	cr.strokeUnlocked()
 }
 
 // FillCircle draws a filled circle.
-// This is a convenience function that combines Arc and Fill.
-// Note: This function is NOT atomic - each internal method call acquires and releases
-// the mutex independently. For atomic operations, use explicit locking at the caller level.
+// This is a convenience function that combines NewPath, Arc, ClosePath and Fill.
+// This function is atomic - the mutex is held for the entire operation.
 func (cr *CairoRenderer) FillCircle(xc, yc, radius float64) {
-	cr.NewPath()
-	cr.Arc(xc, yc, radius, 0, 2*math.Pi)
-	cr.ClosePath()
-	cr.Fill()
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	cr.newPathUnlocked()
+	cr.arcUnlocked(xc, yc, radius, 0, 2*math.Pi)
+	cr.closePathUnlocked()
+	cr.fillUnlocked()
 }
 
 // --- Helper Functions ---
@@ -1240,6 +1572,64 @@ func (cr *CairoRenderer) buildStrokeOptions() *vector.StrokeOptions {
 	return opts
 }
 
+// getEbitenFillRule converts Cairo fill rule to Ebiten FillRule.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) getEbitenFillRule() ebiten.FillRule {
+	switch cr.fillRule {
+	case CairoFillRuleWinding:
+		return ebiten.FillRuleNonZero
+	case CairoFillRuleEvenOdd:
+		return ebiten.FillRuleEvenOdd
+	default:
+		return ebiten.FillRuleNonZero
+	}
+}
+
+// getEbitenBlend converts Cairo operator to Ebiten Blend mode.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) getEbitenBlend() ebiten.Blend {
+	switch cr.operator {
+	case CairoOperatorClear:
+		// CAIRO_OPERATOR_CLEAR sets all blend factors to zero and uses Add operation.
+		// This effectively clears (sets to transparent black) wherever the source
+		// would be drawn, because: result = 0*src + 0*dst = 0
+		return ebiten.Blend{
+			BlendFactorSourceRGB:        ebiten.BlendFactorZero,
+			BlendFactorSourceAlpha:      ebiten.BlendFactorZero,
+			BlendFactorDestinationRGB:   ebiten.BlendFactorZero,
+			BlendFactorDestinationAlpha: ebiten.BlendFactorZero,
+			BlendOperationRGB:           ebiten.BlendOperationAdd,
+			BlendOperationAlpha:         ebiten.BlendOperationAdd,
+		}
+	case CairoOperatorSource:
+		return ebiten.BlendCopy
+	case CairoOperatorOver:
+		return ebiten.BlendSourceOver
+	case CairoOperatorIn:
+		return ebiten.BlendSourceIn
+	case CairoOperatorOut:
+		return ebiten.BlendSourceOut
+	case CairoOperatorAtop:
+		return ebiten.BlendSourceAtop
+	case CairoOperatorDest:
+		return ebiten.BlendDestination
+	case CairoOperatorDestOver:
+		return ebiten.BlendDestinationOver
+	case CairoOperatorDestIn:
+		return ebiten.BlendDestinationIn
+	case CairoOperatorDestOut:
+		return ebiten.BlendDestinationOut
+	case CairoOperatorDestAtop:
+		return ebiten.BlendDestinationAtop
+	case CairoOperatorXor:
+		return ebiten.BlendXor
+	case CairoOperatorAdd:
+		return ebiten.BlendLighter
+	default:
+		return ebiten.BlendSourceOver
+	}
+}
+
 // setVertexColors sets the current color on all vertices.
 // This must be called while holding the mutex.
 func (cr *CairoRenderer) setVertexColors(vertices []ebiten.Vertex) {
@@ -1253,6 +1643,234 @@ func (cr *CairoRenderer) setVertexColors(vertices []ebiten.Vertex) {
 		vertices[i].ColorB = b
 		vertices[i].ColorA = a
 	}
+}
+
+// getClippedScreen returns the screen to draw on, applying clipping if set.
+// If there is a clip region, it returns a SubImage representing the clipped area.
+// Otherwise, it returns the original screen.
+// Also returns the offset (dx, dy) that needs to be applied to vertex coordinates.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) getClippedScreen() (screen *ebiten.Image, dx, dy float32) {
+	if !cr.hasClip || cr.screen == nil {
+		return cr.screen, 0, 0
+	}
+
+	// Create a rectangle from the clip bounds
+	clipRect := image.Rect(
+		int(cr.clipMinX),
+		int(cr.clipMinY),
+		int(cr.clipMaxX),
+		int(cr.clipMaxY),
+	)
+
+	// SubImage returns an image.Image, but for Ebiten images it's always *ebiten.Image
+	subImg := cr.screen.SubImage(clipRect)
+	if subImg == nil {
+		// Fallback if SubImage fails (shouldn't happen for valid Ebiten images)
+		return cr.screen, 0, 0
+	}
+
+	// Type assert to *ebiten.Image (safe per Ebiten documentation)
+	return subImg.(*ebiten.Image), cr.clipMinX, cr.clipMinY
+}
+
+// adjustVerticesForClip offsets vertex positions by the clip origin.
+// When drawing to a SubImage, we need to adjust vertex positions since the
+// SubImage coordinate system starts at (0,0) for the clip region.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) adjustVerticesForClip(vertices []ebiten.Vertex, dx, dy float32) {
+	if dx == 0 && dy == 0 {
+		return
+	}
+	for i := range vertices {
+		vertices[i].DstX -= dx
+		vertices[i].DstY -= dy
+	}
+}
+
+// --- Unlocked Internal Methods ---
+//
+// These internal methods perform path and drawing operations without acquiring the mutex.
+// They are used by the atomic convenience functions to perform multiple operations
+// under a single lock. All of these methods MUST be called while holding the mutex.
+
+// newPathUnlocked clears the current path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) newPathUnlocked() {
+	cr.clearPathUnlocked()
+}
+
+// moveToUnlocked begins a new sub-path at the given point without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) moveToUnlocked(x, y float64) {
+	cr.expandPathBounds(float32(x), float32(y))
+	cr.path.MoveTo(float32(x), float32(y))
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
+	cr.pathStartX = float32(x)
+	cr.pathStartY = float32(y)
+	cr.pathCurrentX = float32(x)
+	cr.pathCurrentY = float32(y)
+	cr.hasPath = true
+}
+
+// lineToUnlocked adds a line to the path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) lineToUnlocked(x, y float64) {
+	cr.expandPathBounds(float32(x), float32(y))
+	if !cr.hasPath {
+		cr.path.MoveTo(float32(x), float32(y))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
+		cr.pathStartX = float32(x)
+		cr.pathStartY = float32(y)
+		cr.hasPath = true
+	} else {
+		cr.path.LineTo(float32(x), float32(y))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y})
+	}
+	cr.pathCurrentX = float32(x)
+	cr.pathCurrentY = float32(y)
+}
+
+// rectangleUnlocked adds a rectangle to the path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) rectangleUnlocked(x, y, width, height float64) {
+	// Expand bounds to include all corners
+	cr.expandPathBounds(float32(x), float32(y))
+	cr.expandPathBounds(float32(x+width), float32(y+height))
+
+	cr.path.MoveTo(float32(x), float32(y))
+	cr.path.LineTo(float32(x+width), float32(y))
+	cr.path.LineTo(float32(x+width), float32(y+height))
+	cr.path.LineTo(float32(x), float32(y+height))
+	cr.path.Close()
+
+	// Track all segments
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y + height})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y + height})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+
+	cr.pathStartX = float32(x)
+	cr.pathStartY = float32(y)
+	cr.pathCurrentX = float32(x)
+	cr.pathCurrentY = float32(y)
+	cr.hasPath = true
+}
+
+// arcUnlocked adds a circular arc to the path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) arcUnlocked(xc, yc, radius, angle1, angle2 float64) {
+	// Calculate start point
+	startX := xc + radius*math.Cos(angle1)
+	startY := yc + radius*math.Sin(angle1)
+
+	// Expand bounds for arc - use bounding box of full circle (conservative)
+	cr.expandPathBounds(float32(xc-radius), float32(yc-radius))
+	cr.expandPathBounds(float32(xc+radius), float32(yc+radius))
+
+	// Move or line to start point
+	if !cr.hasPath {
+		cr.path.MoveTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: startX, Y: startY})
+		cr.pathStartX = float32(startX)
+		cr.pathStartY = float32(startY)
+		cr.hasPath = true
+	} else {
+		cr.path.LineTo(float32(startX), float32(startY))
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: startX, Y: startY})
+	}
+
+	// Add arc using Ebiten's Arc method
+	cr.path.Arc(float32(xc), float32(yc), float32(radius), float32(angle1), float32(angle2), vector.Clockwise)
+
+	// Track arc segment
+	endX := xc + radius*math.Cos(angle2)
+	endY := yc + radius*math.Sin(angle2)
+	cr.pathSegments = append(cr.pathSegments, PathSegment{
+		Type:    PathArc,
+		X:       endX,
+		Y:       endY,
+		CenterX: xc,
+		CenterY: yc,
+		Radius:  radius,
+		Angle1:  angle1,
+		Angle2:  angle2,
+	})
+
+	// Update current position
+	cr.pathCurrentX = float32(endX)
+	cr.pathCurrentY = float32(endY)
+}
+
+// closePathUnlocked closes the current sub-path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) closePathUnlocked() {
+	if cr.hasPath {
+		cr.path.Close()
+		cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+	}
+}
+
+// clearPathUnlocked resets the path state after drawing without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) clearPathUnlocked() {
+	cr.path = &vector.Path{}
+	cr.pathSegments = make([]PathSegment, 0)
+	cr.hasPath = false
+	cr.pathBoundsInit = false
+	cr.pathMinX = 0
+	cr.pathMinY = 0
+	cr.pathMaxX = 0
+	cr.pathMaxY = 0
+}
+
+// strokeUnlocked strokes the current path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) strokeUnlocked() {
+	if !cr.canDraw() {
+		return
+	}
+
+	opts := cr.buildStrokeOptions()
+	vertices, indices := cr.path.AppendVerticesAndIndicesForStroke(nil, nil, opts)
+	cr.setVertexColors(vertices)
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+		AntiAlias: cr.antialias,
+		Blend:     cr.getEbitenBlend(),
+	})
+
+	// Clear the path after stroking
+	cr.clearPathUnlocked()
+}
+
+// fillUnlocked fills the current path without acquiring the mutex.
+// This must be called while holding the mutex.
+func (cr *CairoRenderer) fillUnlocked() {
+	if !cr.canDraw() {
+		return
+	}
+
+	vertices, indices := cr.path.AppendVerticesAndIndicesForFilling(nil, nil)
+	cr.setVertexColors(vertices)
+
+	// Get clipped screen and adjust vertex coordinates
+	screen, dx, dy := cr.getClippedScreen()
+	cr.adjustVerticesForClip(vertices, dx, dy)
+
+	screen.DrawTriangles(vertices, indices, emptySubImage, &ebiten.DrawTrianglesOptions{
+		AntiAlias: cr.antialias,
+		FillRule:  cr.getEbitenFillRule(),
+		Blend:     cr.getEbitenBlend(),
+	})
+
+	// Clear the path after filling
+	cr.clearPathUnlocked()
 }
 
 // GetCurrentPoint returns the current point in the path.
@@ -1433,6 +2051,61 @@ func (cr *CairoRenderer) TextExtentsResult(text string) TextExtents {
 	}
 }
 
+// TextPath adds the outline of the given text to the current path.
+// This is equivalent to cairo_text_path.
+//
+// Implementation Note: Since Ebiten does not expose the actual glyph outlines
+// from the underlying font library, this implementation creates a rectangular
+// approximation using the text bounding box. The rectangle path can then be
+// stroked or filled. For true glyph outline support, a CGO-based font library
+// would be required.
+//
+// The text outline is added at the current path position (or 0,0 if no path exists).
+// After calling TextPath, the current point is advanced by the text width.
+func (cr *CairoRenderer) TextPath(text string) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	// Get current position (or 0,0 if no path)
+	x := float64(cr.pathCurrentX)
+	y := float64(cr.pathCurrentY)
+
+	// Measure the text
+	w, h := cr.textRenderer.MeasureText(text)
+	if w == 0 || h == 0 {
+		return
+	}
+
+	// Add a rectangle path representing the text bounds.
+	// In Cairo, text is drawn with the baseline at the specified y position,
+	// so the rectangle should extend upward from the baseline by the height.
+	// The y-bearing is typically negative (extends above baseline).
+	rectX := x
+	rectY := y - h // Text extends upward from baseline
+
+	// Add the rectangle as path segments (using internal method to avoid deadlock)
+	cr.path.MoveTo(float32(rectX), float32(rectY))
+	cr.path.LineTo(float32(rectX+w), float32(rectY))
+	cr.path.LineTo(float32(rectX+w), float32(rectY+h))
+	cr.path.LineTo(float32(rectX), float32(rectY+h))
+	cr.path.Close()
+
+	// Track path segments for CopyPath
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: rectX, Y: rectY})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: rectX + w, Y: rectY})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: rectX + w, Y: rectY + h})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: rectX, Y: rectY + h})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+
+	// Update path bounds
+	cr.expandPathBounds(float32(rectX), float32(rectY))
+	cr.expandPathBounds(float32(rectX+w), float32(rectY+h))
+
+	// Update current point by advancing by text width
+	cr.pathCurrentX = float32(x + w)
+	cr.hasPath = true
+}
+
 // --- Transformation Functions ---
 
 // Translate moves the coordinate system origin.
@@ -1536,6 +2209,8 @@ func (cr *CairoRenderer) Save() {
 		clipMinY:      cr.clipMinY,
 		clipMaxX:      cr.clipMaxX,
 		clipMaxY:      cr.clipMaxY,
+		fillRule:      cr.fillRule,
+		operator:      cr.operator,
 	}
 	cr.stateStack = append(cr.stateStack, state)
 }
@@ -1582,6 +2257,8 @@ func (cr *CairoRenderer) Restore() {
 	cr.clipMinY = state.clipMinY
 	cr.clipMaxX = state.clipMaxX
 	cr.clipMaxY = state.clipMaxY
+	cr.fillRule = state.fillRule
+	cr.operator = state.operator
 
 	// Update text renderer to match restored state
 	cr.textRenderer.SetFontSize(state.fontSize)
@@ -1678,25 +2355,22 @@ func (cr *CairoRenderer) Transform(m *CairoMatrix) {
 
 // --- Clipping Functions ---
 //
-// IMPORTANT: Clipping is currently a partial implementation.
-// The clip region is tracked (stored in clipPath/hasClip) but NOT enforced
-// during drawing operations. This means calling Clip() will record the clip
-// region for API compatibility, but subsequent drawing will NOT be restricted
-// to the clip area.
+// Clipping is enforced for rectangular clip regions using Ebiten's SubImage
+// functionality. When a clip is set, drawing operations use a SubImage
+// representing the clipped rectangular area, which naturally restricts
+// drawing to that region.
 //
-// Full clipping support would require either:
-// - Using Ebiten's SubImage for rectangular clips only
-// - Implementing stencil buffer or alpha mask clipping for arbitrary paths
-//
-// For now, scripts that use clipping will execute without errors, but the
-// visual clipping effect will not be applied.
+// Limitations:
+// - Only rectangular clipping is supported (based on the path's bounding box)
+// - Non-rectangular paths (arcs, curves) are clipped by their bounding rectangle
+// - Clip intersection is not implemented; each Clip() call replaces the previous clip
 
 // Clip establishes a new clip region by intersecting the current clip region
 // with the current path and clears the path.
 // This is equivalent to cairo_clip.
 //
-// WARNING: Clipping is NOT currently enforced during drawing operations.
-// The clip region is recorded but drawing will not be restricted to the clip area.
+// Note: Clipping is enforced for the bounding rectangle of the path. Non-rectangular
+// paths are clipped by their bounding box, not their exact shape.
 func (cr *CairoRenderer) Clip() {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
@@ -1719,6 +2393,7 @@ func (cr *CairoRenderer) Clip() {
 	// Clear the current path (as per Cairo behavior)
 	cr.path = &vector.Path{}
 	cr.hasPath = false
+	cr.pathBoundsInit = false
 	cr.pathMinX = 0
 	cr.pathMinY = 0
 	cr.pathMaxX = 0
@@ -1728,10 +2403,10 @@ func (cr *CairoRenderer) Clip() {
 // ClipPreserve establishes a new clip region without clearing the current path.
 // This is equivalent to cairo_clip_preserve.
 //
-// WARNING: Clipping is NOT currently enforced during drawing operations.
-// The clip region is recorded but drawing will not be restricted to the clip area.
+// Note: Clipping is enforced for the bounding rectangle of the path. Non-rectangular
+// paths are clipped by their bounding box, not their exact shape.
 //
-// Note: Since Ebiten's vector.Path cannot be copied, we store the current path
+// Since Ebiten's vector.Path cannot be copied, we store the current path
 // as the clip path and create a fresh path for continued drawing. The path state
 // (current point, etc.) is preserved but the path data is now isolated.
 func (cr *CairoRenderer) ClipPreserve() {
@@ -2168,6 +2843,10 @@ const (
 	PathCurveTo
 	// PathClose is a close-path segment.
 	PathClose
+	// PathArc is an arc segment (clockwise direction).
+	PathArc
+	// PathArcNegative is an arc segment (counter-clockwise direction).
+	PathArcNegative
 )
 
 // PathSegment represents a segment of a path.
@@ -2176,15 +2855,26 @@ type PathSegment struct {
 	X, Y float64
 	// For curves: control points
 	X1, Y1, X2, Y2 float64
+	// For arcs: center coordinates, radius, and angles
+	CenterX, CenterY float64
+	Radius           float64
+	Angle1, Angle2   float64
 }
 
-// CopyPath returns a simplified representation of the current path.
-// Note: This returns a basic representation - full path iteration is not supported.
+// CopyPath returns a representation of the current path.
+// The returned slice contains all path segments that have been added since the
+// last NewPath call. This includes MoveTo, LineTo, CurveTo, ClosePath, Arc,
+// and ArcNegative operations.
 func (cr *CairoRenderer) CopyPath() []PathSegment {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
-	// Return empty slice - full path iteration not implemented
-	return []PathSegment{}
+	// Return a copy of the segments to avoid mutation
+	if len(cr.pathSegments) == 0 {
+		return []PathSegment{}
+	}
+	result := make([]PathSegment, len(cr.pathSegments))
+	copy(result, cr.pathSegments)
+	return result
 }
 
 // AppendPath appends the given path segments to the current path.
@@ -2199,30 +2889,10 @@ func (cr *CairoRenderer) AppendPath(segments []PathSegment) {
 			cr.CurveTo(seg.X1, seg.Y1, seg.X2, seg.Y2, seg.X, seg.Y)
 		case PathClose:
 			cr.ClosePath()
-		}
-	}
-}
-
-// expandPathBoundsUnlocked expands path bounds without acquiring the lock.
-// Caller must hold the lock.
-func (cr *CairoRenderer) expandPathBoundsUnlocked(x, y float32) {
-	if cr.pathMinX == 0 && cr.pathMaxX == 0 {
-		cr.pathMinX = x
-		cr.pathMaxX = x
-		cr.pathMinY = y
-		cr.pathMaxY = y
-	} else {
-		if x < cr.pathMinX {
-			cr.pathMinX = x
-		}
-		if x > cr.pathMaxX {
-			cr.pathMaxX = x
-		}
-		if y < cr.pathMinY {
-			cr.pathMinY = y
-		}
-		if y > cr.pathMaxY {
-			cr.pathMaxY = y
+		case PathArc:
+			cr.Arc(seg.CenterX, seg.CenterY, seg.Radius, seg.Angle1, seg.Angle2)
+		case PathArcNegative:
+			cr.ArcNegative(seg.CenterX, seg.CenterY, seg.Radius, seg.Angle1, seg.Angle2)
 		}
 	}
 }
@@ -2339,4 +3009,342 @@ func (cr *CairoRenderer) GetFontWeight() FontWeight {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 	return cr.fontWeight
+}
+
+// --- Mask Functions ---
+//
+// Mask operations composite the current source using a mask pattern's alpha
+// channel. Where the mask is opaque, the source is fully applied; where
+// transparent, no source is applied.
+
+// Mask paints the current source using the alpha channel of the given pattern
+// as a mask. This is equivalent to cairo_mask.
+//
+// The mask pattern's alpha channel modulates the current source: where the
+// mask is opaque (alpha = 1), the source is fully applied; where transparent
+// (alpha = 0), no source is applied. Intermediate alpha values produce
+// partial transparency.
+//
+// The current path is not affected by this operation.
+func (cr *CairoRenderer) Mask(pattern *CairoPattern) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if cr.screen == nil || pattern == nil {
+		return
+	}
+
+	// Get screen bounds
+	bounds := cr.screen.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	// Create a temporary image to hold the masked result
+	tempImg := ebiten.NewImage(w, h)
+	defer tempImg.Deallocate()
+
+	// For each pixel, compute the mask alpha and blend accordingly
+	// We use a pixel-by-pixel approach for accuracy
+	pixels := make([]byte, w*h*4)
+
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			// Get mask alpha at this point
+			maskColor := pattern.ColorAtPoint(float64(x), float64(y))
+			maskAlpha := float64(maskColor.A) / 255.0
+
+			// Compute final color: source color with alpha modulated by mask
+			finalR := uint8(float64(cr.currentColor.R) * maskAlpha)
+			finalG := uint8(float64(cr.currentColor.G) * maskAlpha)
+			finalB := uint8(float64(cr.currentColor.B) * maskAlpha)
+			finalA := uint8(float64(cr.currentColor.A) * maskAlpha)
+
+			// Write to pixel buffer (RGBA format)
+			offset := (y*w + x) * 4
+			pixels[offset] = finalR
+			pixels[offset+1] = finalG
+			pixels[offset+2] = finalB
+			pixels[offset+3] = finalA
+		}
+	}
+
+	tempImg.WritePixels(pixels)
+
+	// Get clipped screen for compositing
+	screen, _, _ := cr.getClippedScreen()
+
+	// Composite the masked image onto the screen
+	screen.DrawImage(tempImg, &ebiten.DrawImageOptions{
+		Blend: cr.getEbitenBlend(),
+	})
+}
+
+// MaskSurface paints the current source using the alpha channel of the given
+// surface as a mask. This is equivalent to cairo_mask_surface.
+//
+// The surface is placed at (surfaceX, surfaceY) in user-space coordinates.
+// The alpha channel of the surface modulates the current source color.
+//
+// Implementation note: This uses Ebiten's DrawImage with color matrix to
+// achieve the masking effect without requiring ReadPixels, which has
+// limitations in Ebiten's execution model.
+func (cr *CairoRenderer) MaskSurface(surface *CairoSurface, surfaceX, surfaceY float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if cr.screen == nil || surface == nil || surface.IsDestroyed() {
+		return
+	}
+
+	maskImg := surface.Image()
+	if maskImg == nil {
+		return
+	}
+
+	// Get mask bounds
+	maskBounds := maskImg.Bounds()
+	maskW := maskBounds.Dx()
+	maskH := maskBounds.Dy()
+
+	if maskW <= 0 || maskH <= 0 {
+		return
+	}
+
+	// Apply transformation to surface position
+	tx, ty := cr.transformPointUnlocked(surfaceX, surfaceY)
+
+	// Create a temporary image the size of the mask to hold the colored result
+	tempImg := ebiten.NewImage(maskW, maskH)
+	defer tempImg.Deallocate()
+
+	// Fill temp image with the source color
+	tempImg.Fill(cr.currentColor)
+
+	// Get clipped screen for compositing
+	screen, _, _ := cr.getClippedScreen()
+
+	// Use Ebiten's blend modes to apply the mask.
+	// We draw the colored image using the mask's alpha channel.
+	// The BlendSourceIn blend mode uses: result = source * dest_alpha
+	// So we first draw the mask to establish alpha, then draw color with SourceIn.
+
+	// Alternative approach: Use a ColorMatrix to modulate the colored image
+	// by the mask's alpha. We draw the mask first, then draw the color on top.
+
+	// Create a destination image for compositing
+	compositeImg := ebiten.NewImage(maskW, maskH)
+	defer compositeImg.Deallocate()
+
+	// Draw the mask to establish the alpha channel
+	compositeImg.DrawImage(maskImg, nil)
+
+	// Now draw the colored image with SourceIn blending
+	// SourceIn: result = source * dest_alpha (uses destination alpha as mask)
+	opts := &ebiten.DrawImageOptions{
+		Blend: ebiten.BlendSourceIn,
+	}
+	compositeImg.DrawImage(tempImg, opts)
+
+	// Finally, draw the composite result to the screen at the specified position
+	screenOpts := &ebiten.DrawImageOptions{
+		Blend: cr.getEbitenBlend(),
+	}
+	screenOpts.GeoM.Translate(tx, ty)
+	screen.DrawImage(compositeImg, screenOpts)
+}
+
+// --- Group Rendering Functions ---
+//
+// Group rendering allows drawing to a temporary surface that can later be
+// composited back to the main surface. This is useful for complex effects
+// like transparency, blur, or when you need to capture drawing operations.
+
+// PushGroup temporarily redirects drawing to an internal group surface.
+// This is equivalent to cairo_push_group.
+//
+// All subsequent drawing operations will be directed to the group surface
+// until PopGroup or PopGroupToSource is called. Groups can be nested.
+func (cr *CairoRenderer) PushGroup() {
+	cr.PushGroupWithContent(CairoContentColorAlpha)
+}
+
+// PushGroupWithContent temporarily redirects drawing to a group surface with
+// the specified content type. This is equivalent to cairo_push_group_with_content.
+//
+// The content type determines the properties of the group surface:
+// - CairoContentColor: RGB only (no alpha channel)
+// - CairoContentAlpha: Alpha only (no color)
+// - CairoContentColorAlpha: Full RGBA (default)
+func (cr *CairoRenderer) PushGroupWithContent(content CairoContent) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if cr.screen == nil {
+		return
+	}
+
+	// Get screen dimensions
+	bounds := cr.screen.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	// Create a new group surface
+	groupSurface := ebiten.NewImage(w, h)
+
+	// For alpha-only content, we still use RGBA but will only use alpha channel
+	// For color-only content, we start with opaque background
+	if content == CairoContentColor {
+		groupSurface.Fill(color.RGBA{A: 255})
+	}
+
+	// Save current screen and push group state
+	state := &groupState{
+		surface:        groupSurface,
+		previousScreen: cr.screen,
+		content:        content,
+	}
+	cr.groupStack = append(cr.groupStack, state)
+
+	// Redirect drawing to the group surface
+	cr.screen = groupSurface
+}
+
+// PopGroup terminates the current group and returns its contents as a pattern.
+// This is equivalent to cairo_pop_group.
+//
+// The returned pattern can be used with SetSource to composite the group
+// contents onto the original surface. Returns nil if no group was pushed.
+func (cr *CairoRenderer) PopGroup() *CairoPattern {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	return cr.popGroupUnlocked()
+}
+
+// popGroupUnlocked pops the group without acquiring the mutex.
+// Returns a surface pattern containing the group contents.
+// Must be called while holding the mutex.
+func (cr *CairoRenderer) popGroupUnlocked() *CairoPattern {
+	if len(cr.groupStack) == 0 {
+		return nil
+	}
+
+	// Pop the group state
+	lastIdx := len(cr.groupStack) - 1
+	state := cr.groupStack[lastIdx]
+	cr.groupStack = cr.groupStack[:lastIdx]
+
+	// Restore the previous screen
+	cr.screen = state.previousScreen
+
+	// Create a surface pattern from the group surface
+	// The pattern will contain the group's image data
+	pattern := &CairoPattern{
+		patternType: PatternTypeSurface,
+		surface:     state.surface,
+	}
+
+	return pattern
+}
+
+// PopGroupToSource terminates the current group and sets it as the source.
+// This is equivalent to cairo_pop_group_to_source.
+//
+// This is a convenience function equivalent to:
+//
+//	pattern := cr.PopGroup()
+//	cr.SetSource(pattern)
+func (cr *CairoRenderer) PopGroupToSource() {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	pattern := cr.popGroupUnlocked()
+	if pattern != nil {
+		cr.sourcePattern = pattern
+	}
+}
+
+// GetGroupTarget returns the current target surface.
+// If a group is active, this returns the group surface; otherwise
+// it returns the original surface.
+// This is equivalent to cairo_get_group_target.
+func (cr *CairoRenderer) GetGroupTarget() *ebiten.Image {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return cr.screen
+}
+
+// HasGroup returns whether a group is currently active.
+func (cr *CairoRenderer) HasGroup() bool {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	return len(cr.groupStack) > 0
+}
+
+// --- Source Surface Functions ---
+//
+// These functions allow using a surface (image) as the source for drawing
+// operations. This enables painting images or compositing surfaces.
+
+// SetSourceSurface sets a surface as the source for subsequent drawing operations.
+// The surface is placed at (x, y) in user-space coordinates.
+// This is equivalent to cairo_set_source_surface.
+//
+// After calling SetSourceSurface, operations like Paint() will draw the surface
+// content instead of a solid color.
+func (cr *CairoRenderer) SetSourceSurface(surface *CairoSurface, x, y float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if surface == nil || surface.IsDestroyed() {
+		cr.sourceSurface = nil
+		cr.hasSourceSurface = false
+		return
+	}
+
+	cr.sourceSurface = surface.Image()
+	cr.sourceSurfaceX = x
+	cr.sourceSurfaceY = y
+	cr.hasSourceSurface = cr.sourceSurface != nil
+
+	// Create a surface pattern and set it as source
+	if cr.hasSourceSurface {
+		cr.sourcePattern = &CairoPattern{
+			patternType: PatternTypeSurface,
+			surface:     cr.sourceSurface,
+			x0:          x,
+			y0:          y,
+		}
+	}
+}
+
+// SetSourceSurfaceImage sets an Ebiten image as the source for drawing operations.
+// This is a convenience function for cases where you have a raw Ebiten image
+// instead of a CairoSurface.
+func (cr *CairoRenderer) SetSourceSurfaceImage(image *ebiten.Image, x, y float64) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	cr.sourceSurface = image
+	cr.sourceSurfaceX = x
+	cr.sourceSurfaceY = y
+	cr.hasSourceSurface = image != nil
+
+	// Create a surface pattern and set it as source
+	if cr.hasSourceSurface {
+		cr.sourcePattern = &CairoPattern{
+			patternType: PatternTypeSurface,
+			surface:     image,
+			x0:          x,
+			y0:          y,
+		}
+	}
 }

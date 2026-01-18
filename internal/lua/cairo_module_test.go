@@ -474,3 +474,150 @@ func TestCairoModule_FallbackToGlobals(t *testing.T) {
 		t.Errorf("Expected line width 3.0, got %f", width)
 	}
 }
+
+func TestCairoModule_UpdateWindowInfoAllFields(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cm, err := NewCairoModule(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoModule: %v", err)
+	}
+
+	// Use UpdateWindowInfo which sets defaults for text region
+	cm.UpdateWindowInfo(800, 600, 1, 2, 3)
+
+	// Test all fields with a table-driven approach
+	tests := []struct {
+		field    string
+		expected int64
+	}{
+		{"width", 800},
+		{"height", 600},
+		{"display", 1},
+		{"drawable", 2},
+		{"visual", 3},
+		{"text_start_x", 10},         // default margin
+		{"text_start_y", 20},         // default margin
+		{"text_width", 780},          // 800 - 20
+		{"text_height", 570},         // 600 - 30
+		{"border_inner_margin", 0},   // default
+		{"border_outer_margin", 0},   // default
+		{"border_width", 0},          // default
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.field, func(t *testing.T) {
+			result, err := runtime.ExecuteString("test", `return conky_window.`+tc.field)
+			if err != nil {
+				t.Fatalf("Failed to execute: %v", err)
+			}
+			if val, ok := result.TryInt(); !ok || val != tc.expected {
+				t.Errorf("Expected %s=%d, got %v", tc.field, tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestCairoModule_UpdateWindowInfoFull(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cm, err := NewCairoModule(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoModule: %v", err)
+	}
+
+	// Use UpdateWindowInfoFull with custom values
+	info := WindowInfo{
+		Width:             1024,
+		Height:            768,
+		Display:           100,
+		Drawable:          200,
+		Visual:            300,
+		BorderInnerMargin: 5,
+		BorderOuterMargin: 10,
+		BorderWidth:       2,
+		TextStartX:        15,
+		TextStartY:        25,
+		TextWidth:         994,
+		TextHeight:        718,
+	}
+	cm.UpdateWindowInfoFull(info)
+
+	// Test all custom fields
+	tests := []struct {
+		field    string
+		expected int64
+	}{
+		{"width", 1024},
+		{"height", 768},
+		{"display", 100},
+		{"drawable", 200},
+		{"visual", 300},
+		{"border_inner_margin", 5},
+		{"border_outer_margin", 10},
+		{"border_width", 2},
+		{"text_start_x", 15},
+		{"text_start_y", 25},
+		{"text_width", 994},
+		{"text_height", 718},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.field, func(t *testing.T) {
+			result, err := runtime.ExecuteString("test", `return conky_window.`+tc.field)
+			if err != nil {
+				t.Fatalf("Failed to execute: %v", err)
+			}
+			if val, ok := result.TryInt(); !ok || val != tc.expected {
+				t.Errorf("Expected %s=%d, got %v", tc.field, tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestCairoModule_WindowInfoInLuaScript(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	cm, err := NewCairoModule(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoModule: %v", err)
+	}
+
+	cm.UpdateWindowInfo(640, 480, 0, 0, 0)
+
+	// Test a realistic Lua script that uses the text region fields
+	result, err := runtime.ExecuteString("test", `
+		if conky_window == nil then
+			return "no_window"
+		end
+		
+		-- Calculate center of text region (common pattern in Conky scripts)
+		local center_x = conky_window.text_start_x + (conky_window.text_width / 2)
+		local center_y = conky_window.text_start_y + (conky_window.text_height / 2)
+		
+		-- Return the calculated center
+		return center_x .. "," .. center_y
+	`)
+	if err != nil {
+		t.Fatalf("Failed to execute: %v", err)
+	}
+
+	// Expected: text_start_x=10, text_width=620, so center_x = 10 + 310 = 320
+	// text_start_y=20, text_height=450, so center_y = 20 + 225 = 245
+	expected := "320,245"
+	if result.AsString() != expected {
+		t.Errorf("Expected center=%s, got %s", expected, result.AsString())
+	}
+}

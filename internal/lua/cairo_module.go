@@ -78,23 +78,73 @@ func (cm *CairoModule) Renderer() *render.CairoRenderer {
 	return cm.renderer
 }
 
+// WindowInfo contains all the fields for the conky_window Lua global table.
+// This matches the original Conky's conky_window table structure.
+type WindowInfo struct {
+	// Core dimensions
+	Width  int // Window width in pixels
+	Height int // Window height in pixels
+
+	// X11 handles (placeholders in Ebiten - for API compatibility)
+	Display  uintptr // X11 Display pointer
+	Drawable uintptr // X11 Drawable handle
+	Visual   uintptr // X11 Visual handle
+
+	// Border settings
+	BorderInnerMargin int // Inner border margin in pixels
+	BorderOuterMargin int // Outer border margin in pixels
+	BorderWidth       int // Border width in pixels
+
+	// Text drawing region
+	TextStartX int // X coordinate where text drawing begins
+	TextStartY int // Y coordinate where text drawing begins
+	TextWidth  int // Width of the text drawing region
+	TextHeight int // Height of the text drawing region
+}
+
 // UpdateWindowInfo updates the conky_window global with current window dimensions.
 // This should be called each frame before Lua drawing hooks are executed.
 func (cm *CairoModule) UpdateWindowInfo(width, height int, display, drawable, visual uintptr) {
-	// Create window table outside the lock
+	info := WindowInfo{
+		Width:    width,
+		Height:   height,
+		Display:  display,
+		Drawable: drawable,
+		Visual:   visual,
+		// Default text region to full window with small margin
+		TextStartX: 10,
+		TextStartY: 20,
+		TextWidth:  width - 20,
+		TextHeight: height - 30,
+	}
+	cm.UpdateWindowInfoFull(info)
+}
+
+// UpdateWindowInfoFull updates the conky_window global with complete window information.
+// This provides full control over all conky_window fields for advanced integrations.
+func (cm *CairoModule) UpdateWindowInfoFull(info WindowInfo) {
 	windowTable := rt.NewTable()
-	windowTable.Set(rt.StringValue("width"), rt.IntValue(int64(width)))
-	windowTable.Set(rt.StringValue("height"), rt.IntValue(int64(height)))
 
-	// These are placeholders for X11 compatibility.
-	// In Ebiten, we don't have direct X11 access, but we provide the fields
-	// so that scripts checking for nil conky_window work correctly.
-	// The actual values are implementation-specific handles.
-	windowTable.Set(rt.StringValue("display"), rt.IntValue(int64(display)))
-	windowTable.Set(rt.StringValue("drawable"), rt.IntValue(int64(drawable)))
-	windowTable.Set(rt.StringValue("visual"), rt.IntValue(int64(visual)))
+	// Core dimensions
+	windowTable.Set(rt.StringValue("width"), rt.IntValue(int64(info.Width)))
+	windowTable.Set(rt.StringValue("height"), rt.IntValue(int64(info.Height)))
 
-	// Use the runtime's public API which handles locking
+	// X11 handles (placeholders for API compatibility)
+	windowTable.Set(rt.StringValue("display"), rt.IntValue(int64(info.Display)))
+	windowTable.Set(rt.StringValue("drawable"), rt.IntValue(int64(info.Drawable)))
+	windowTable.Set(rt.StringValue("visual"), rt.IntValue(int64(info.Visual)))
+
+	// Border settings
+	windowTable.Set(rt.StringValue("border_inner_margin"), rt.IntValue(int64(info.BorderInnerMargin)))
+	windowTable.Set(rt.StringValue("border_outer_margin"), rt.IntValue(int64(info.BorderOuterMargin)))
+	windowTable.Set(rt.StringValue("border_width"), rt.IntValue(int64(info.BorderWidth)))
+
+	// Text drawing region
+	windowTable.Set(rt.StringValue("text_start_x"), rt.IntValue(int64(info.TextStartX)))
+	windowTable.Set(rt.StringValue("text_start_y"), rt.IntValue(int64(info.TextStartY)))
+	windowTable.Set(rt.StringValue("text_width"), rt.IntValue(int64(info.TextWidth)))
+	windowTable.Set(rt.StringValue("text_height"), rt.IntValue(int64(info.TextHeight)))
+
 	cm.runtime.SetGlobal("conky_window", rt.TableValue(windowTable))
 }
 

@@ -3,6 +3,7 @@ package conky
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"io/fs"
 	"sync"
 	"sync/atomic"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/opd-ai/go-conky/internal/config"
 	"github.com/opd-ai/go-conky/internal/monitor"
+	"github.com/opd-ai/go-conky/internal/render"
 )
 
 // defaultUpdateInterval is the default update interval for the monitor and render loop.
@@ -27,7 +29,9 @@ type conkyImpl struct {
 	configFormat  string // Format for reader-based configs
 
 	// Components
-	monitor *monitor.SystemMonitor
+	monitor    *monitor.SystemMonitor
+	gameRunner *gameRunner // For hot-reload support
+	metrics    *Metrics    // Metrics collector
 
 	// State
 	running     atomic.Bool
@@ -81,12 +85,19 @@ func (c *conkyImpl) Start() error {
 	c.running.Store(true)
 	c.startTime = time.Now()
 
+	// Update metrics
+	c.metrics.IncrementStarts()
+	c.metrics.SetRunning(true)
+	c.metrics.SetActiveMonitors(1)
+
 	// Start update loop in goroutine (non-blocking)
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
 		defer c.cleanup()
 		defer c.running.Store(false)
+		defer c.metrics.SetRunning(false)
+		defer c.metrics.SetActiveMonitors(0)
 
 		if c.opts.Headless {
 			// Headless mode: just wait for context cancellation
@@ -142,6 +153,7 @@ func (c *conkyImpl) Stop() error {
 
 	select {
 	case <-done:
+		c.metrics.IncrementStops()
 		return nil
 	case <-time.After(timeout):
 		err := fmt.Errorf("shutdown timeout after %v: some goroutines did not stop", timeout)
@@ -180,8 +192,91 @@ func (c *conkyImpl) Restart() error {
 		return wrappedErr
 	}
 
+	c.metrics.IncrementRestarts()
 	c.emitEvent(EventRestarted, "Instance restarted")
 	return nil
+}
+
+// ReloadConfig reloads the configuration in-place without stopping.
+// This provides seamless hot-reload: the rendering continues uninterrupted
+// while configuration changes take effect immediately.
+func (c *conkyImpl) ReloadConfig() error {
+	if !c.running.Load() {
+		return fmt.Errorf("conky instance not running")
+	}
+
+	if c.configLoader == nil {
+		return fmt.Errorf("no config loader available")
+	}
+
+	// Load the new configuration
+	newCfg, err := c.configLoader()
+	if err != nil {
+		wrappedErr := fmt.Errorf("config reload failed: %w", err)
+		c.notifyError(wrappedErr)
+		return wrappedErr
+	}
+
+	// Update the configuration atomically
+	c.mu.Lock()
+	oldCfg := c.cfg
+	c.cfg = newCfg
+	gameRunner := c.gameRunner
+	c.mu.Unlock()
+
+	// Update the render game if running in GUI mode
+	if gameRunner != nil && gameRunner.game != nil {
+		c.applyConfigToGame(gameRunner.game, newCfg, oldCfg)
+	}
+
+	c.metrics.IncrementConfigReloads()
+	c.emitEvent(EventConfigReloaded, "Configuration reloaded in-place")
+	return nil
+}
+
+// applyConfigToGame updates the game with new configuration values.
+func (c *conkyImpl) applyConfigToGame(game *render.Game, newCfg, oldCfg *config.Config) {
+	// Update text lines from the new template
+	if len(newCfg.Text.Template) > 0 {
+		textColor := newCfg.Colors.Default
+		if textColor == (color.RGBA{}) {
+			textColor = color.RGBA{R: 255, G: 255, B: 255, A: 255}
+		}
+
+		lines := make([]render.TextLine, 0, len(newCfg.Text.Template))
+		y := defaultTextStartY
+		for _, text := range newCfg.Text.Template {
+			lines = append(lines, render.TextLine{
+				Text:  text,
+				X:     defaultTextStartX,
+				Y:     y,
+				Color: textColor,
+			})
+			y += defaultLineHeight
+		}
+		game.SetLines(lines)
+	}
+
+	// Update render config if dimensions or colors changed
+	needsConfigUpdate := false
+	currentConfig := game.Config()
+
+	if newCfg.Window.Width > 0 && newCfg.Window.Width != currentConfig.Width {
+		currentConfig.Width = newCfg.Window.Width
+		needsConfigUpdate = true
+	}
+	if newCfg.Window.Height > 0 && newCfg.Window.Height != currentConfig.Height {
+		currentConfig.Height = newCfg.Window.Height
+		needsConfigUpdate = true
+	}
+	if newCfg.Display.UpdateInterval > 0 && newCfg.Display.UpdateInterval != currentConfig.UpdateInterval {
+		currentConfig.UpdateInterval = newCfg.Display.UpdateInterval
+		needsConfigUpdate = true
+	}
+
+	if needsConfigUpdate {
+		game.SetConfig(currentConfig)
+	}
 }
 
 // IsRunning returns true if the go-conky instance is currently running.
@@ -224,6 +319,13 @@ func (c *conkyImpl) initComponents() error {
 	// Validate config is not nil (should be guaranteed by factory functions)
 	if c.cfg == nil {
 		return fmt.Errorf("configuration is nil")
+	}
+
+	// Initialize metrics (use provided or default)
+	if c.opts.Metrics != nil {
+		c.metrics = c.opts.Metrics
+	} else {
+		c.metrics = DefaultMetrics()
 	}
 
 	// Determine update interval
@@ -277,6 +379,11 @@ func (c *conkyImpl) notifyError(err error) {
 	// Store the error for Status() retrieval
 	c.lastError.Store(err)
 
+	// Update metrics
+	if c.metrics != nil {
+		c.metrics.IncrementErrors()
+	}
+
 	c.mu.RLock()
 	handler := c.errorHandler
 	logger := c.opts.Logger
@@ -302,6 +409,11 @@ func (c *conkyImpl) notifyError(err error) {
 
 // emitEvent sends an event to the event handler if configured.
 func (c *conkyImpl) emitEvent(eventType EventType, message string) {
+	// Update metrics
+	if c.metrics != nil {
+		c.metrics.IncrementEventsEmitted()
+	}
+
 	c.mu.RLock()
 	handler := c.eventHandler
 	c.mu.RUnlock()
@@ -331,4 +443,100 @@ func (c *conkyImpl) emitEvent(eventType EventType, message string) {
 			})
 		}()
 	}
+}
+
+// Health returns a health check result for the Conky instance.
+func (c *conkyImpl) Health() HealthCheck {
+	now := time.Now()
+	components := make(map[string]ComponentHealth)
+
+	// Check running state
+	running := c.running.Load()
+
+	// Calculate uptime
+	var uptime time.Duration
+	c.mu.RLock()
+	if running && !c.startTime.IsZero() {
+		uptime = now.Sub(c.startTime)
+	}
+	c.mu.RUnlock()
+
+	// Check instance component
+	if running {
+		components["instance"] = ComponentHealth{
+			Status:      HealthOK,
+			Message:     "Instance is running",
+			LastUpdated: now,
+		}
+	} else {
+		components["instance"] = ComponentHealth{
+			Status:      HealthUnhealthy,
+			Message:     "Instance is not running",
+			LastUpdated: now,
+		}
+	}
+
+	// Check monitor component
+	if c.monitor != nil && running {
+		components["monitor"] = ComponentHealth{
+			Status:      HealthOK,
+			Message:     fmt.Sprintf("Monitor active, %d updates completed", c.updateCount.Load()),
+			LastUpdated: now,
+		}
+	} else if c.monitor != nil {
+		components["monitor"] = ComponentHealth{
+			Status:      HealthDegraded,
+			Message:     "Monitor initialized but not active",
+			LastUpdated: now,
+		}
+	} else {
+		components["monitor"] = ComponentHealth{
+			Status:      HealthUnhealthy,
+			Message:     "Monitor not initialized",
+			LastUpdated: now,
+		}
+	}
+
+	// Check for errors
+	lastErr := c.getError()
+	if lastErr != nil {
+		components["errors"] = ComponentHealth{
+			Status:      HealthDegraded,
+			Message:     lastErr.Error(),
+			LastUpdated: now,
+		}
+	} else {
+		components["errors"] = ComponentHealth{
+			Status:      HealthOK,
+			Message:     "No recent errors",
+			LastUpdated: now,
+		}
+	}
+
+	// Determine overall status
+	overallStatus := HealthOK
+	var message string
+
+	if !running {
+		overallStatus = HealthUnhealthy
+		message = "Instance is not running"
+	} else if lastErr != nil {
+		overallStatus = HealthDegraded
+		message = "Running with recent errors"
+	} else {
+		message = "All components healthy"
+	}
+
+	return HealthCheck{
+		Status:     overallStatus,
+		Timestamp:  now,
+		Uptime:     uptime,
+		Components: components,
+		Message:    message,
+	}
+}
+
+// Metrics returns the metrics collector for this instance.
+func (c *conkyImpl) Metrics() *Metrics {
+	return c.metrics
 }

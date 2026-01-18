@@ -155,6 +155,19 @@ func (p *LuaConfigParser) extractConfigTable(cfg *Config, table *rt.Table) error
 	if val := getTableBool(table, "own_window_transparent"); val != nil {
 		cfg.Window.Transparent = *val
 	}
+	if val := getTableBool(table, "own_window_argb_visual"); val != nil {
+		cfg.Window.ARGBVisual = *val
+	}
+	if val := getTableInt(table, "own_window_argb_value"); val != nil {
+		// Clamp value to 0-255 range
+		v := *val
+		if v < 0 {
+			v = 0
+		} else if v > 255 {
+			v = 255
+		}
+		cfg.Window.ARGBValue = v
+	}
 
 	// Numeric settings
 	if val := getTableFloat(table, "update_interval"); val != nil {
@@ -205,10 +218,50 @@ func (p *LuaConfigParser) extractConfigTable(cfg *Config, table *rt.Table) error
 		cfg.Window.Alignment = a
 	}
 
+	// Display/rendering settings
+	if val := getTableBool(table, "draw_borders"); val != nil {
+		cfg.Display.DrawBorders = *val
+	}
+	if val := getTableBool(table, "draw_outline"); val != nil {
+		cfg.Display.DrawOutline = *val
+	}
+	if val := getTableBool(table, "draw_shades"); val != nil {
+		cfg.Display.DrawShades = *val
+	}
+	if val := getTableBool(table, "stippled_borders"); val != nil {
+		cfg.Display.StippledBorders = *val
+	}
+	if val := getTableInt(table, "border_width"); val != nil {
+		cfg.Display.BorderWidth = *val
+	}
+	if val := getTableInt(table, "border_inner_margin"); val != nil {
+		cfg.Display.BorderInnerMargin = *val
+	}
+	if val := getTableInt(table, "border_outer_margin"); val != nil {
+		cfg.Display.BorderOuterMargin = *val
+	}
+
+	// Background mode
+	if val := getTableString(table, "background_mode"); val != nil {
+		bm, err := ParseBackgroundMode(*val)
+		if err != nil {
+			return fmt.Errorf("invalid background_mode: %w", err)
+		}
+		cfg.Window.BackgroundMode = bm
+	}
+
+	// Gradient configuration (nested table)
+	if err := p.extractGradient(cfg, table); err != nil {
+		return err
+	}
+
 	// Color settings
 	if err := p.extractColors(cfg, table); err != nil {
 		return err
 	}
+
+	// Template definitions (template0-template9)
+	p.extractTemplates(cfg, table)
 
 	return nil
 }
@@ -240,6 +293,48 @@ func (p *LuaConfigParser) extractColors(cfg *Config, table *rt.Table) error {
 			}
 			*cf.target = c
 		}
+	}
+
+	return nil
+}
+
+// extractGradient extracts gradient configuration from a nested table.
+func (p *LuaConfigParser) extractGradient(cfg *Config, table *rt.Table) error {
+	gradientVal := table.Get(rt.StringValue("gradient"))
+	if gradientVal == rt.NilValue {
+		return nil
+	}
+
+	gradientTable, ok := gradientVal.TryTable()
+	if !ok {
+		return nil // Ignore if not a table
+	}
+
+	// Extract start_color
+	if val := getTableString(gradientTable, "start_color"); val != nil {
+		c, err := parseColor(*val)
+		if err != nil {
+			return fmt.Errorf("invalid gradient start_color: %w", err)
+		}
+		cfg.Window.Gradient.StartColor = c
+	}
+
+	// Extract end_color
+	if val := getTableString(gradientTable, "end_color"); val != nil {
+		c, err := parseColor(*val)
+		if err != nil {
+			return fmt.Errorf("invalid gradient end_color: %w", err)
+		}
+		cfg.Window.Gradient.EndColor = c
+	}
+
+	// Extract direction
+	if val := getTableString(gradientTable, "direction"); val != nil {
+		dir, err := ParseGradientDirection(*val)
+		if err != nil {
+			return fmt.Errorf("invalid gradient direction: %w", err)
+		}
+		cfg.Window.Gradient.Direction = dir
 	}
 
 	return nil
@@ -335,4 +430,18 @@ func getTableInt(table *rt.Table, key string) *int {
 	}
 
 	return nil
+}
+
+// extractTemplates extracts template0-template9 from the conky.config table.
+func (p *LuaConfigParser) extractTemplates(cfg *Config, table *rt.Table) {
+	templateKeys := []string{
+		"template0", "template1", "template2", "template3", "template4",
+		"template5", "template6", "template7", "template8", "template9",
+	}
+
+	for i, key := range templateKeys {
+		if val := getTableString(table, key); val != nil {
+			cfg.Text.Templates[i] = *val
+		}
+	}
 }

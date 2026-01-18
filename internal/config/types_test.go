@@ -351,3 +351,153 @@ func TestConfigCopy(t *testing.T) {
 	// Note: slices are not deep copied by value copy
 	// This is expected Go behavior
 }
+
+func TestBackgroundModeString(t *testing.T) {
+	tests := []struct {
+		mode BackgroundMode
+		want string
+	}{
+		{BackgroundModeSolid, "solid"},
+		{BackgroundModeNone, "none"},
+		{BackgroundModeTransparent, "transparent"},
+		{BackgroundModeGradient, "gradient"},
+		{BackgroundModePseudo, "pseudo"},
+		{BackgroundMode(999), "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := tt.mode.String(); got != tt.want {
+				t.Errorf("BackgroundMode.String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseBackgroundMode(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    BackgroundMode
+		wantErr bool
+	}{
+		{"solid", BackgroundModeSolid, false},
+		{"Solid", BackgroundModeSolid, false},
+		{"SOLID", BackgroundModeSolid, false},
+		{"none", BackgroundModeNone, false},
+		{"None", BackgroundModeNone, false},
+		{"NONE", BackgroundModeNone, false},
+		{"transparent", BackgroundModeTransparent, false},
+		{"Transparent", BackgroundModeTransparent, false},
+		{"gradient", BackgroundModeGradient, false},
+		{"Gradient", BackgroundModeGradient, false},
+		{"GRADIENT", BackgroundModeGradient, false},
+		{"pseudo", BackgroundModePseudo, false},
+		{"Pseudo", BackgroundModePseudo, false},
+		{"PSEUDO", BackgroundModePseudo, false},
+		{"pseudo-transparent", BackgroundModePseudo, false},
+		{"pseudo_transparent", BackgroundModePseudo, false},
+		{"", BackgroundModeSolid, false}, // Empty defaults to solid
+		{"invalid", BackgroundModeSolid, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ParseBackgroundMode(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseBackgroundMode(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ParseBackgroundMode(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGradientDirectionString(t *testing.T) {
+	tests := []struct {
+		dir  GradientDirection
+		want string
+	}{
+		{GradientDirectionVertical, "vertical"},
+		{GradientDirectionHorizontal, "horizontal"},
+		{GradientDirectionDiagonal, "diagonal"},
+		{GradientDirectionRadial, "radial"},
+		{GradientDirection(999), "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := tt.dir.String(); got != tt.want {
+				t.Errorf("GradientDirection.String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseGradientDirection(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    GradientDirection
+		wantErr bool
+	}{
+		{"vertical", GradientDirectionVertical, false},
+		{"Vertical", GradientDirectionVertical, false},
+		{"v", GradientDirectionVertical, false},
+		{"", GradientDirectionVertical, false}, // Empty defaults to vertical
+		{"horizontal", GradientDirectionHorizontal, false},
+		{"Horizontal", GradientDirectionHorizontal, false},
+		{"h", GradientDirectionHorizontal, false},
+		{"diagonal", GradientDirectionDiagonal, false},
+		{"Diagonal", GradientDirectionDiagonal, false},
+		{"d", GradientDirectionDiagonal, false},
+		{"radial", GradientDirectionRadial, false},
+		{"Radial", GradientDirectionRadial, false},
+		{"r", GradientDirectionRadial, false},
+		{"invalid", GradientDirectionVertical, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ParseGradientDirection(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseGradientDirection(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ParseGradientDirection(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGradientConfig(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	gc := GradientConfig{
+		StartColor: startColor,
+		EndColor:   endColor,
+		Direction:  GradientDirectionVertical,
+	}
+
+	if gc.StartColor != startColor {
+		t.Errorf("StartColor = %v, want %v", gc.StartColor, startColor)
+	}
+	if gc.EndColor != endColor {
+		t.Errorf("EndColor = %v, want %v", gc.EndColor, endColor)
+	}
+	if gc.Direction != GradientDirectionVertical {
+		t.Errorf("Direction = %v, want GradientDirectionVertical", gc.Direction)
+	}
+}
+
+func TestDefaultConfigHasBackgroundMode(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Window.BackgroundMode != BackgroundModeSolid {
+		t.Errorf("Default BackgroundMode = %v, want BackgroundModeSolid", cfg.Window.BackgroundMode)
+	}
+	if cfg.Window.BackgroundColour != DefaultBackgroundColour {
+		t.Errorf("Default BackgroundColour = %v, want %v", cfg.Window.BackgroundColour, DefaultBackgroundColour)
+	}
+}

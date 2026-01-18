@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLinuxFilesystemProvider_Mounts(t *testing.T) {
@@ -162,14 +163,274 @@ func TestIsVirtualFS(t *testing.T) {
 }
 
 func TestLinuxFilesystemProvider_Stats(t *testing.T) {
-	// We can't easily test Stats() without actually mounting filesystems,
-	// but we can at least test that it returns an error for non-existent paths
 	provider := &linuxFilesystemProvider{
 		procMountsPath: "/proc/mounts",
 	}
 
-	_, err := provider.Stats("/nonexistent/path/that/does/not/exist")
+	t.Run("non-existent path", func(t *testing.T) {
+		_, err := provider.Stats("/nonexistent/path/that/does/not/exist")
+		if err == nil {
+			t.Error("Stats() should fail for non-existent path")
+		}
+	})
+
+	t.Run("root filesystem", func(t *testing.T) {
+		// Test against root filesystem which always exists
+		stats, err := provider.Stats("/")
+		if err != nil {
+			t.Fatalf("Stats('/') failed: %v", err)
+		}
+
+		// Basic sanity checks
+		if stats.Total == 0 {
+			t.Error("Total should be greater than 0")
+		}
+		if stats.Free > stats.Total {
+			t.Errorf("Free (%d) should not exceed Total (%d)", stats.Free, stats.Total)
+		}
+		if stats.Used > stats.Total {
+			t.Errorf("Used (%d) should not exceed Total (%d)", stats.Used, stats.Total)
+		}
+		if stats.UsedPercent < 0 || stats.UsedPercent > 100 {
+			t.Errorf("UsedPercent should be between 0-100, got %f", stats.UsedPercent)
+		}
+
+		// Verify Used + Free approximately equals Total (allow for reserved blocks)
+		// Reserved blocks for root can cause Used + Free < Total
+		calculatedTotal := stats.Used + stats.Free
+		if calculatedTotal > stats.Total*2 {
+			t.Errorf("Used + Free (%d) is unreasonably high compared to Total (%d)",
+				calculatedTotal, stats.Total)
+		}
+	})
+
+	t.Run("tmp filesystem", func(t *testing.T) {
+		// Test against /tmp which should exist on any Linux system
+		stats, err := provider.Stats("/tmp")
+		if err != nil {
+			t.Fatalf("Stats('/tmp') failed: %v", err)
+		}
+
+		// /tmp might be a tmpfs or regular partition, either way Total should be > 0
+		if stats.Total == 0 {
+			t.Error("Total should be greater than 0 for /tmp")
+		}
+	})
+
+	t.Run("inode statistics", func(t *testing.T) {
+		// Test inode statistics
+		stats, err := provider.Stats("/")
+		if err != nil {
+			t.Fatalf("Stats('/') failed: %v", err)
+		}
+
+		// Root filesystem should have inodes
+		if stats.InodesTotal == 0 {
+			t.Log("InodesTotal is 0 - filesystem may not support inode tracking")
+		}
+		if stats.InodesUsed > stats.InodesTotal && stats.InodesTotal > 0 {
+			t.Errorf("InodesUsed (%d) should not exceed InodesTotal (%d)",
+				stats.InodesUsed, stats.InodesTotal)
+		}
+		if stats.InodesFree > stats.InodesTotal && stats.InodesTotal > 0 {
+			t.Errorf("InodesFree (%d) should not exceed InodesTotal (%d)",
+				stats.InodesFree, stats.InodesTotal)
+		}
+	})
+}
+
+func TestLinuxFilesystemProvider_DiskIO(t *testing.T) {
+	// Create a temporary /proc/diskstats file
+	tmpDir := t.TempDir()
+	diskstatsPath := filepath.Join(tmpDir, "diskstats")
+
+	// Example diskstats content (from Linux kernel documentation)
+	// Format: major minor name reads reads_merged sectors_read read_time writes ...
+	content := `   8       0 sda 139631 11053 4146832 45912 189264 51212 5248152 167292 0 96316 213204
+   8       1 sda1 1234 567 24680 500 890 123 9876 250 0 700 750
+   8      16 sdb 50000 1000 1000000 10000 25000 500 500000 5000 0 15000 15000
+  11       0 sr0 0 0 0 0 0 0 0 0 0 0 0
+`
+	if err := os.WriteFile(diskstatsPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("Failed to write diskstats file: %v", err)
+	}
+
+	provider := &linuxFilesystemProvider{
+		procDiskstatsPath: diskstatsPath,
+	}
+
+	tests := []struct {
+		name       string
+		device     string
+		wantErr    bool
+		wantReads  uint64
+		wantWrites uint64
+	}{
+		{
+			name:       "sda device",
+			device:     "sda",
+			wantErr:    false,
+			wantReads:  139631,
+			wantWrites: 189264,
+		},
+		{
+			name:       "sda1 partition",
+			device:     "sda1",
+			wantErr:    false,
+			wantReads:  1234,
+			wantWrites: 890,
+		},
+		{
+			name:       "sdb device",
+			device:     "sdb",
+			wantErr:    false,
+			wantReads:  50000,
+			wantWrites: 25000,
+		},
+		{
+			name:    "non-existent device",
+			device:  "nvme0n1",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stats, err := provider.DiskIO(tt.device)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("DiskIO() should have returned an error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("DiskIO() failed: %v", err)
+			}
+			if stats.ReadCount != tt.wantReads {
+				t.Errorf("ReadCount = %d, want %d", stats.ReadCount, tt.wantReads)
+			}
+			if stats.WriteCount != tt.wantWrites {
+				t.Errorf("WriteCount = %d, want %d", stats.WriteCount, tt.wantWrites)
+			}
+		})
+	}
+}
+
+func TestLinuxFilesystemProvider_DiskIO_FileNotFound(t *testing.T) {
+	provider := &linuxFilesystemProvider{
+		procDiskstatsPath: "/nonexistent/path/diskstats",
+	}
+
+	_, err := provider.DiskIO("sda")
 	if err == nil {
-		t.Error("Stats() should fail for non-existent path")
+		t.Error("DiskIO() should fail when diskstats file doesn't exist")
+	}
+}
+
+func TestLinuxFilesystemProvider_DiskIO_BytesCalculation(t *testing.T) {
+	// Test that sector-to-byte conversion is correct (512 bytes per sector)
+	tmpDir := t.TempDir()
+	diskstatsPath := filepath.Join(tmpDir, "diskstats")
+
+	// 1000 sectors read, 2000 sectors written
+	// Should be 512000 bytes read, 1024000 bytes written
+	content := `   8       0 sda 100 0 1000 50 200 0 2000 100 0 150 150
+`
+	if err := os.WriteFile(diskstatsPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("Failed to write diskstats file: %v", err)
+	}
+
+	provider := &linuxFilesystemProvider{
+		procDiskstatsPath: diskstatsPath,
+	}
+
+	stats, err := provider.DiskIO("sda")
+	if err != nil {
+		t.Fatalf("DiskIO() failed: %v", err)
+	}
+
+	expectedReadBytes := uint64(1000 * 512)
+	expectedWriteBytes := uint64(2000 * 512)
+
+	if stats.ReadBytes != expectedReadBytes {
+		t.Errorf("ReadBytes = %d, want %d", stats.ReadBytes, expectedReadBytes)
+	}
+	if stats.WriteBytes != expectedWriteBytes {
+		t.Errorf("WriteBytes = %d, want %d", stats.WriteBytes, expectedWriteBytes)
+	}
+}
+
+func TestLinuxFilesystemProvider_DiskIO_TimeConversion(t *testing.T) {
+	// Test that millisecond-to-duration conversion is correct
+	tmpDir := t.TempDir()
+	diskstatsPath := filepath.Join(tmpDir, "diskstats")
+
+	// 1500ms read time, 2500ms write time
+	content := `   8       0 sda 100 0 1000 1500 200 0 2000 2500 0 4000 4000
+`
+	if err := os.WriteFile(diskstatsPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("Failed to write diskstats file: %v", err)
+	}
+
+	provider := &linuxFilesystemProvider{
+		procDiskstatsPath: diskstatsPath,
+	}
+
+	stats, err := provider.DiskIO("sda")
+	if err != nil {
+		t.Fatalf("DiskIO() failed: %v", err)
+	}
+
+	expectedReadTime := time.Duration(1500) * time.Millisecond
+	expectedWriteTime := time.Duration(2500) * time.Millisecond
+
+	if stats.ReadTime != expectedReadTime {
+		t.Errorf("ReadTime = %v, want %v", stats.ReadTime, expectedReadTime)
+	}
+	if stats.WriteTime != expectedWriteTime {
+		t.Errorf("WriteTime = %v, want %v", stats.WriteTime, expectedWriteTime)
+	}
+}
+
+func TestTimeFromMillis(t *testing.T) {
+	tests := []struct {
+		name string
+		ms   uint64
+		want time.Duration
+	}{
+		{
+			name: "zero",
+			ms:   0,
+			want: 0,
+		},
+		{
+			name: "one millisecond",
+			ms:   1,
+			want: time.Millisecond,
+		},
+		{
+			name: "one second",
+			ms:   1000,
+			want: time.Second,
+		},
+		{
+			name: "one minute",
+			ms:   60000,
+			want: time.Minute,
+		},
+		{
+			name: "mixed",
+			ms:   1500,
+			want: 1500 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := timeFromMillis(tt.ms)
+			if got != tt.want {
+				t.Errorf("timeFromMillis(%d) = %v, want %v", tt.ms, got, tt.want)
+			}
+		})
 	}
 }

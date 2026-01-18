@@ -1,0 +1,52 @@
+-- Lua Transparency Configuration Example
+-- Demonstrates all transparency options in modern Lua format
+
+conky.config = {
+    -- Window configuration
+    own_window = true,
+    own_window_type = 'desktop',
+    own_window_transparent = true,
+    own_window_argb_visual = true,
+    own_window_argb_value = 160,  -- 0=fully transparent, 255=opaque
+    
+    -- Window hints for proper desktop integration
+    own_window_hints = 'undecorated,below,sticky,skip_taskbar,skip_pager',
+    
+    -- Position: top-right corner with 20px gap
+    alignment = 'top_right',
+    gap_x = 20,
+    gap_y = 40,
+    
+    -- Size
+    minimum_width = 320,
+    minimum_height = 200,
+    
+    -- Display settings
+    background = true,
+    font = 'DejaVu Sans Mono:size=10',
+    update_interval = 1.0,
+    double_buffer = true,
+    
+    -- Colors
+    default_color = 'ffffff',
+    color0 = '88ccff',  -- Headers
+    color1 = 'aaaaaa',  -- Labels
+    color2 = '00ff88',  -- Good values
+    color3 = 'ff8844',  -- Warning values
+}
+
+conky.text = [[
+${color0}Transparent System Monitor${color}
+${hr 1}
+${color1}CPU:${color} ${cpu}% ${cpubar 6}
+${color1}RAM:${color} ${mem}/${memmax} (${memperc}%)
+${color1}Swap:${color} ${swap}/${swapmax}
+${color1}Disk:${color} ${fs_used /}/${fs_size /}
+${hr 1}
+${color1}Network:${color}
+  Down: ${downspeed eth0}
+  Up:   ${upspeed eth0}
+${hr 1}
+${color1}Uptime:${color} ${uptime_short}
+${color1}Kernel:${color} ${kernel}
+]]

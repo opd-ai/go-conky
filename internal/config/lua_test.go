@@ -169,6 +169,257 @@ conky.text = ''
 	}
 }
 
+// TestLuaConfigParserBackgroundMode tests parsing of background_mode setting.
+func TestLuaConfigParserBackgroundMode(t *testing.T) {
+	tests := []struct {
+		name         string
+		luaCode      string
+		expectedMode BackgroundMode
+	}{
+		{
+			name: "solid mode",
+			luaCode: `conky.config = {
+    background_mode = 'solid'
+}`,
+			expectedMode: BackgroundModeSolid,
+		},
+		{
+			name: "none mode",
+			luaCode: `conky.config = {
+    background_mode = 'none'
+}`,
+			expectedMode: BackgroundModeNone,
+		},
+		{
+			name: "transparent mode",
+			luaCode: `conky.config = {
+    background_mode = 'transparent'
+}`,
+			expectedMode: BackgroundModeTransparent,
+		},
+		{
+			name: "gradient mode",
+			luaCode: `conky.config = {
+    background_mode = 'gradient'
+}`,
+			expectedMode: BackgroundModeGradient,
+		},
+		{
+			name: "pseudo mode",
+			luaCode: `conky.config = {
+    background_mode = 'pseudo'
+}`,
+			expectedMode: BackgroundModePseudo,
+		},
+		{
+			name: "pseudo-transparent mode",
+			luaCode: `conky.config = {
+    background_mode = 'pseudo-transparent'
+}`,
+			expectedMode: BackgroundModePseudo,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := NewLuaConfigParser()
+			if err != nil {
+				t.Fatalf("NewLuaConfigParser failed: %v", err)
+			}
+			defer p.Close()
+
+			cfg, err := p.Parse([]byte(tt.luaCode))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+			if cfg.Window.BackgroundMode != tt.expectedMode {
+				t.Errorf("expected BackgroundMode=%v, got %v", tt.expectedMode, cfg.Window.BackgroundMode)
+			}
+		})
+	}
+}
+
+// TestLuaConfigParserGradient tests parsing of gradient configuration table.
+func TestLuaConfigParserGradient(t *testing.T) {
+	tests := []struct {
+		name              string
+		luaCode           string
+		expectedDirection GradientDirection
+		checkStartColor   bool
+		checkEndColor     bool
+	}{
+		{
+			name: "full gradient config",
+			luaCode: `conky.config = {
+    background_mode = 'gradient',
+    gradient = {
+        start_color = '1a1a3e',
+        end_color = '3e1a3e',
+        direction = 'diagonal',
+    }
+}`,
+			expectedDirection: GradientDirectionDiagonal,
+			checkStartColor:   true,
+			checkEndColor:     true,
+		},
+		{
+			name: "vertical gradient",
+			luaCode: `conky.config = {
+    gradient = {
+        start_color = 'ff0000',
+        end_color = '0000ff',
+        direction = 'vertical',
+    }
+}`,
+			expectedDirection: GradientDirectionVertical,
+			checkStartColor:   true,
+			checkEndColor:     true,
+		},
+		{
+			name: "horizontal gradient",
+			luaCode: `conky.config = {
+    gradient = {
+        start_color = '00ff00',
+        end_color = 'ff00ff',
+        direction = 'horizontal',
+    }
+}`,
+			expectedDirection: GradientDirectionHorizontal,
+			checkStartColor:   true,
+			checkEndColor:     true,
+		},
+		{
+			name: "radial gradient",
+			luaCode: `conky.config = {
+    gradient = {
+        start_color = 'ffffff',
+        end_color = '000000',
+        direction = 'radial',
+    }
+}`,
+			expectedDirection: GradientDirectionRadial,
+			checkStartColor:   true,
+			checkEndColor:     true,
+		},
+		{
+			name: "short direction syntax",
+			luaCode: `conky.config = {
+    gradient = {
+        start_color = 'aabbcc',
+        end_color = 'ddeeff',
+        direction = 'd',
+    }
+}`,
+			expectedDirection: GradientDirectionDiagonal,
+			checkStartColor:   true,
+			checkEndColor:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := NewLuaConfigParser()
+			if err != nil {
+				t.Fatalf("NewLuaConfigParser failed: %v", err)
+			}
+			defer p.Close()
+
+			cfg, err := p.Parse([]byte(tt.luaCode))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+
+			if cfg.Window.Gradient.Direction != tt.expectedDirection {
+				t.Errorf("expected Direction=%v, got %v", tt.expectedDirection, cfg.Window.Gradient.Direction)
+			}
+
+			// Check that start/end colors are non-zero when expected
+			if tt.checkStartColor {
+				if cfg.Window.Gradient.StartColor.R == 0 &&
+					cfg.Window.Gradient.StartColor.G == 0 &&
+					cfg.Window.Gradient.StartColor.B == 0 &&
+					cfg.Window.Gradient.StartColor.A == 0 {
+					t.Error("expected non-zero start color")
+				}
+			}
+			if tt.checkEndColor {
+				if cfg.Window.Gradient.EndColor.R == 0 &&
+					cfg.Window.Gradient.EndColor.G == 0 &&
+					cfg.Window.Gradient.EndColor.B == 0 &&
+					cfg.Window.Gradient.EndColor.A == 0 {
+					t.Error("expected non-zero end color")
+				}
+			}
+		})
+	}
+}
+
+// TestLuaConfigParserGradientErrors tests error handling for invalid gradient configs.
+func TestLuaConfigParserGradientErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		luaCode string
+	}{
+		{
+			name: "invalid gradient direction",
+			luaCode: `conky.config = {
+    gradient = {
+        direction = 'invalid_direction',
+    }
+}`,
+		},
+		{
+			name: "invalid start color",
+			luaCode: `conky.config = {
+    gradient = {
+        start_color = 'not_a_color',
+    }
+}`,
+		},
+		{
+			name: "invalid end color",
+			luaCode: `conky.config = {
+    gradient = {
+        end_color = 'gggggg',
+    }
+}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := NewLuaConfigParser()
+			if err != nil {
+				t.Fatalf("NewLuaConfigParser failed: %v", err)
+			}
+			defer p.Close()
+
+			_, err = p.Parse([]byte(tt.luaCode))
+			if err == nil {
+				t.Error("expected error for invalid gradient config")
+			}
+		})
+	}
+}
+
+// TestLuaConfigParserBackgroundModeError tests error handling for invalid background_mode.
+func TestLuaConfigParserBackgroundModeError(t *testing.T) {
+	p, err := NewLuaConfigParser()
+	if err != nil {
+		t.Fatalf("NewLuaConfigParser failed: %v", err)
+	}
+	defer p.Close()
+
+	luaCode := `conky.config = {
+    background_mode = 'invalid_mode'
+}`
+
+	_, err = p.Parse([]byte(luaCode))
+	if err == nil {
+		t.Error("expected error for invalid background_mode")
+	}
+}
+
 func TestLuaConfigParserAlignment(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -498,5 +749,233 @@ func TestLuaConfigParserClose(t *testing.T) {
 	// Closing again should be safe
 	if err := p.Close(); err != nil {
 		t.Errorf("Second Close failed: %v", err)
+	}
+}
+
+// TestLuaParserTemplates tests parsing of template0-template9 in Lua config.
+func TestLuaParserTemplates(t *testing.T) {
+content := []byte(`
+conky.config = {
+    template0 = "Hello World",
+    template1 = "Core \\1 usage: ${cpu \\1}%",
+    template2 = "FS \\1 is \\2% full",
+    template9 = "Last template with arg \\1",
+}
+conky.text = [[Test]]
+`)
+
+parser, err := NewLuaConfigParser()
+if err != nil {
+t.Fatalf("NewLuaConfigParser failed: %v", err)
+}
+defer parser.Close()
+
+cfg, err := parser.Parse(content)
+if err != nil {
+t.Fatalf("Parse failed: %v", err)
+}
+
+tests := []struct {
+index    int
+expected string
+}{
+{0, "Hello World"},
+{1, "Core \\1 usage: ${cpu \\1}%"},
+{2, "FS \\1 is \\2% full"},
+{3, ""},
+{4, ""},
+{5, ""},
+{6, ""},
+{7, ""},
+{8, ""},
+{9, "Last template with arg \\1"},
+}
+
+for _, tt := range tests {
+t.Run("template"+string(rune('0'+tt.index)), func(t *testing.T) {
+if cfg.Text.Templates[tt.index] != tt.expected {
+t.Errorf("Templates[%d] = %q, want %q", tt.index, cfg.Text.Templates[tt.index], tt.expected)
+}
+})
+}
+}
+
+// TestLuaParserDisplayDirectives tests parsing of display/rendering directives in Lua format.
+func TestLuaParserDisplayDirectives(t *testing.T) {
+	content := []byte(`
+conky.config = {
+    draw_borders = true,
+    draw_outline = true,
+    draw_shades = false,
+    stippled_borders = true,
+    border_width = 3,
+    border_inner_margin = 10,
+    border_outer_margin = 8,
+}
+conky.text = [[Test line]]
+`)
+
+	parser, err := NewLuaConfigParser()
+	if err != nil {
+		t.Fatalf("NewLuaConfigParser failed: %v", err)
+	}
+	defer parser.Close()
+
+	cfg, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		got      interface{}
+		expected interface{}
+	}{
+		{"DrawBorders", cfg.Display.DrawBorders, true},
+		{"DrawOutline", cfg.Display.DrawOutline, true},
+		{"DrawShades", cfg.Display.DrawShades, false},
+		{"StippledBorders", cfg.Display.StippledBorders, true},
+		{"BorderWidth", cfg.Display.BorderWidth, 3},
+		{"BorderInnerMargin", cfg.Display.BorderInnerMargin, 10},
+		{"BorderOuterMargin", cfg.Display.BorderOuterMargin, 8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.expected {
+				t.Errorf("%s = %v, want %v", tt.name, tt.got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestLuaParserDisplayDirectivesDefaults tests default values for display directives.
+func TestLuaParserDisplayDirectivesDefaults(t *testing.T) {
+	content := []byte(`
+conky.config = {
+    background = false,
+}
+conky.text = [[Test line]]
+`)
+
+	parser, err := NewLuaConfigParser()
+	if err != nil {
+		t.Fatalf("NewLuaConfigParser failed: %v", err)
+	}
+	defer parser.Close()
+
+	cfg, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if cfg.Display.DrawBorders != false {
+		t.Errorf("DrawBorders default = %v, want false", cfg.Display.DrawBorders)
+	}
+	if cfg.Display.DrawOutline != false {
+		t.Errorf("DrawOutline default = %v, want false", cfg.Display.DrawOutline)
+	}
+	if cfg.Display.DrawShades != true {
+		t.Errorf("DrawShades default = %v, want true", cfg.Display.DrawShades)
+	}
+	if cfg.Display.StippledBorders != false {
+		t.Errorf("StippledBorders default = %v, want false", cfg.Display.StippledBorders)
+	}
+	if cfg.Display.BorderWidth != 1 {
+		t.Errorf("BorderWidth default = %v, want 1", cfg.Display.BorderWidth)
+	}
+	if cfg.Display.BorderInnerMargin != 5 {
+		t.Errorf("BorderInnerMargin default = %v, want 5", cfg.Display.BorderInnerMargin)
+	}
+	if cfg.Display.BorderOuterMargin != 5 {
+		t.Errorf("BorderOuterMargin default = %v, want 5", cfg.Display.BorderOuterMargin)
+	}
+}
+
+func TestLuaParserARGBSettings(t *testing.T) {
+	tests := []struct {
+		name           string
+		luaCode        string
+		expectedVisual bool
+		expectedValue  int
+	}{
+		{
+			name: "argb visual enabled",
+			luaCode: `conky.config = {
+    own_window_argb_visual = true
+}`,
+			expectedVisual: true,
+			expectedValue:  255, // default
+		},
+		{
+			name: "argb visual disabled",
+			luaCode: `conky.config = {
+    own_window_argb_visual = false
+}`,
+			expectedVisual: false,
+			expectedValue:  255, // default
+		},
+		{
+			name: "argb value set",
+			luaCode: `conky.config = {
+    own_window_argb_value = 128
+}`,
+			expectedVisual: false, // default
+			expectedValue:  128,
+		},
+		{
+			name: "both argb settings",
+			luaCode: `conky.config = {
+    own_window_argb_visual = true,
+    own_window_argb_value = 200
+}`,
+			expectedVisual: true,
+			expectedValue:  200,
+		},
+		{
+			name: "argb value zero (fully transparent)",
+			luaCode: `conky.config = {
+    own_window_argb_value = 0
+}`,
+			expectedVisual: false,
+			expectedValue:  0,
+		},
+		{
+			name: "argb value clamped to max",
+			luaCode: `conky.config = {
+    own_window_argb_value = 300
+}`,
+			expectedVisual: false,
+			expectedValue:  255, // clamped
+		},
+		{
+			name: "argb value clamped to min",
+			luaCode: `conky.config = {
+    own_window_argb_value = -10
+}`,
+			expectedVisual: false,
+			expectedValue:  0, // clamped
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := NewLuaConfigParser()
+			if err != nil {
+				t.Fatalf("NewLuaConfigParser failed: %v", err)
+			}
+			defer p.Close()
+
+			cfg, err := p.Parse([]byte(tt.luaCode))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+			if cfg.Window.ARGBVisual != tt.expectedVisual {
+				t.Errorf("expected ARGBVisual=%v, got %v", tt.expectedVisual, cfg.Window.ARGBVisual)
+			}
+			if cfg.Window.ARGBValue != tt.expectedValue {
+				t.Errorf("expected ARGBValue=%d, got %d", tt.expectedValue, cfg.Window.ARGBValue)
+			}
+		})
 	}
 }

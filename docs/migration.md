@@ -99,7 +99,7 @@ ${color0}Uptime:$color ${uptime}
 Conky-Go includes a migration tool to convert legacy configurations to Lua format:
 
 ```bash
-# Convert a legacy config to Lua (future feature)
+# Convert a legacy config to Lua format
 ./conky-go --convert ~/.conkyrc > ~/.config/conky/conky.conf
 ```
 
@@ -219,6 +219,139 @@ Conky-Go supports the most commonly used Conky variables:
 | `${execi interval command}` | Execute command with caching | `${execi 60 sensors \| grep temp}` |
 | `${execpi interval command}` | Cached execution (parsed) | `${execpi 30 echo ${cpu}%}` |
 
+### Stock Quotes
+
+The `${stockquote}` variable is **not implemented** in Conky-Go. Stock data APIs (Yahoo Finance, Alpha Vantage, IEX Cloud, etc.) require API keys, have usage limits, and their terms of service change frequently. This makes a built-in implementation impractical.
+
+**Recommended Approach:** Use `${execi}` with a custom script:
+
+```bash
+# Create a script: ~/.config/conky/scripts/stock.sh
+#!/bin/bash
+# Example using curl and a free API (API key required)
+# Replace YOUR_API_KEY with an actual key from your chosen provider
+
+SYMBOL="${1:-AAPL}"
+API_KEY="YOUR_API_KEY"
+
+# Example with Alpha Vantage (free tier available)
+curl -s "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${SYMBOL}&apikey=${API_KEY}" | \
+    jq -r '.["Global Quote"]["05. price"]'
+```
+
+Then use in your configuration:
+
+```
+${execi 300 ~/.config/conky/scripts/stock.sh AAPL}
+```
+
+**Popular Stock API Providers:**
+- **Alpha Vantage**: Free tier with 5 requests/minute, 500/day
+- **IEX Cloud**: Free tier with 50,000 credits/month
+- **Finnhub**: Free tier with 60 API calls/minute
+- **Yahoo Finance** (via yfinance Python library): Unofficial, no key required
+
+**Example with yfinance (Python):**
+
+```bash
+# Install: pip install yfinance
+# Script: ~/.config/conky/scripts/stock_yf.py
+#!/usr/bin/env python3
+import sys
+import yfinance as yf
+
+symbol = sys.argv[1] if len(sys.argv) > 1 else "AAPL"
+stock = yf.Ticker(symbol)
+info = stock.info
+print(f"{info.get('regularMarketPrice', 'N/A')}")
+```
+
+Usage: `${execi 300 python3 ~/.config/conky/scripts/stock_yf.py AAPL}`
+
+### APCUPSD (UPS Monitoring)
+
+The `${apcupsd_*}` variables are **not implemented** in Conky-Go. APCUPSD is a daemon for monitoring APC UPS (Uninterruptible Power Supply) devices, and implementing a full client would require:
+
+- Network communication with the APCUPSD daemon (NIS protocol)
+- Handling various UPS models and their different data formats
+- Maintaining connection state and reconnection logic
+- Complex parsing of the apcaccess output format
+
+**Unsupported Variables:**
+- `${apcupsd}` - General UPS status
+- `${apcupsd_model}` - UPS model name
+- `${apcupsd_status}` - UPS status (ONLINE/ONBATT)
+- `${apcupsd_linev}` - Line voltage
+- `${apcupsd_load}` - UPS load percentage
+- `${apcupsd_charge}` - Battery charge percentage
+- `${apcupsd_timeleft}` - Estimated runtime on battery
+- `${apcupsd_temp}` - UPS internal temperature
+- And other apcupsd_* variants
+
+**Recommended Approach:** Use `${execi}` with `apcaccess` (the APCUPSD command-line client):
+
+```bash
+# Show UPS model
+${execi 60 apcaccess -p MODEL 2>/dev/null || echo "N/A"}
+
+# Show UPS status (ONLINE, ONBATT, etc.)
+${execi 10 apcaccess -p STATUS 2>/dev/null || echo "N/A"}
+
+# Show line voltage
+${execi 30 apcaccess -p LINEV 2>/dev/null | cut -d' ' -f1}
+
+# Show load percentage
+${execi 30 apcaccess -p LOADPCT 2>/dev/null | cut -d' ' -f1}
+
+# Show battery charge
+${execi 30 apcaccess -p BCHARGE 2>/dev/null | cut -d' ' -f1}
+
+# Show time remaining on battery
+${execi 30 apcaccess -p TIMELEFT 2>/dev/null | cut -d' ' -f1}
+
+# Show UPS temperature
+${execi 60 apcaccess -p ITEMP 2>/dev/null | cut -d' ' -f1}
+```
+
+**Example Configuration Section:**
+
+```
+# UPS Monitoring (requires apcupsd and apcaccess)
+${color grey}UPS Status:${color}
+ Model:    ${execi 300 apcaccess -p MODEL 2>/dev/null || echo "N/A"}
+ Status:   ${execi 10 apcaccess -p STATUS 2>/dev/null || echo "N/A"}
+ Load:     ${execi 30 apcaccess -p LOADPCT 2>/dev/null | cut -d' ' -f1}%
+ Battery:  ${execi 30 apcaccess -p BCHARGE 2>/dev/null | cut -d' ' -f1}%
+ Runtime:  ${execi 30 apcaccess -p TIMELEFT 2>/dev/null}
+```
+
+**Alternative: Create a Helper Script:**
+
+```bash
+#!/bin/bash
+# ~/.config/conky/scripts/ups.sh
+# Usage: ups.sh <field>
+# Fields: model, status, linev, load, charge, timeleft, temp
+
+FIELD="${1:-status}"
+VALUE=$(apcaccess -p "$FIELD" 2>/dev/null)
+
+if [ -z "$VALUE" ]; then
+    echo "N/A"
+else
+    echo "$VALUE" | cut -d' ' -f1
+fi
+```
+
+Usage: `${execi 30 ~/.config/conky/scripts/ups.sh load}%`
+
+**Why Not Implemented:**
+1. **Niche Use Case**: Most users don't have APC UPS devices
+2. **Dependency**: Requires APCUPSD daemon to be running
+3. **Network Protocol**: Would need to implement NIS (Network Information Server) protocol
+4. **Maintenance Burden**: Different UPS models report different data fields
+5. **Simple Alternative**: `apcaccess` command provides all needed data via `${execi}`
+
 ### Formatting
 
 | Variable | Description |
@@ -291,6 +424,16 @@ function conky_main()
 end
 ```
 
+### Clipping Limitations
+
+**Important:** Cairo clipping functions (`cairo_clip`, `cairo_clip_preserve`, `cairo_reset_clip`) are implemented for API compatibility, but clipping is **not currently enforced** during drawing operations. This means:
+
+- Calling `cairo_clip()` will record the clip region without errors
+- Subsequent drawing operations will **not be restricted** to the clip area
+- Scripts using clipping will execute successfully but may produce incorrect visual output
+
+If your Conky scripts rely on clipping for complex drawings or masking effects, the visual results may differ from the original Conky behavior. This is a known limitation of the Ebiten-based rendering engine.
+
 ### Resource Limits
 
 Conky-Go enforces resource limits on Lua scripts for security:
@@ -319,6 +462,39 @@ Conky-Go uses [Ebiten](https://github.com/hajimehoshi/ebiten) instead of Cairo f
 - **Cairo functions** are translated to Ebiten equivalents
 - **Most drawing operations** work identically
 - **Some advanced Cairo features** may have slight visual differences
+
+### conky_window Table
+
+The `conky_window` global table is available in Lua scripts, but with important differences from the original Conky:
+
+| Field | Status | Notes |
+|-------|--------|-------|
+| `width` | ✅ Supported | Window width in pixels |
+| `height` | ✅ Supported | Window height in pixels |
+| `drawable` | ⚠️ Placeholder | Returns a stub value (not a real X11 drawable) |
+| `display` | ⚠️ Placeholder | Returns a stub value (not a real X11 display pointer) |
+| `visual` | ⚠️ Placeholder | Returns a stub value (not a real X11 visual) |
+| `text_start_x` | ✅ Supported | X coordinate where text drawing begins |
+| `text_start_y` | ✅ Supported | Y coordinate where text drawing begins |
+| `text_width` | ✅ Supported | Width of the text drawing region |
+| `text_height` | ✅ Supported | Height of the text drawing region |
+
+**Why are `drawable`, `display`, and `visual` placeholders?**
+
+Conky-Go uses Ebiten for rendering, which abstracts away the underlying graphics system (X11, Wayland, etc.). This means there is no direct X11 drawable or display pointer to expose. The placeholder values allow existing scripts to execute without errors, but the values cannot be used for direct X11 operations.
+
+**Compatibility Note:**
+
+Most Conky Lua scripts use these fields only to pass to `cairo_xlib_surface_create()`, which Conky-Go intercepts and handles internally. The following pattern works correctly:
+
+```lua
+-- This works in Conky-Go despite placeholder values
+local cs = cairo_xlib_surface_create(conky_window.display,
+    conky_window.drawable, conky_window.visual,
+    conky_window.width, conky_window.height)
+```
+
+Scripts that try to use `drawable`, `display`, or `visual` for direct X11 manipulation will not work as expected. If you have such scripts, consider refactoring to use only Cairo drawing functions, which are fully supported.
 
 ### Font Handling
 

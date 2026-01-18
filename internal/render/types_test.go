@@ -148,3 +148,267 @@ func TestConfigValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultConfigDisplayEffects(t *testing.T) {
+	config := DefaultConfig()
+
+	// Test new display effect defaults
+	if config.DrawBorders {
+		t.Error("DrawBorders should be false by default")
+	}
+	if config.DrawOutline {
+		t.Error("DrawOutline should be false by default")
+	}
+	if config.DrawShades {
+		t.Error("DrawShades should be false by default")
+	}
+	if config.BorderWidth != 1 {
+		t.Errorf("BorderWidth = %d, want 1", config.BorderWidth)
+	}
+	if config.BorderInnerMargin != 5 {
+		t.Errorf("BorderInnerMargin = %d, want 5", config.BorderInnerMargin)
+	}
+	if config.BorderOuterMargin != 5 {
+		t.Errorf("BorderOuterMargin = %d, want 5", config.BorderOuterMargin)
+	}
+	if config.StippledBorders {
+		t.Error("StippledBorders should be false by default")
+	}
+
+	// Test default colors
+	if config.BorderColor != (color.RGBA{R: 255, G: 255, B: 255, A: 255}) {
+		t.Errorf("BorderColor = %v, want white", config.BorderColor)
+	}
+	if config.OutlineColor != (color.RGBA{R: 0, G: 0, B: 0, A: 255}) {
+		t.Errorf("OutlineColor = %v, want black", config.OutlineColor)
+	}
+	if config.ShadeColor != (color.RGBA{R: 0, G: 0, B: 0, A: 128}) {
+		t.Errorf("ShadeColor = %v, want dark gray with 50%% alpha", config.ShadeColor)
+	}
+}
+
+func TestConfigDisplayEffectsCustomValues(t *testing.T) {
+	config := Config{
+		Width:             800,
+		Height:            600,
+		DrawBorders:       true,
+		DrawOutline:       true,
+		DrawShades:        true,
+		BorderWidth:       3,
+		BorderInnerMargin: 10,
+		BorderOuterMargin: 15,
+		StippledBorders:   true,
+		BorderColor:       color.RGBA{R: 255, G: 0, B: 0, A: 255},
+		OutlineColor:      color.RGBA{R: 0, G: 255, B: 0, A: 255},
+		ShadeColor:        color.RGBA{R: 0, G: 0, B: 255, A: 200},
+	}
+
+	if !config.DrawBorders {
+		t.Error("DrawBorders should be true")
+	}
+	if !config.DrawOutline {
+		t.Error("DrawOutline should be true")
+	}
+	if !config.DrawShades {
+		t.Error("DrawShades should be true")
+	}
+	if config.BorderWidth != 3 {
+		t.Errorf("BorderWidth = %d, want 3", config.BorderWidth)
+	}
+	if config.BorderInnerMargin != 10 {
+		t.Errorf("BorderInnerMargin = %d, want 10", config.BorderInnerMargin)
+	}
+	if config.BorderOuterMargin != 15 {
+		t.Errorf("BorderOuterMargin = %d, want 15", config.BorderOuterMargin)
+	}
+	if !config.StippledBorders {
+		t.Error("StippledBorders should be true")
+	}
+	if config.BorderColor.R != 255 {
+		t.Errorf("BorderColor.R = %d, want 255", config.BorderColor.R)
+	}
+	if config.OutlineColor.G != 255 {
+		t.Errorf("OutlineColor.G = %d, want 255", config.OutlineColor.G)
+	}
+	if config.ShadeColor.B != 255 {
+		t.Errorf("ShadeColor.B = %d, want 255", config.ShadeColor.B)
+	}
+}
+
+func TestDefaultConfigARGBSettings(t *testing.T) {
+	config := DefaultConfig()
+
+	// Test ARGB transparency defaults
+	if config.Transparent {
+		t.Error("Transparent should be false by default")
+	}
+	if config.ARGBVisual {
+		t.Error("ARGBVisual should be false by default")
+	}
+	if config.ARGBValue != 255 {
+		t.Errorf("ARGBValue = %d, want 255 (fully opaque)", config.ARGBValue)
+	}
+}
+
+func TestConfigARGBCustomValues(t *testing.T) {
+	tests := []struct {
+		name        string
+		transparent bool
+		argbVisual  bool
+		argbValue   int
+	}{
+		{
+			name:        "transparency enabled",
+			transparent: true,
+			argbVisual:  false,
+			argbValue:   255,
+		},
+		{
+			name:        "argb visual enabled",
+			transparent: false,
+			argbVisual:  true,
+			argbValue:   128,
+		},
+		{
+			name:        "both enabled with semi-transparent",
+			transparent: true,
+			argbVisual:  true,
+			argbValue:   100,
+		},
+		{
+			name:        "fully transparent",
+			transparent: true,
+			argbVisual:  true,
+			argbValue:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Width:       400,
+				Height:      300,
+				Transparent: tt.transparent,
+				ARGBVisual:  tt.argbVisual,
+				ARGBValue:   tt.argbValue,
+			}
+
+			if config.Transparent != tt.transparent {
+				t.Errorf("Transparent = %v, want %v", config.Transparent, tt.transparent)
+			}
+			if config.ARGBVisual != tt.argbVisual {
+				t.Errorf("ARGBVisual = %v, want %v", config.ARGBVisual, tt.argbVisual)
+			}
+			if config.ARGBValue != tt.argbValue {
+				t.Errorf("ARGBValue = %d, want %d", config.ARGBValue, tt.argbValue)
+			}
+		})
+	}
+}
+
+func TestDefaultConfigWindowHints(t *testing.T) {
+	config := DefaultConfig()
+
+	// Test window hints defaults
+	if config.Undecorated {
+		t.Error("Undecorated should be false by default")
+	}
+	if config.Floating {
+		t.Error("Floating should be false by default")
+	}
+	if config.WindowX != -1 {
+		t.Errorf("WindowX = %d, want -1 (system default)", config.WindowX)
+	}
+	if config.WindowY != -1 {
+		t.Errorf("WindowY = %d, want -1 (system default)", config.WindowY)
+	}
+	if config.SkipTaskbar {
+		t.Error("SkipTaskbar should be false by default")
+	}
+	if config.SkipPager {
+		t.Error("SkipPager should be false by default")
+	}
+}
+
+func TestConfigWindowHintsCustomValues(t *testing.T) {
+	tests := []struct {
+		name        string
+		undecorated bool
+		floating    bool
+		windowX     int
+		windowY     int
+		skipTaskbar bool
+		skipPager   bool
+	}{
+		{
+			name:        "undecorated only",
+			undecorated: true,
+			floating:    false,
+			windowX:     -1,
+			windowY:     -1,
+			skipTaskbar: false,
+			skipPager:   false,
+		},
+		{
+			name:        "floating only",
+			undecorated: false,
+			floating:    true,
+			windowX:     -1,
+			windowY:     -1,
+			skipTaskbar: false,
+			skipPager:   false,
+		},
+		{
+			name:        "desktop widget style",
+			undecorated: true,
+			floating:    true,
+			windowX:     100,
+			windowY:     50,
+			skipTaskbar: true,
+			skipPager:   true,
+		},
+		{
+			name:        "positioned window",
+			undecorated: false,
+			floating:    false,
+			windowX:     0,
+			windowY:     0,
+			skipTaskbar: false,
+			skipPager:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Width:       400,
+				Height:      300,
+				Undecorated: tt.undecorated,
+				Floating:    tt.floating,
+				WindowX:     tt.windowX,
+				WindowY:     tt.windowY,
+				SkipTaskbar: tt.skipTaskbar,
+				SkipPager:   tt.skipPager,
+			}
+
+			if config.Undecorated != tt.undecorated {
+				t.Errorf("Undecorated = %v, want %v", config.Undecorated, tt.undecorated)
+			}
+			if config.Floating != tt.floating {
+				t.Errorf("Floating = %v, want %v", config.Floating, tt.floating)
+			}
+			if config.WindowX != tt.windowX {
+				t.Errorf("WindowX = %d, want %d", config.WindowX, tt.windowX)
+			}
+			if config.WindowY != tt.windowY {
+				t.Errorf("WindowY = %d, want %d", config.WindowY, tt.windowY)
+			}
+			if config.SkipTaskbar != tt.skipTaskbar {
+				t.Errorf("SkipTaskbar = %v, want %v", config.SkipTaskbar, tt.skipTaskbar)
+			}
+			if config.SkipPager != tt.skipPager {
+				t.Errorf("SkipPager = %v, want %v", config.SkipPager, tt.skipPager)
+			}
+		})
+	}
+}

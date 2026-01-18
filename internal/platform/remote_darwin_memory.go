@@ -8,18 +8,25 @@ import (
 
 // remoteDarwinMemoryProvider collects memory metrics from remote macOS systems via SSH.
 type remoteDarwinMemoryProvider struct {
-	platform *sshPlatform
+	runner commandRunner
 }
 
 func newRemoteDarwinMemoryProvider(p *sshPlatform) *remoteDarwinMemoryProvider {
 	return &remoteDarwinMemoryProvider{
-		platform: p,
+		runner: p,
+	}
+}
+
+// newTestableRemoteDarwinMemoryProviderWithRunner creates a provider with an injectable runner for testing.
+func newTestableRemoteDarwinMemoryProviderWithRunner(runner commandRunner) *remoteDarwinMemoryProvider {
+	return &remoteDarwinMemoryProvider{
+		runner: runner,
 	}
 }
 
 func (m *remoteDarwinMemoryProvider) Stats() (*MemoryStats, error) {
 	// Get total memory
-	totalOutput, err := m.platform.runCommand("sysctl -n hw.memsize")
+	totalOutput, err := m.runner.runCommand("sysctl -n hw.memsize")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read total memory: %w", err)
 	}
@@ -30,7 +37,7 @@ func (m *remoteDarwinMemoryProvider) Stats() (*MemoryStats, error) {
 	}
 
 	// Get memory statistics from vm_stat
-	output, err := m.platform.runCommand("vm_stat")
+	output, err := m.runner.runCommand("vm_stat")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read vm_stat: %w", err)
 	}
@@ -96,7 +103,7 @@ func (m *remoteDarwinMemoryProvider) Stats() (*MemoryStats, error) {
 }
 
 func (m *remoteDarwinMemoryProvider) SwapStats() (*SwapStats, error) {
-	output, err := m.platform.runCommand("sysctl -n vm.swapusage")
+	output, err := m.runner.runCommand("sysctl -n vm.swapusage")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read swap usage: %w", err)
 	}

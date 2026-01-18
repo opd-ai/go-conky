@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"image/color"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,13 @@ type WindowConfig struct {
 	Type WindowType
 	// Transparent enables window transparency.
 	Transparent bool
+	// ARGBVisual enables 32-bit ARGB visual for true transparency.
+	// Requires a compositor (e.g., compton, picom) to be running.
+	ARGBVisual bool
+	// ARGBValue sets the alpha value for ARGB transparency (0-255).
+	// 0 is fully transparent, 255 is fully opaque.
+	// Only effective when ARGBVisual is true.
+	ARGBValue int
 	// Hints contains window manager hints (undecorated, below, sticky, etc.).
 	Hints []WindowHint
 	// Width is the minimum window width in pixels.
@@ -42,6 +50,16 @@ type WindowConfig struct {
 	Y int
 	// Alignment specifies window alignment on screen.
 	Alignment Alignment
+	// BackgroundMode specifies how the window background is rendered.
+	// Default is BackgroundModeSolid.
+	BackgroundMode BackgroundMode
+	// BackgroundColour is the custom background color when BackgroundMode is solid.
+	// This corresponds to the own_window_colour Conky setting.
+	// If not set (zero value), uses the default semi-transparent black.
+	BackgroundColour color.RGBA
+	// Gradient contains gradient configuration when BackgroundMode is gradient.
+	// Only used when BackgroundMode is BackgroundModeGradient.
+	Gradient GradientConfig
 }
 
 // DisplayConfig holds display and rendering settings.
@@ -56,12 +74,29 @@ type DisplayConfig struct {
 	Font string
 	// FontSize is the default font size in points.
 	FontSize float64
+	// DrawBorders enables drawing borders around the window.
+	DrawBorders bool
+	// DrawOutline enables drawing outline around text.
+	DrawOutline bool
+	// DrawShades enables drawing shades (shadows) behind text.
+	DrawShades bool
+	// BorderWidth is the width of borders in pixels.
+	BorderWidth int
+	// BorderInnerMargin is the inner margin between border and content in pixels.
+	BorderInnerMargin int
+	// BorderOuterMargin is the outer margin between window edge and border in pixels.
+	BorderOuterMargin int
+	// StippledBorders enables stippled (dashed) border effect.
+	StippledBorders bool
 }
 
 // TextConfig holds text template and formatting settings.
 type TextConfig struct {
 	// Template contains the text template lines.
 	Template []string
+	// Templates contains the template0-template9 definitions.
+	// Templates can use \1, \2, etc. as argument placeholders.
+	Templates [10]string
 }
 
 // ColorConfig holds color definitions.
@@ -272,4 +307,118 @@ func ParseAlignment(s string) (Alignment, error) {
 // For detailed validation results including warnings, use NewValidator().Validate().
 func (c *Config) Validate() error {
 	return ValidateConfig(c)
+}
+
+// BackgroundMode specifies how the window background is rendered.
+type BackgroundMode int
+
+const (
+	// BackgroundModeSolid draws a solid background color.
+	// This is the default mode when transparency is not enabled.
+	BackgroundModeSolid BackgroundMode = iota
+	// BackgroundModeNone draws no background (fully transparent).
+	// Useful for true transparency with a compositor.
+	BackgroundModeNone
+	// BackgroundModeTransparent is an alias for BackgroundModeNone.
+	// It indicates the window should be fully transparent.
+	BackgroundModeTransparent
+	// BackgroundModeGradient draws a gradient background.
+	// Uses GradientColours for start/end colors and GradientDirection for direction.
+	BackgroundModeGradient
+	// BackgroundModePseudo uses a cached screenshot of the desktop as the background.
+	// This provides fake transparency when a compositor is not available.
+	// The screenshot is taken at startup and can be refreshed on demand.
+	BackgroundModePseudo
+)
+
+// String returns the string representation of a BackgroundMode.
+func (bm BackgroundMode) String() string {
+	switch bm {
+	case BackgroundModeSolid:
+		return "solid"
+	case BackgroundModeNone:
+		return "none"
+	case BackgroundModeTransparent:
+		return "transparent"
+	case BackgroundModeGradient:
+		return "gradient"
+	case BackgroundModePseudo:
+		return "pseudo"
+	default:
+		return "unknown"
+	}
+}
+
+// ParseBackgroundMode parses a string into a BackgroundMode.
+func ParseBackgroundMode(s string) (BackgroundMode, error) {
+	switch strings.ToLower(s) {
+	case "solid", "":
+		return BackgroundModeSolid, nil
+	case "none":
+		return BackgroundModeNone, nil
+	case "transparent":
+		return BackgroundModeTransparent, nil
+	case "gradient":
+		return BackgroundModeGradient, nil
+	case "pseudo", "pseudo-transparent", "pseudo_transparent":
+		return BackgroundModePseudo, nil
+	default:
+		return BackgroundModeSolid, fmt.Errorf("unknown background mode: %s", s)
+	}
+}
+
+// GradientDirection specifies the direction of a gradient.
+type GradientDirection int
+
+const (
+	// GradientDirectionVertical renders gradient from top to bottom.
+	GradientDirectionVertical GradientDirection = iota
+	// GradientDirectionHorizontal renders gradient from left to right.
+	GradientDirectionHorizontal
+	// GradientDirectionDiagonal renders gradient from top-left to bottom-right.
+	GradientDirectionDiagonal
+	// GradientDirectionRadial renders gradient from center outward.
+	GradientDirectionRadial
+)
+
+// String returns the string representation of a GradientDirection.
+func (gd GradientDirection) String() string {
+	switch gd {
+	case GradientDirectionVertical:
+		return "vertical"
+	case GradientDirectionHorizontal:
+		return "horizontal"
+	case GradientDirectionDiagonal:
+		return "diagonal"
+	case GradientDirectionRadial:
+		return "radial"
+	default:
+		return "unknown"
+	}
+}
+
+// ParseGradientDirection parses a string into a GradientDirection.
+func ParseGradientDirection(s string) (GradientDirection, error) {
+	switch strings.ToLower(s) {
+	case "vertical", "v", "":
+		return GradientDirectionVertical, nil
+	case "horizontal", "h":
+		return GradientDirectionHorizontal, nil
+	case "diagonal", "d":
+		return GradientDirectionDiagonal, nil
+	case "radial", "r":
+		return GradientDirectionRadial, nil
+	default:
+		return GradientDirectionVertical, fmt.Errorf("unknown gradient direction: %s", s)
+	}
+}
+
+// GradientConfig holds configuration for gradient backgrounds.
+type GradientConfig struct {
+	// StartColor is the beginning color of the gradient.
+	StartColor color.RGBA
+	// EndColor is the ending color of the gradient.
+	EndColor color.RGBA
+	// Direction specifies how the gradient is oriented.
+	Direction GradientDirection
 }

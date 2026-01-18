@@ -2,8 +2,14 @@ package platform
 
 import (
 	"context"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func TestNewSSHPlatform(t *testing.T) {
@@ -285,5 +291,416 @@ func TestCommandInjectionPrevention(t *testing.T) {
 				t.Errorf("validatePath(%q) = %v, expected %v", tt.input, isValid, !tt.shouldErr)
 			}
 		})
+	}
+}
+
+// TestBuildHostKeyCallback tests the host key verification callback building logic.
+func TestBuildHostKeyCallback(t *testing.T) {
+	tests := []struct {
+		name      string
+		config    RemoteConfig
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name: "custom callback takes precedence",
+			config: RemoteConfig{
+				Host:       "example.com",
+				User:       "testuser",
+				AuthMethod: PasswordAuth{Password: "testpass"},
+				HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+					return nil
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "insecure mode with explicit flag",
+			config: RemoteConfig{
+				Host:                  "example.com",
+				User:                  "testuser",
+				AuthMethod:            PasswordAuth{Password: "testpass"},
+				InsecureIgnoreHostKey: true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "nonexistent known_hosts file",
+			config: RemoteConfig{
+				Host:           "example.com",
+				User:           "testuser",
+				AuthMethod:     PasswordAuth{Password: "testpass"},
+				KnownHostsPath: "/nonexistent/path/known_hosts",
+			},
+			wantErr:   true,
+			errSubstr: "known_hosts file not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := newSSHPlatform(tt.config)
+			if err != nil {
+				t.Fatalf("newSSHPlatform() error = %v", err)
+			}
+
+			callback, err := p.buildHostKeyCallback()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("buildHostKeyCallback() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errSubstr != "" {
+				if !strings.Contains(err.Error(), tt.errSubstr) {
+					t.Errorf("buildHostKeyCallback() error = %v, want error containing %q", err, tt.errSubstr)
+				}
+			}
+			if !tt.wantErr && callback == nil {
+				t.Errorf("buildHostKeyCallback() returned nil callback without error")
+			}
+		})
+	}
+}
+
+// TestBuildHostKeyCallbackWithValidKnownHosts tests known_hosts file reading.
+func TestBuildHostKeyCallbackWithValidKnownHosts(t *testing.T) {
+	// Create a temporary known_hosts file
+	tmpDir := t.TempDir()
+	knownHostsPath := filepath.Join(tmpDir, "known_hosts")
+
+	// Write a valid known_hosts entry using ed25519 key
+	// This is a valid OpenSSH public key format
+	knownHostsContent := "example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBaLR4I4jx/L5oqjNBl0r/QJLCC0BFmPdCLzU4mQD8vS\n"
+	if err := os.WriteFile(knownHostsPath, []byte(knownHostsContent), 0600); err != nil {
+		t.Fatalf("Failed to write known_hosts file: %v", err)
+	}
+
+	config := RemoteConfig{
+		Host:           "example.com",
+		User:           "testuser",
+		AuthMethod:     PasswordAuth{Password: "testpass"},
+		KnownHostsPath: knownHostsPath,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	callback, err := p.buildHostKeyCallback()
+	if err != nil {
+		t.Errorf("buildHostKeyCallback() error = %v", err)
+	}
+	if callback == nil {
+		t.Errorf("buildHostKeyCallback() returned nil callback")
+	}
+}
+
+// TestRemoteConfigHostKeyFields tests that the new host key fields are properly set.
+func TestRemoteConfigHostKeyFields(t *testing.T) {
+	// Test with InsecureIgnoreHostKey
+	config := RemoteConfig{
+		Host:                  "example.com",
+		User:                  "testuser",
+		AuthMethod:            PasswordAuth{Password: "testpass"},
+		InsecureIgnoreHostKey: true,
+	}
+
+	if !config.InsecureIgnoreHostKey {
+		t.Error("InsecureIgnoreHostKey should be true")
+	}
+
+	// Test with KnownHostsPath
+	config = RemoteConfig{
+		Host:           "example.com",
+		User:           "testuser",
+		AuthMethod:     PasswordAuth{Password: "testpass"},
+		KnownHostsPath: "/custom/path/known_hosts",
+	}
+
+	if config.KnownHostsPath != "/custom/path/known_hosts" {
+		t.Errorf("KnownHostsPath = %v, want /custom/path/known_hosts", config.KnownHostsPath)
+	}
+
+	// Test with custom HostKeyCallback
+	customCallback := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		return nil
+	}
+
+	config = RemoteConfig{
+		Host:            "example.com",
+		User:            "testuser",
+		AuthMethod:      PasswordAuth{Password: "testpass"},
+		HostKeyCallback: customCallback,
+	}
+
+	if config.HostKeyCallback == nil {
+		t.Error("HostKeyCallback should not be nil")
+	}
+}
+
+// TestCircuitBreakerEnabled tests that circuit breaker is enabled by default.
+func TestCircuitBreakerEnabled(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	if p.circuitBreaker == nil {
+		t.Error("Circuit breaker should be enabled by default")
+	}
+}
+
+// TestCircuitBreakerDisabled tests that circuit breaker can be disabled.
+func TestCircuitBreakerDisabled(t *testing.T) {
+	enabled := false
+	config := RemoteConfig{
+		Host:                  "example.com",
+		User:                  "testuser",
+		AuthMethod:            PasswordAuth{Password: "testpass"},
+		CircuitBreakerEnabled: &enabled,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	if p.circuitBreaker != nil {
+		t.Error("Circuit breaker should be disabled when CircuitBreakerEnabled is false")
+	}
+}
+
+// TestCircuitBreakerConfig tests custom circuit breaker configuration.
+func TestCircuitBreakerConfig(t *testing.T) {
+	config := RemoteConfig{
+		Host:                           "example.com",
+		User:                           "testuser",
+		AuthMethod:                     PasswordAuth{Password: "testpass"},
+		CircuitBreakerFailureThreshold: 10,
+		CircuitBreakerTimeout:          1 * time.Minute,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	if p.circuitBreaker == nil {
+		t.Fatal("Circuit breaker should be enabled")
+	}
+
+	stats := p.CircuitBreakerStats()
+	if stats == nil {
+		t.Fatal("CircuitBreakerStats() should return non-nil stats")
+	}
+
+	// Verify the circuit breaker is in closed state initially
+	if stats.State.String() != "closed" {
+		t.Errorf("Initial state = %v, want closed", stats.State)
+	}
+}
+
+// TestCircuitBreakerStats tests that stats are returned correctly.
+func TestCircuitBreakerStats(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	stats := p.CircuitBreakerStats()
+	if stats == nil {
+		t.Fatal("CircuitBreakerStats() should return non-nil stats")
+	}
+
+	// Check initial stats
+	if stats.TotalFailures != 0 {
+		t.Errorf("Initial TotalFailures = %d, want 0", stats.TotalFailures)
+	}
+	if stats.TotalSuccesses != 0 {
+		t.Errorf("Initial TotalSuccesses = %d, want 0", stats.TotalSuccesses)
+	}
+}
+
+// TestCircuitBreakerStatsNil tests that stats are nil when circuit breaker is disabled.
+func TestCircuitBreakerStatsNil(t *testing.T) {
+	enabled := false
+	config := RemoteConfig{
+		Host:                  "example.com",
+		User:                  "testuser",
+		AuthMethod:            PasswordAuth{Password: "testpass"},
+		CircuitBreakerEnabled: &enabled,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	stats := p.CircuitBreakerStats()
+	if stats != nil {
+		t.Error("CircuitBreakerStats() should return nil when circuit breaker is disabled")
+	}
+}
+
+// TestResetCircuitBreaker tests the circuit breaker reset functionality.
+func TestResetCircuitBreaker(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Reset should not panic
+	p.ResetCircuitBreaker()
+
+	// Verify still closed
+	stats := p.CircuitBreakerStats()
+	if stats.State.String() != "closed" {
+		t.Errorf("State after reset = %v, want closed", stats.State)
+	}
+}
+
+// TestResetCircuitBreakerWhenDisabled tests reset with disabled circuit breaker.
+func TestResetCircuitBreakerWhenDisabled(t *testing.T) {
+	enabled := false
+	config := RemoteConfig{
+		Host:                  "example.com",
+		User:                  "testuser",
+		AuthMethod:            PasswordAuth{Password: "testpass"},
+		CircuitBreakerEnabled: &enabled,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Reset should not panic when circuit breaker is disabled
+	p.ResetCircuitBreaker()
+}
+
+// TestConnectionManagementConfig tests the new connection management configuration fields.
+func TestConnectionManagementConfig(t *testing.T) {
+	config := RemoteConfig{
+		Host:                  "example.com",
+		User:                  "testuser",
+		AuthMethod:            PasswordAuth{Password: "testpass"},
+		KeepAliveInterval:     1 * time.Minute,
+		KeepAliveTimeout:      30 * time.Second,
+		MaxReconnectAttempts:  10,
+		InitialReconnectDelay: 5 * time.Second,
+		MaxReconnectDelay:     10 * time.Minute,
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Verify config was stored
+	if p.config.KeepAliveInterval != 1*time.Minute {
+		t.Errorf("KeepAliveInterval = %v, want 1m", p.config.KeepAliveInterval)
+	}
+	if p.config.MaxReconnectAttempts != 10 {
+		t.Errorf("MaxReconnectAttempts = %v, want 10", p.config.MaxReconnectAttempts)
+	}
+}
+
+// TestConnectionStateMethod tests the ConnectionState method.
+func TestConnectionStateMethod(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Before initialization, should be disconnected
+	state := p.ConnectionState()
+	if state != ConnectionStateDisconnected {
+		t.Errorf("ConnectionState() = %v, want disconnected", state)
+	}
+}
+
+// TestIsConnectionHealthyMethod tests the IsConnectionHealthy method.
+func TestIsConnectionHealthyMethod(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Before initialization, should not be healthy
+	if p.IsConnectionHealthy() {
+		t.Error("IsConnectionHealthy() should be false before initialization")
+	}
+}
+
+// TestConnectionStatsNil tests that ConnectionStats returns nil before initialization.
+func TestConnectionStatsNil(t *testing.T) {
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Before initialization, connManager is nil
+	stats := p.ConnectionStats()
+	if stats != nil {
+		t.Error("ConnectionStats() should be nil before initialization")
+	}
+}
+
+// TestOnConnectionStateChangeCallback tests the state change callback configuration.
+func TestOnConnectionStateChangeCallback(t *testing.T) {
+	var stateChanges []struct{ from, to ConnectionState }
+
+	config := RemoteConfig{
+		Host:       "example.com",
+		User:       "testuser",
+		AuthMethod: PasswordAuth{Password: "testpass"},
+		OnConnectionStateChange: func(from, to ConnectionState) {
+			stateChanges = append(stateChanges, struct{ from, to ConnectionState }{from, to})
+		},
+	}
+
+	p, err := newSSHPlatform(config)
+	if err != nil {
+		t.Fatalf("newSSHPlatform() error = %v", err)
+	}
+
+	// Verify callback was stored in config
+	if p.config.OnConnectionStateChange == nil {
+		t.Error("OnConnectionStateChange should not be nil")
 	}
 }

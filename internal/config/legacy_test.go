@@ -593,3 +593,271 @@ func TestParseWindowHints(t *testing.T) {
 		})
 	}
 }
+
+// TestLegacyParserTemplates tests parsing of template0-template9 directives.
+func TestLegacyParserTemplates(t *testing.T) {
+content := []byte(`
+template0 Hello World
+template1 Core \1 usage: ${cpu \1}%
+template2 FS \1 is \2% full
+template9 Last template with arg \1
+
+TEXT
+Test line
+`)
+
+parser := NewLegacyParser()
+cfg, err := parser.Parse(content)
+if err != nil {
+t.Fatalf("Parse failed: %v", err)
+}
+
+tests := []struct {
+index    int
+expected string
+}{
+{0, "Hello World"},
+{1, "Core \\1 usage: ${cpu \\1}%"},
+{2, "FS \\1 is \\2% full"},
+{3, ""},
+{4, ""},
+{5, ""},
+{6, ""},
+{7, ""},
+{8, ""},
+{9, "Last template with arg \\1"},
+}
+
+for _, tt := range tests {
+t.Run("template"+string(rune('0'+tt.index)), func(t *testing.T) {
+if cfg.Text.Templates[tt.index] != tt.expected {
+t.Errorf("Templates[%d] = %q, want %q", tt.index, cfg.Text.Templates[tt.index], tt.expected)
+}
+})
+}
+}
+
+// TestLegacyParserDisplayDirectives tests parsing of display/rendering directives.
+func TestLegacyParserDisplayDirectives(t *testing.T) {
+	content := []byte(`draw_borders yes
+draw_outline yes
+draw_shades no
+stippled_borders yes
+border_width 3
+border_inner_margin 10
+border_outer_margin 8
+
+TEXT
+Test line
+`)
+
+	parser := NewLegacyParser()
+	cfg, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		got      interface{}
+		expected interface{}
+	}{
+		{"DrawBorders", cfg.Display.DrawBorders, true},
+		{"DrawOutline", cfg.Display.DrawOutline, true},
+		{"DrawShades", cfg.Display.DrawShades, false},
+		{"StippledBorders", cfg.Display.StippledBorders, true},
+		{"BorderWidth", cfg.Display.BorderWidth, 3},
+		{"BorderInnerMargin", cfg.Display.BorderInnerMargin, 10},
+		{"BorderOuterMargin", cfg.Display.BorderOuterMargin, 8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.expected {
+				t.Errorf("%s = %v, want %v", tt.name, tt.got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestLegacyParserDisplayDirectivesDefaults tests default values for display directives.
+func TestLegacyParserDisplayDirectivesDefaults(t *testing.T) {
+	content := []byte(`background no
+
+TEXT
+Test line
+`)
+
+	parser := NewLegacyParser()
+	cfg, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if cfg.Display.DrawBorders != false {
+		t.Errorf("DrawBorders default = %v, want false", cfg.Display.DrawBorders)
+	}
+	if cfg.Display.DrawOutline != false {
+		t.Errorf("DrawOutline default = %v, want false", cfg.Display.DrawOutline)
+	}
+	if cfg.Display.DrawShades != true {
+		t.Errorf("DrawShades default = %v, want true", cfg.Display.DrawShades)
+	}
+	if cfg.Display.StippledBorders != false {
+		t.Errorf("StippledBorders default = %v, want false", cfg.Display.StippledBorders)
+	}
+	if cfg.Display.BorderWidth != 1 {
+		t.Errorf("BorderWidth default = %v, want 1", cfg.Display.BorderWidth)
+	}
+	if cfg.Display.BorderInnerMargin != 5 {
+		t.Errorf("BorderInnerMargin default = %v, want 5", cfg.Display.BorderInnerMargin)
+	}
+	if cfg.Display.BorderOuterMargin != 5 {
+		t.Errorf("BorderOuterMargin default = %v, want 5", cfg.Display.BorderOuterMargin)
+	}
+}
+
+// TestLegacyParserDisplayDirectivesInvalidValues tests error handling for invalid directive values.
+func TestLegacyParserDisplayDirectivesInvalidValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{"invalid border_width", "border_width abc"},
+		{"invalid border_inner_margin", "border_inner_margin xyz"},
+		{"invalid border_outer_margin", "border_outer_margin not_a_number"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewLegacyParser()
+			_, err := parser.Parse([]byte(tt.content))
+			if err == nil {
+				t.Errorf("expected error for %s, got nil", tt.name)
+			}
+		})
+	}
+}
+
+func TestLegacyParserARGBSettings(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expectedVisual bool
+		expectedValue  int
+	}{
+		{
+			name:           "argb visual enabled",
+			input:          "own_window_argb_visual yes",
+			expectedVisual: true,
+			expectedValue:  255, // default
+		},
+		{
+			name:           "argb visual disabled",
+			input:          "own_window_argb_visual no",
+			expectedVisual: false,
+			expectedValue:  255, // default
+		},
+		{
+			name:           "argb value set",
+			input:          "own_window_argb_value 128",
+			expectedVisual: false, // default
+			expectedValue:  128,
+		},
+		{
+			name: "both argb settings",
+			input: `own_window_argb_visual yes
+own_window_argb_value 200`,
+			expectedVisual: true,
+			expectedValue:  200,
+		},
+		{
+			name:           "argb value zero (fully transparent)",
+			input:          "own_window_argb_value 0",
+			expectedVisual: false,
+			expectedValue:  0,
+		},
+		{
+			name:           "argb value clamped to max",
+			input:          "own_window_argb_value 300",
+			expectedVisual: false,
+			expectedValue:  255, // clamped
+		},
+		{
+			name:           "argb value clamped to min",
+			input:          "own_window_argb_value -10",
+			expectedVisual: false,
+			expectedValue:  0, // clamped
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewLegacyParser()
+			cfg, err := p.Parse([]byte(tt.input))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+			if cfg.Window.ARGBVisual != tt.expectedVisual {
+				t.Errorf("expected ARGBVisual=%v, got %v", tt.expectedVisual, cfg.Window.ARGBVisual)
+			}
+			if cfg.Window.ARGBValue != tt.expectedValue {
+				t.Errorf("expected ARGBValue=%d, got %d", tt.expectedValue, cfg.Window.ARGBValue)
+			}
+		})
+	}
+}
+
+func TestLegacyParserOwnWindowColour(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected color.RGBA
+		wantErr  bool
+	}{
+		{
+			name:     "own_window_colour hex",
+			input:    "own_window_colour 1a2b3c",
+			expected: color.RGBA{R: 0x1a, G: 0x2b, B: 0x3c, A: 255},
+			wantErr:  false,
+		},
+		{
+			name:     "own_window_colour with hash",
+			input:    "own_window_colour #ff5500",
+			expected: color.RGBA{R: 255, G: 85, B: 0, A: 255},
+			wantErr:  false,
+		},
+		{
+			name:     "own_window_colour named",
+			input:    "own_window_colour black",
+			expected: color.RGBA{R: 0, G: 0, B: 0, A: 255},
+			wantErr:  false,
+		},
+		{
+			name:     "own_window_color US spelling",
+			input:    "own_window_color white",
+			expected: color.RGBA{R: 255, G: 255, B: 255, A: 255},
+			wantErr:  false,
+		},
+		{
+			name:     "own_window_colour invalid",
+			input:    "own_window_colour gggggg",
+			expected: color.RGBA{},
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewLegacyParser()
+			cfg, err := p.Parse([]byte(tt.input))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && cfg.Window.BackgroundColour != tt.expected {
+				t.Errorf("BackgroundColour = %v, want %v", cfg.Window.BackgroundColour, tt.expected)
+			}
+		})
+	}
+}

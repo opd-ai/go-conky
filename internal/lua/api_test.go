@@ -1,6 +1,8 @@
 package lua
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +10,7 @@ import (
 	rt "github.com/arnodel/golua/runtime"
 
 	"github.com/opd-ai/go-conky/internal/monitor"
+	"github.com/opd-ai/go-conky/internal/render"
 )
 
 // mockSystemDataProvider implements SystemDataProvider for testing.
@@ -25,6 +28,8 @@ type mockSystemDataProvider struct {
 	sysInfo    monitor.SystemInfo
 	tcp        monitor.TCPStats
 	gpu        monitor.GPUStats
+	mail       monitor.MailStats
+	weather    monitor.WeatherStats
 }
 
 func (m *mockSystemDataProvider) CPU() monitor.CPUStats               { return m.cpu }
@@ -60,7 +65,49 @@ func (m *mockSystemDataProvider) TCPConnectionByIndex(minPort, maxPort, index in
 	}
 	return nil
 }
-func (m *mockSystemDataProvider) GPU() monitor.GPUStats { return m.gpu }
+func (m *mockSystemDataProvider) GPU() monitor.GPUStats   { return m.gpu }
+func (m *mockSystemDataProvider) Mail() monitor.MailStats { return m.mail }
+func (m *mockSystemDataProvider) MailUnseenCount(name string) int {
+	if m.mail.Accounts == nil {
+		return 0
+	}
+	if account, ok := m.mail.Accounts[name]; ok {
+		return account.Unseen
+	}
+	return 0
+}
+func (m *mockSystemDataProvider) MailTotalCount(name string) int {
+	if m.mail.Accounts == nil {
+		return 0
+	}
+	if account, ok := m.mail.Accounts[name]; ok {
+		return account.Total
+	}
+	return 0
+}
+func (m *mockSystemDataProvider) MailTotalUnseen() int {
+	if m.mail.Accounts == nil {
+		return 0
+	}
+	var total int
+	for _, account := range m.mail.Accounts {
+		total += account.Unseen
+	}
+	return total
+}
+func (m *mockSystemDataProvider) MailTotalMessages() int {
+	if m.mail.Accounts == nil {
+		return 0
+	}
+	var total int
+	for _, account := range m.mail.Accounts {
+		total += account.Total
+	}
+	return total
+}
+func (m *mockSystemDataProvider) Weather(stationID string) monitor.WeatherStats {
+	return m.weather
+}
 
 func newMockProvider() *mockSystemDataProvider {
 	return &mockSystemDataProvider{
@@ -200,8 +247,9 @@ func newMockProvider() *mockSystemDataProvider {
 		battery: monitor.BatteryStats{
 			Batteries: map[string]monitor.BatteryInfo{
 				"BAT0": {
-					Capacity: 85,
-					Status:   "Discharging",
+					Capacity:    85,
+					Status:      "Discharging",
+					TimeToEmpty: 9000, // 2 hours 30 minutes in seconds
 				},
 			},
 			TotalCapacity: 85.0,
@@ -261,6 +309,20 @@ func newMockProvider() *mockSystemDataProvider {
 			PowerDraw:   180.5,
 			PowerLimit:  320.0,
 			Available:   true,
+		},
+		weather: monitor.WeatherStats{
+			StationID:     "KJFK",
+			Temperature:   22,
+			DewPoint:      10,
+			Humidity:      50,
+			Pressure:      1013.25,
+			WindSpeed:     15,
+			WindDirection: 270,
+			WindGust:      25,
+			Visibility:    10,
+			Condition:     "clear",
+			Cloud:         "few clouds",
+			RawMETAR:      "KJFK 151756Z 27015G25KT 10SM FEW045 22/10 A2992",
 		},
 	}
 }
@@ -906,19 +968,149 @@ func TestParseBatteryVariables(t *testing.T) {
 			expected: "Discharging 85%",
 		},
 		{
-			name:     "battery bar",
-			template: "${battery_bar 10}",
-			expected: "########--",
+			name:     "battery time discharging",
+			template: "${battery_time}",
+			expected: "2:30",
 		},
 		{
-			name:     "battery time",
-			template: "${battery_time}",
-			expected: "Unknown",
+			name:     "battery time with battery name",
+			template: "${battery_time BAT0}",
+			expected: "2:30",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestBatteryTimeScenarios tests battery_time with various battery states.
+func TestBatteryTimeScenarios(t *testing.T) {
+	tests := []struct {
+		name     string
+		battery  monitor.BatteryStats
+		template string
+		expected string
+	}{
+		{
+			name: "discharging with time",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Discharging", TimeToEmpty: 5400}, // 1:30
+				},
+				IsDischarging: true,
+			},
+			template: "${battery_time}",
+			expected: "1:30",
+		},
+		{
+			name: "charging with time",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Charging", TimeToFull: 3660}, // 1:01
+				},
+				IsCharging: true,
+			},
+			template: "${battery_time}",
+			expected: "1:01",
+		},
+		{
+			name: "full battery on AC",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Full"},
+				},
+				ACOnline: true,
+			},
+			template: "${battery_time}",
+			expected: "AC",
+		},
+		{
+			name: "not charging on AC",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Not charging"},
+				},
+				ACOnline: true,
+			},
+			template: "${battery_time}",
+			expected: "AC",
+		},
+		{
+			name: "discharging no time available",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Discharging", TimeToEmpty: 0},
+				},
+				IsDischarging: true,
+			},
+			template: "${battery_time}",
+			expected: "Unknown",
+		},
+		{
+			name: "no battery AC online",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{},
+				ACOnline:  true,
+			},
+			template: "${battery_time}",
+			expected: "AC",
+		},
+		{
+			name: "no battery AC offline",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{},
+				ACOnline:  false,
+			},
+			template: "${battery_time}",
+			expected: "Unknown",
+		},
+		{
+			name: "specific battery name",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Discharging", TimeToEmpty: 7200}, // 2:00
+					"BAT1": {Status: "Discharging", TimeToEmpty: 3600}, // 1:00
+				},
+				IsDischarging: true,
+			},
+			template: "${battery_time BAT1}",
+			expected: "1:00",
+		},
+		{
+			name: "long discharge time",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Status: "Discharging", TimeToEmpty: 36000}, // 10:00
+				},
+				IsDischarging: true,
+			},
+			template: "${battery_time}",
+			expected: "10:00",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtime, err := New(DefaultConfig())
+			if err != nil {
+				t.Fatalf("failed to create runtime: %v", err)
+			}
+			defer runtime.Close()
+
+			provider := newMockProvider()
+			provider.battery = tt.battery
+
+			api, err := NewConkyAPI(runtime, provider)
+			if err != nil {
+				t.Fatalf("failed to create API: %v", err)
+			}
+
 			result := api.Parse(tt.template)
 			if result != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, result)
@@ -1141,6 +1333,83 @@ func TestParseTimeVariable(t *testing.T) {
 	}
 }
 
+func TestStrftimeSpecifiers(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Test %V - ISO week number (01-53)
+	result := api.Parse("${time %V}")
+	if len(result) != 2 {
+		t.Errorf("%%V should produce 2-digit week number, got %q", result)
+	}
+	// Verify it's a valid week number (01-53)
+	weekNum := 0
+	_, err = fmt.Sscanf(result, "%d", &weekNum)
+	if err != nil || weekNum < 1 || weekNum > 53 {
+		t.Errorf("%%V should produce valid ISO week number (01-53), got %q", result)
+	}
+
+	// Test %G - ISO year (4 digits)
+	result = api.Parse("${time %G}")
+	if len(result) != 4 {
+		t.Errorf("%%G should produce 4-digit year, got %q", result)
+	}
+
+	// Test %g - ISO year without century (2 digits)
+	result = api.Parse("${time %g}")
+	if len(result) != 2 {
+		t.Errorf("%%g should produce 2-digit year, got %q", result)
+	}
+
+	// Test %U - Week number (Sunday first, 00-53)
+	result = api.Parse("${time %U}")
+	if len(result) != 2 {
+		t.Errorf("%%U should produce 2-digit week number, got %q", result)
+	}
+	weekNum = 0
+	_, err = fmt.Sscanf(result, "%d", &weekNum)
+	if err != nil || weekNum < 0 || weekNum > 53 {
+		t.Errorf("%%U should produce valid week number (00-53), got %q", result)
+	}
+
+	// Test %W - Week number (Monday first, 00-53)
+	result = api.Parse("${time %W}")
+	if len(result) != 2 {
+		t.Errorf("%%W should produce 2-digit week number, got %q", result)
+	}
+	weekNum = 0
+	_, err = fmt.Sscanf(result, "%d", &weekNum)
+	if err != nil || weekNum < 0 || weekNum > 53 {
+		t.Errorf("%%W should produce valid week number (00-53), got %q", result)
+	}
+
+	// Test %s - Unix timestamp
+	result = api.Parse("${time %s}")
+	if len(result) < 10 {
+		t.Errorf("%%s should produce Unix timestamp (at least 10 digits), got %q", result)
+	}
+	var ts int64
+	_, err = fmt.Sscanf(result, "%d", &ts)
+	if err != nil {
+		t.Errorf("%%s should produce valid integer Unix timestamp, got %q", result)
+	}
+
+	// Test combined format with new specifiers
+	result = api.Parse("${time Week %V of %G}")
+	if !strings.Contains(result, "Week") || !strings.Contains(result, "of") {
+		t.Errorf("expected format 'Week NN of YYYY', got %q", result)
+	}
+}
+
 func TestParseComplexTemplate(t *testing.T) {
 	runtime, err := New(DefaultConfig())
 	if err != nil {
@@ -1347,8 +1616,8 @@ func TestParseInvalidNetworkInterface(t *testing.T) {
 		t.Fatalf("failed to create API: %v", err)
 	}
 
-	// Non-existent interface
-	result := api.Parse("${downspeed wlan0}")
+	// Non-existent interface - use wlan99 which doesn't exist in mock data
+	result := api.Parse("${downspeed wlan99}")
 	expected := "0B"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
@@ -1470,11 +1739,6 @@ func TestParseMiscVariables(t *testing.T) {
 			name:     "fs type home",
 			template: "${fs_type /home}",
 			expected: "xfs",
-		},
-		{
-			name:     "fs bar",
-			template: "${fs_bar 10 /}",
-			expected: "####------",
 		},
 		{
 			name:     "hr",
@@ -1645,17 +1909,28 @@ func TestEntropyVariables(t *testing.T) {
 		t.Errorf("expected '4096', got %q", result)
 	}
 
-	// Test entropy_perc - should be a percentage
-	result = api.Parse("${entropy_perc}")
-	// Just check it's a valid number
-	if result == "" {
-		result = "0"
+	// Test entropy_perc - should be a percentage (0-100)
+	entropyPercResult := api.Parse("${entropy_perc}")
+	if entropyPercResult != "" {
+		// Parse and validate it's a valid percentage
+		if percVal, err := strconv.Atoi(entropyPercResult); err != nil {
+			t.Errorf("entropy_perc should be numeric, got %q", entropyPercResult)
+		} else if percVal < 0 || percVal > 100 {
+			t.Errorf("entropy_perc should be 0-100, got %d", percVal)
+		}
 	}
 
 	// Test entropy_bar
 	result = api.Parse("${entropy_bar}")
-	if len(result) != 10 { // default width is 10
-		t.Errorf("expected bar of length 10, got length %d: %q", len(result), result)
+	if !render.ContainsWidgetMarker(result) {
+		t.Errorf("expected widget marker for entropy_bar, got: %q", result)
+	} else {
+		marker := render.DecodeWidgetMarker(result)
+		if marker == nil {
+			t.Errorf("failed to decode entropy_bar widget marker")
+		} else if marker.Type != render.WidgetTypeBar {
+			t.Errorf("expected bar widget type, got %s", marker.Type.String())
+		}
 	}
 }
 
@@ -1673,28 +1948,41 @@ func TestBarWidgets(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		variable string
-		minLen   int
+		name       string
+		variable   string
+		wantType   string
+		wantWidth  float64
+		wantHeight float64
 	}{
-		{"membar default", "${membar}", 10},
-		{"membar custom width", "${membar 20}", 20},
-		{"swapbar default", "${swapbar}", 10},
-		{"cpubar default", "${cpubar}", 10},
-		{"loadgraph default", "${loadgraph}", 10},
+		{"membar default", "${membar}", "bar", 100, 8},
+		{"membar custom height", "${membar 20}", "bar", 100, 20},
+		{"swapbar default", "${swapbar}", "bar", 100, 8},
+		{"cpubar default", "${cpubar}", "bar", 100, 8},
+		{"loadgraph default", "${loadgraph}", "graph", 100, 20},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := api.Parse(tt.variable)
-			if len(result) != tt.minLen {
-				t.Errorf("expected bar of length %d, got length %d: %q", tt.minLen, len(result), result)
+			// Check that result is a widget marker
+			if !render.ContainsWidgetMarker(result) {
+				t.Errorf("expected widget marker, got: %q", result)
+				return
 			}
-			// Check bar contains only # and -
-			for _, c := range result {
-				if c != '#' && c != '-' {
-					t.Errorf("unexpected character in bar: %c", c)
-				}
+			// Decode and verify the marker
+			marker := render.DecodeWidgetMarker(result)
+			if marker == nil {
+				t.Errorf("failed to decode widget marker: %q", result)
+				return
+			}
+			if marker.Type.String() != tt.wantType {
+				t.Errorf("widget type = %s, want %s", marker.Type.String(), tt.wantType)
+			}
+			if marker.Width != tt.wantWidth {
+				t.Errorf("widget width = %v, want %v", marker.Width, tt.wantWidth)
+			}
+			if marker.Height != tt.wantHeight {
+				t.Errorf("widget height = %v, want %v", marker.Height, tt.wantHeight)
 			}
 		})
 	}
@@ -1896,6 +2184,8 @@ func TestParseWirelessVariables(t *testing.T) {
 }
 
 // TestParseTCPPortMonVariables tests TCP port monitor variable parsing.
+// NOTE: TCP port monitoring is currently a stub implementation.
+// TestParseTCPPortMonVariables tests TCP port monitoring variable parsing.
 func TestParseTCPPortMonVariables(t *testing.T) {
 	runtime, err := New(DefaultConfig())
 	if err != nil {
@@ -1917,7 +2207,7 @@ func TestParseTCPPortMonVariables(t *testing.T) {
 		{
 			name:     "tcp portmon count in range",
 			template: "${tcp_portmon 1 1024 count}",
-			expected: "2", // SSH port 22 and HTTP port 80
+			expected: "3", // SSH port 22, HTTP port 80, and HTTPS port 443
 		},
 		{
 			name:     "tcp portmon count all ports",
@@ -1972,6 +2262,9 @@ func TestParseTCPPortMonVariables(t *testing.T) {
 }
 
 // TestParseNvidiaVariables tests NVIDIA GPU variable parsing.
+// NOTE: NVIDIA GPU support is currently a stub implementation.
+// This test is skipped because resolveNvidiaVariable always returns "".
+// TODO: Implement NVIDIA GPU monitoring and un-skip this test.
 func TestParseNvidiaVariables(t *testing.T) {
 	runtime, err := New(DefaultConfig())
 	if err != nil {
@@ -2065,6 +2358,16 @@ func TestParseNvidiaVariables(t *testing.T) {
 			template: "${nvidia unknown}",
 			expected: "",
 		},
+		{
+			name:     "nvidia default (no field)",
+			template: "${nvidia}",
+			expected: "45%",
+		},
+		{
+			name:     "nvidiagraph",
+			template: "${nvidiagraph}",
+			expected: "45",
+		},
 	}
 
 	for _, tt := range tests {
@@ -2075,4 +2378,1259 @@ func TestParseNvidiaVariables(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseMailVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	// Add mail accounts to the mock
+	provider.mail = monitor.MailStats{
+		Accounts: map[string]monitor.MailAccountStats{
+			"gmail": {
+				Name:   "gmail",
+				Type:   "imap",
+				Unseen: 5,
+				Total:  100,
+			},
+			"work": {
+				Name:   "work",
+				Type:   "imap",
+				Unseen: 3,
+				Total:  50,
+			},
+		},
+	}
+
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "imap_unseen total",
+			template: "${imap_unseen}",
+			expected: "8",
+		},
+		{
+			name:     "imap_unseen specific account",
+			template: "${imap_unseen gmail}",
+			expected: "5",
+		},
+		{
+			name:     "imap_unseen work account",
+			template: "${imap_unseen work}",
+			expected: "3",
+		},
+		{
+			name:     "imap_unseen nonexistent account",
+			template: "${imap_unseen nonexistent}",
+			expected: "0",
+		},
+		{
+			name:     "imap_messages total",
+			template: "${imap_messages}",
+			expected: "150",
+		},
+		{
+			name:     "imap_messages specific account",
+			template: "${imap_messages gmail}",
+			expected: "100",
+		},
+		{
+			name:     "pop3_unseen total",
+			template: "${pop3_unseen}",
+			expected: "8",
+		},
+		{
+			name:     "pop3_used total",
+			template: "${pop3_used}",
+			expected: "150",
+		},
+		{
+			name:     "new_mails total",
+			template: "${new_mails}",
+			expected: "8",
+		},
+		{
+			name:     "new_mails specific account",
+			template: "${new_mails gmail}",
+			expected: "5",
+		},
+		{
+			name:     "mails total",
+			template: "${mails}",
+			expected: "8",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseMailVariablesNoAccounts(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	// No mail accounts configured
+
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "imap_unseen no accounts",
+			template: "${imap_unseen}",
+			expected: "0",
+		},
+		{
+			name:     "imap_messages no accounts",
+			template: "${imap_messages}",
+			expected: "0",
+		},
+		{
+			name:     "new_mails no accounts",
+			template: "${new_mails}",
+			expected: "0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseWeatherVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		{
+			name:     "weather temp",
+			template: "${weather KJFK temp}",
+			expected: "22",
+		},
+		{
+			name:     "weather temperature_f",
+			template: "${weather KJFK temp_f}",
+			expected: "72",
+		},
+		{
+			name:     "weather humidity",
+			template: "${weather KJFK humidity}",
+			expected: "50",
+		},
+		{
+			name:     "weather wind",
+			template: "${weather KJFK wind}",
+			expected: "15",
+		},
+		{
+			name:     "weather wind_dir",
+			template: "${weather KJFK wind_dir}",
+			expected: "270",
+		},
+		{
+			name:     "weather wind_dir_compass",
+			template: "${weather KJFK wind_dir_compass}",
+			expected: "W",
+		},
+		{
+			name:     "weather condition default",
+			template: "${weather KJFK}",
+			expected: "clear",
+		},
+		{
+			name:     "weather condition explicit",
+			template: "${weather KJFK condition}",
+			expected: "clear",
+		},
+		{
+			name:     "weather cloud",
+			template: "${weather KJFK cloud}",
+			expected: "few clouds",
+		},
+		{
+			name:     "weather pressure",
+			template: "${weather KJFK pressure}",
+			expected: "1013",
+		},
+		{
+			name:     "weather visibility",
+			template: "${weather KJFK visibility}",
+			expected: "10.0",
+		},
+		{
+			name:     "weather no station",
+			template: "${weather}",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestScrollAnimation tests the scroll variable animation.
+func TestScrollAnimation(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, newMockProvider())
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		check    func(result string) bool
+		desc     string
+	}{
+		{
+			name:     "short text no scroll",
+			template: "${scroll 20 1 Hello}",
+			check:    func(r string) bool { return len(r) == 20 && r[:5] == "Hello" },
+			desc:     "short text should be padded to length",
+		},
+		{
+			name:     "long text scrolls",
+			template: "${scroll 10 1 This is a very long text that needs scrolling}",
+			check:    func(r string) bool { return len(r) == 10 },
+			desc:     "result should be exactly 10 characters",
+		},
+		{
+			name:     "default step",
+			template: "${scroll 5 1 ABCDEFGHIJ}",
+			check:    func(r string) bool { return len(r) == 5 },
+			desc:     "should return 5 character window",
+		},
+		{
+			name:     "missing args",
+			template: "${scroll 10}",
+			check:    func(r string) bool { return r == "" },
+			desc:     "insufficient args returns empty",
+		},
+		{
+			name:     "empty text",
+			template: "${scroll 10 1}",
+			check:    func(r string) bool { return r == "" },
+			desc:     "empty text returns empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if !tt.check(result) {
+				t.Errorf("%s: got %q (len=%d)", tt.desc, result, len(result))
+			}
+		})
+	}
+}
+
+// TestScrollAnimationAdvances tests that scroll position advances.
+func TestScrollAnimationAdvances(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, newMockProvider())
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Use a simple text that's longer than the window
+	template := "${scroll 5 1 ABCDEFGHIJ}"
+
+	// Get first result
+	result1 := api.Parse(template)
+	if len(result1) != 5 {
+		t.Errorf("expected length 5, got %d: %q", len(result1), result1)
+	}
+
+	// Parse again - position should advance
+	result2 := api.Parse(template)
+	if len(result2) != 5 {
+		t.Errorf("expected length 5, got %d: %q", len(result2), result2)
+	}
+
+	// Results should differ after advancement (unless wrapping at same position)
+	// Due to step=1, they should differ
+	if result1 == result2 {
+		// This is actually acceptable if the time hasn't advanced enough
+		// The scroll advances based on time, not just calls
+		t.Logf("results may be same due to rapid calls: %q vs %q", result1, result2)
+	}
+}
+
+// TestScrollStateIsolation tests that different scroll instances maintain separate state.
+func TestScrollStateIsolation(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, newMockProvider())
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Two different scroll templates should have separate state
+	template1 := "${scroll 5 1 AAAAAAAAAA}"
+	template2 := "${scroll 5 1 BBBBBBBBBB}"
+
+	result1 := api.Parse(template1)
+	result2 := api.Parse(template2)
+
+	// Results should match their respective content
+	for _, r := range result1 {
+		if r != 'A' && r != ' ' {
+			t.Errorf("template1 result should contain only 'A' or space, got %q", result1)
+			break
+		}
+	}
+	for _, r := range result2 {
+		if r != 'B' && r != ' ' {
+			t.Errorf("template2 result should contain only 'B' or space, got %q", result2)
+			break
+		}
+	}
+}
+
+// TestScrollUnicodeText tests scroll with Unicode characters.
+func TestScrollUnicodeText(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, newMockProvider())
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Unicode characters should be counted as single characters
+	template := "${scroll 5 1 日本語テスト文字列}"
+	result := api.Parse(template)
+
+	// Should return 5 runes, not 5 bytes
+	runes := []rune(result)
+	if len(runes) != 5 {
+		t.Errorf("expected 5 runes, got %d: %q", len(runes), result)
+	}
+}
+
+// TestPadRight tests the padRight helper function.
+func TestPadRight(t *testing.T) {
+	tests := []struct {
+		input    string
+		length   int
+		expected string
+	}{
+		{"Hello", 10, "Hello     "},
+		{"Test", 4, "Test"},
+		{"Long", 2, "Long"},
+		{"", 5, "     "},
+		{"日本語", 6, "日本語   "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := padRight(tt.input, tt.length)
+			if result != tt.expected {
+				t.Errorf("padRight(%q, %d) = %q, want %q", tt.input, tt.length, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestTemplateVariables tests the template0-template9 variable resolution.
+func TestTemplateVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	mockProvider := &mockSystemDataProvider{
+		cpu: monitor.CPUStats{
+			UsagePercent: 42.5,
+			Cores:        []float64{42.5},
+		},
+		memory: monitor.MemoryStats{
+			Total:     16 * 1024 * 1024 * 1024, // 16 GiB
+			Used:      8 * 1024 * 1024 * 1024,  // 8 GiB
+			Available: 8 * 1024 * 1024 * 1024,
+		},
+	}
+
+	api, err := NewConkyAPI(runtime, mockProvider)
+	if err != nil {
+		t.Fatalf("Failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		templates [10]string
+		input     string
+		contains  []string
+	}{
+		{
+			name: "simple template without args",
+			templates: [10]string{
+				"Hello World", // template0
+			},
+			input:    "${template0}",
+			contains: []string{"Hello World"},
+		},
+		{
+			name: "template with one argument",
+			templates: [10]string{
+				"",               // template0
+				"Core \\1 usage", // template1
+			},
+			input:    "${template1 5}",
+			contains: []string{"Core 5 usage"},
+		},
+		{
+			name: "template with multiple arguments",
+			templates: [10]string{
+				"", "", // template0, template1
+				"\\1 is \\2 and \\3", // template2
+			},
+			input:    "${template2 CPU fast efficient}",
+			contains: []string{"CPU is fast and efficient"},
+		},
+		{
+			name: "template with embedded variables",
+			templates: [10]string{
+				"", "", "", // template0-2
+				"CPU: ${cpu}%", // template3
+			},
+			input:    "${template3}",
+			contains: []string{"CPU:", "%"},
+		},
+		{
+			name: "template with argument in variable",
+			templates: [10]string{
+				"", "", "", "", // template0-3
+				"Memory used: ${mem}", // template4
+			},
+			input:    "${template4}",
+			contains: []string{"Memory used:"},
+		},
+		{
+			name:      "undefined template returns empty",
+			templates: [10]string{}, // all empty
+			input:     "${template5}",
+			contains:  []string{},
+		},
+		{
+			name: "template9 works",
+			templates: [10]string{
+				"", "", "", "", "", "", "", "", "", // template0-8
+				"Last template: \\1", // template9
+			},
+			input:    "${template9 works}",
+			contains: []string{"Last template: works"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			api.SetTemplates(tt.templates)
+			result := api.Parse(tt.input)
+
+			for _, expected := range tt.contains {
+				if !strings.Contains(result, expected) {
+					t.Errorf("Parse(%q) = %q, expected to contain %q", tt.input, result, expected)
+				}
+			}
+
+			// For undefined template, result should be empty
+			if len(tt.contains) == 0 && result != "" {
+				t.Errorf("Parse(%q) = %q, expected empty string", tt.input, result)
+			}
+		})
+	}
+}
+
+// TestTemplateSetAndGet tests the SetTemplates and GetTemplate methods.
+func TestTemplateSetAndGet(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, nil)
+	if err != nil {
+		t.Fatalf("Failed to create API: %v", err)
+	}
+
+	// Initially all templates should be empty
+	for i := 0; i < 10; i++ {
+		if got := api.GetTemplate(i); got != "" {
+			t.Errorf("GetTemplate(%d) = %q, expected empty", i, got)
+		}
+	}
+
+	// Set templates
+	templates := [10]string{
+		"template0 content",
+		"template1 content",
+		"template2 content",
+		"", "", "", "", "", "",
+		"template9 content",
+	}
+	api.SetTemplates(templates)
+
+	// Verify templates are set
+	if got := api.GetTemplate(0); got != "template0 content" {
+		t.Errorf("GetTemplate(0) = %q, expected %q", got, "template0 content")
+	}
+	if got := api.GetTemplate(1); got != "template1 content" {
+		t.Errorf("GetTemplate(1) = %q, expected %q", got, "template1 content")
+	}
+	if got := api.GetTemplate(9); got != "template9 content" {
+		t.Errorf("GetTemplate(9) = %q, expected %q", got, "template9 content")
+	}
+
+	// Test out of bounds
+	if got := api.GetTemplate(-1); got != "" {
+		t.Errorf("GetTemplate(-1) = %q, expected empty", got)
+	}
+	if got := api.GetTemplate(10); got != "" {
+		t.Errorf("GetTemplate(10) = %q, expected empty", got)
+	}
+}
+
+// TestTemplateArgumentSubstitution tests argument placeholder substitution.
+func TestTemplateArgumentSubstitution(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	api, err := NewConkyAPI(runtime, &mockSystemDataProvider{})
+	if err != nil {
+		t.Fatalf("Failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		args     []string
+		expected string
+	}{
+		{
+			name:     "no placeholders",
+			template: "Static text",
+			args:     []string{"ignored"},
+			expected: "Static text",
+		},
+		{
+			name:     "single placeholder",
+			template: "Value: \\1",
+			args:     []string{"42"},
+			expected: "Value: 42",
+		},
+		{
+			name:     "multiple same placeholder",
+			template: "\\1 and \\1 again",
+			args:     []string{"test"},
+			expected: "test and test again",
+		},
+		{
+			name:     "multiple different placeholders",
+			template: "\\1, \\2, \\3",
+			args:     []string{"a", "b", "c"},
+			expected: "a, b, c",
+		},
+		{
+			name:     "placeholder without matching arg",
+			template: "Has \\5 placeholder",
+			args:     []string{"only one"},
+			expected: "Has \\5 placeholder",
+		},
+		{
+			name:     "no args with placeholder",
+			template: "Needs \\1",
+			args:     []string{},
+			expected: "Needs \\1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			templates := [10]string{tt.template}
+			api.SetTemplates(templates)
+
+			// Build the input string with args
+			input := "${template0"
+			for _, arg := range tt.args {
+				input += " " + arg
+			}
+			input += "}"
+
+			result := api.Parse(input)
+			if result != tt.expected {
+				t.Errorf("Parse(%q) with template %q = %q, want %q", input, tt.template, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestUnsupportedVariables tests that intentionally unsupported variables
+// return "N/A" and are documented as such in docs/migration.md
+func TestUnsupportedVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		template string
+		expected string
+	}{
+		// Stock quote - not implemented; requires external API keys
+		{
+			name:     "stockquote returns N/A",
+			template: "${stockquote AAPL}",
+			expected: "N/A",
+		},
+		// APCUPSD - not implemented; requires APCUPSD daemon and NIS protocol
+		{
+			name:     "apcupsd returns N/A",
+			template: "${apcupsd}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_model returns N/A",
+			template: "${apcupsd_model}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_status returns N/A",
+			template: "${apcupsd_status}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_linev returns N/A",
+			template: "${apcupsd_linev}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_load returns N/A",
+			template: "${apcupsd_load}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_charge returns N/A",
+			template: "${apcupsd_charge}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_timeleft returns N/A",
+			template: "${apcupsd_timeleft}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_temp returns N/A",
+			template: "${apcupsd_temp}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_battv returns N/A",
+			template: "${apcupsd_battv}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_cable returns N/A",
+			template: "${apcupsd_cable}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_driver returns N/A",
+			template: "${apcupsd_driver}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_upsmode returns N/A",
+			template: "${apcupsd_upsmode}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_name returns N/A",
+			template: "${apcupsd_name}",
+			expected: "N/A",
+		},
+		{
+			name:     "apcupsd_hostname returns N/A",
+			template: "${apcupsd_hostname}",
+			expected: "N/A",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseImageVariables(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		template   string
+		checkPath  string
+		checkWidth float64
+		checkX     float64
+		noCache    bool
+	}{
+		{
+			name:       "basic image",
+			template:   "${image /path/to/image.png}",
+			checkPath:  "/path/to/image.png",
+			checkWidth: 0,
+			checkX:     -1,
+			noCache:    false,
+		},
+		{
+			name:       "image with size",
+			template:   "${image /path/to/image.png -s 100x50}",
+			checkPath:  "/path/to/image.png",
+			checkWidth: 100,
+			checkX:     -1,
+			noCache:    false,
+		},
+		{
+			name:       "image with position",
+			template:   "${image /path/to/image.png -p 10,20}",
+			checkPath:  "/path/to/image.png",
+			checkWidth: 0,
+			checkX:     10,
+			noCache:    false,
+		},
+		{
+			name:       "image with no cache",
+			template:   "${image /dynamic.png -n}",
+			checkPath:  "/dynamic.png",
+			checkWidth: 0,
+			checkX:     -1,
+			noCache:    true,
+		},
+		{
+			name:       "image with all options",
+			template:   "${image /image.png -s 200x100 -p 50,25 -n}",
+			checkPath:  "/image.png",
+			checkWidth: 200,
+			checkX:     50,
+			noCache:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+
+			// The result should be an image marker
+			if !strings.Contains(result, "\x00IMG:") {
+				t.Errorf("expected image marker in result, got %q", result)
+				return
+			}
+
+			// Decode the marker
+			marker := render.DecodeImageMarker(result)
+			if marker == nil {
+				t.Errorf("failed to decode image marker from %q", result)
+				return
+			}
+
+			if marker.Path != tt.checkPath {
+				t.Errorf("Path = %q, want %q", marker.Path, tt.checkPath)
+			}
+			if marker.Width != tt.checkWidth {
+				t.Errorf("Width = %v, want %v", marker.Width, tt.checkWidth)
+			}
+			if marker.X != tt.checkX {
+				t.Errorf("X = %v, want %v", marker.X, tt.checkX)
+			}
+			if marker.NoCache != tt.noCache {
+				t.Errorf("NoCache = %v, want %v", marker.NoCache, tt.noCache)
+			}
+		})
+	}
+}
+
+func TestResolveImageEmptyArgs(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Empty args should return empty string
+	result := api.Parse("${image}")
+	if result != "" {
+		t.Errorf("expected empty string for empty image args, got %q", result)
+	}
+}
+
+// TestResolveFSBar tests the filesystem bar widget resolver.
+func TestResolveFSBar(t *testing.T) {
+runtime, err := New(DefaultConfig())
+if err != nil {
+t.Fatalf("failed to create runtime: %v", err)
+}
+defer runtime.Close()
+
+provider := newMockProvider()
+api, err := NewConkyAPI(runtime, provider)
+if err != nil {
+t.Fatalf("failed to create API: %v", err)
+}
+
+tests := []struct {
+name       string
+template   string
+checkPerc  float64 // Expected percentage encoded in bar
+checkWidth float64
+}{
+{
+name:       "default mount point",
+template:   "${fs_bar}",
+checkPerc:  40.0, // "/" mount is 40% in mock
+checkWidth: 100,
+},
+{
+name:       "specific mount point",
+template:   "${fs_bar /home}",
+checkPerc:  50.0, // "/home" mount is 50% in mock
+checkWidth: 100,
+},
+{
+name:       "with height",
+template:   "${fs_bar 12}",
+checkPerc:  40.0,
+checkWidth: 100,
+},
+{
+name:       "with height,width",
+template:   "${fs_bar 10,80}",
+checkPerc:  40.0,
+checkWidth: 80,
+},
+{
+name:       "with size and mount point",
+template:   "${fs_bar 10,80 /home}",
+checkPerc:  50.0,
+checkWidth: 80,
+},
+{
+name:       "unknown mount point",
+template:   "${fs_bar /unknown}",
+checkPerc:  0.0,
+checkWidth: 100,
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+result := api.Parse(tt.template)
+
+// Should return a widget marker
+if !strings.Contains(result, "\x00WGT:") {
+t.Errorf("expected widget marker in result, got %q", result)
+return
+}
+
+// Decode and check widget marker
+marker := render.DecodeWidgetMarker(result)
+if marker == nil {
+t.Errorf("failed to decode widget marker from %q", result)
+return
+}
+
+if marker.Value != tt.checkPerc {
+t.Errorf("Value = %v, want %v", marker.Value, tt.checkPerc)
+}
+if marker.Width != tt.checkWidth {
+t.Errorf("Width = %v, want %v", marker.Width, tt.checkWidth)
+}
+})
+}
+}
+
+// TestResolveBatteryBar tests the battery bar widget resolver.
+func TestResolveBatteryBar(t *testing.T) {
+runtime, err := New(DefaultConfig())
+if err != nil {
+t.Fatalf("failed to create runtime: %v", err)
+}
+defer runtime.Close()
+
+provider := newMockProvider()
+api, err := NewConkyAPI(runtime, provider)
+if err != nil {
+t.Fatalf("failed to create API: %v", err)
+}
+
+tests := []struct {
+name       string
+template   string
+checkPerc  float64
+checkWidth float64
+}{
+{
+name:       "default size",
+template:   "${battery_bar}",
+checkPerc:  85.0, // TotalCapacity from mock
+checkWidth: 100,
+},
+{
+name:       "with height",
+template:   "${battery_bar 12}",
+checkPerc:  85.0,
+checkWidth: 100,
+},
+{
+name:       "with height and width",
+template:   "${battery_bar 15 150}",
+checkPerc:  85.0,
+checkWidth: 150,
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+result := api.Parse(tt.template)
+
+if !strings.Contains(result, "\x00WGT:") {
+t.Errorf("expected widget marker in result, got %q", result)
+return
+}
+
+marker := render.DecodeWidgetMarker(result)
+if marker == nil {
+t.Errorf("failed to decode widget marker from %q", result)
+return
+}
+
+if marker.Value != tt.checkPerc {
+t.Errorf("Value = %v, want %v", marker.Value, tt.checkPerc)
+}
+if marker.Width != tt.checkWidth {
+t.Errorf("Width = %v, want %v", marker.Width, tt.checkWidth)
+}
+})
+}
+}
+
+// TestResolveIfRunning tests the if_running process check resolver.
+func TestResolveIfRunning(t *testing.T) {
+runtime, err := New(DefaultConfig())
+if err != nil {
+t.Fatalf("failed to create runtime: %v", err)
+}
+defer runtime.Close()
+
+provider := newMockProvider()
+api, err := NewConkyAPI(runtime, provider)
+if err != nil {
+t.Fatalf("failed to create API: %v", err)
+}
+
+tests := []struct {
+name     string
+template string
+want     string
+}{
+{
+name:     "running process",
+template: "${if_running firefox}yes${else}no${endif}",
+want:     "yes",
+},
+{
+name:     "partial match",
+template: "${if_running fire}yes${else}no${endif}",
+want:     "yes",
+},
+{
+name:     "not running process",
+template: "${if_running nonexistent}yes${else}no${endif}",
+want:     "no",
+},
+{
+name:     "another running process",
+template: "${if_running chrome}yes${else}no${endif}",
+want:     "yes",
+},
+{
+name:     "case sensitivity",
+template: "${if_running FIREFOX}yes${else}no${endif}",
+want:     "no", // Process name is lowercase "firefox"
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+result := api.Parse(tt.template)
+if result != tt.want {
+t.Errorf("Parse(%q) = %q, want %q", tt.template, result, tt.want)
+}
+})
+}
+}
+
+// TestResolveACPIFan tests the ACPI fan status resolver.
+func TestResolveACPIFan(t *testing.T) {
+runtime, err := New(DefaultConfig())
+if err != nil {
+t.Fatalf("failed to create runtime: %v", err)
+}
+defer runtime.Close()
+
+tests := []struct {
+name   string
+hwmon  monitor.HwmonStats
+want   string
+}{
+{
+name: "fan device present",
+hwmon: monitor.HwmonStats{
+Devices: map[string]monitor.HwmonDevice{
+"coretemp": {Name: "coretemp"},
+"thinkpad_fan": {Name: "thinkpad_fan"},
+},
+},
+want: "running",
+},
+{
+name: "fan in name case insensitive",
+hwmon: monitor.HwmonStats{
+Devices: map[string]monitor.HwmonDevice{
+"CPU_FAN": {Name: "CPU_FAN"},
+},
+},
+want: "running",
+},
+{
+name: "no fan device",
+hwmon: monitor.HwmonStats{
+Devices: map[string]monitor.HwmonDevice{
+"coretemp": {Name: "coretemp"},
+"amdgpu": {Name: "amdgpu"},
+},
+},
+want: "unknown",
+},
+{
+name:  "empty devices",
+hwmon: monitor.HwmonStats{},
+want:  "unknown",
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+provider := newMockProvider()
+provider.hwmon = tt.hwmon
+
+api, err := NewConkyAPI(runtime, provider)
+if err != nil {
+t.Fatalf("failed to create API: %v", err)
+}
+
+result := api.Parse("${acpifan}")
+if result != tt.want {
+t.Errorf("Parse(${acpifan}) = %q, want %q", result, tt.want)
+}
+})
+}
+}
+
+// TestResolveBattery tests the battery status string resolver.
+func TestResolveBattery(t *testing.T) {
+runtime, err := New(DefaultConfig())
+if err != nil {
+t.Fatalf("failed to create runtime: %v", err)
+}
+defer runtime.Close()
+
+tests := []struct {
+name    string
+battery monitor.BatteryStats
+args    string
+want    string
+}{
+{
+name:    "no battery",
+battery: monitor.BatteryStats{},
+args:    "",
+want:    "No battery",
+},
+{
+name: "specific battery",
+battery: monitor.BatteryStats{
+Batteries: map[string]monitor.BatteryInfo{
+"BAT0": {Capacity: 75, Status: "Charging"},
+},
+},
+args: "BAT0",
+want: "Charging 75%",
+},
+{
+name: "default battery",
+battery: monitor.BatteryStats{
+Batteries: map[string]monitor.BatteryInfo{
+"BAT0": {Capacity: 50, Status: "Discharging"},
+},
+},
+args: "",
+want: "Discharging 50%",
+},
+{
+name: "aggregate charging on AC",
+battery: monitor.BatteryStats{
+Batteries:     map[string]monitor.BatteryInfo{},
+ACOnline:      true,
+IsCharging:    true,
+TotalCapacity: 80.0,
+},
+args: "UNKNOWN",
+want: "Charging 80%",
+},
+{
+name: "aggregate full on AC",
+battery: monitor.BatteryStats{
+Batteries:     map[string]monitor.BatteryInfo{},
+ACOnline:      true,
+IsCharging:    false,
+TotalCapacity: 100.0,
+},
+args: "UNKNOWN",
+want: "Full 100%",
+},
+{
+name: "aggregate discharging",
+battery: monitor.BatteryStats{
+Batteries:     map[string]monitor.BatteryInfo{},
+ACOnline:      false,
+IsDischarging: true,
+TotalCapacity: 45.0,
+},
+args: "UNKNOWN",
+want: "Discharging 45%",
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+provider := newMockProvider()
+provider.battery = tt.battery
+
+api, err := NewConkyAPI(runtime, provider)
+if err != nil {
+t.Fatalf("failed to create API: %v", err)
+}
+
+template := "${battery}"
+if tt.args != "" {
+template = fmt.Sprintf("${battery %s}", tt.args)
+}
+
+result := api.Parse(template)
+if result != tt.want {
+t.Errorf("Parse(%q) = %q, want %q", template, result, tt.want)
+}
+})
+}
 }

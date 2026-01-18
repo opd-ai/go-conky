@@ -16,6 +16,7 @@ import (
 	rt "github.com/arnodel/golua/runtime"
 
 	"github.com/opd-ai/go-conky/internal/monitor"
+	"github.com/opd-ai/go-conky/internal/render"
 )
 
 // Version is the conky-go version string.
@@ -35,10 +36,16 @@ type SystemDataProvider interface {
 	Battery() monitor.BatteryStats
 	Audio() monitor.AudioStats
 	SysInfo() monitor.SystemInfo
+	GPU() monitor.GPUStats
+	Mail() monitor.MailStats
+	MailUnseenCount(name string) int
+	MailTotalCount(name string) int
+	MailTotalUnseen() int
+	MailTotalMessages() int
+	Weather(stationID string) monitor.WeatherStats
 	TCP() monitor.TCPStats
 	TCPCountInRange(minPort, maxPort int) int
 	TCPConnectionByIndex(minPort, maxPort, index int) *monitor.TCPConnection
-	GPU() monitor.GPUStats
 }
 
 // execCacheEntry stores cached output from execi commands.
@@ -47,13 +54,21 @@ type execCacheEntry struct {
 	expiresAt time.Time
 }
 
+// scrollState tracks the current scroll position for a scroll instance.
+type scrollState struct {
+	position   int       // Current scroll offset
+	lastUpdate time.Time // When the scroll was last advanced
+}
+
 // ConkyAPI provides the Conky Lua API implementation.
 // It registers conky_parse() and other Conky functions in the Lua environment.
 type ConkyAPI struct {
-	runtime     *ConkyRuntime
-	sysProvider SystemDataProvider
-	execCache   map[string]*execCacheEntry
-	mu          sync.RWMutex
+	runtime      *ConkyRuntime
+	sysProvider  SystemDataProvider
+	execCache    map[string]*execCacheEntry
+	scrollStates map[string]*scrollState
+	templates    [10]string // template0-template9 definitions
+	mu           sync.RWMutex
 }
 
 // NewConkyAPI creates a new ConkyAPI instance and registers all Conky functions
@@ -64,9 +79,10 @@ func NewConkyAPI(runtime *ConkyRuntime, provider SystemDataProvider) (*ConkyAPI,
 	}
 
 	api := &ConkyAPI{
-		runtime:     runtime,
-		sysProvider: provider,
-		execCache:   make(map[string]*execCacheEntry),
+		runtime:      runtime,
+		sysProvider:  provider,
+		execCache:    make(map[string]*execCacheEntry),
+		scrollStates: make(map[string]*scrollState),
 	}
 
 	api.registerFunctions()
@@ -79,6 +95,24 @@ func (api *ConkyAPI) SetSystemDataProvider(provider SystemDataProvider) {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 	api.sysProvider = provider
+}
+
+// SetTemplates sets the template0-template9 definitions.
+// Templates can use \1, \2, etc. as argument placeholders.
+func (api *ConkyAPI) SetTemplates(templates [10]string) {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	api.templates = templates
+}
+
+// GetTemplate returns the template at the given index (0-9).
+func (api *ConkyAPI) GetTemplate(index int) string {
+	if index < 0 || index > 9 {
+		return ""
+	}
+	api.mu.RLock()
+	defer api.mu.RUnlock()
+	return api.templates[index]
 }
 
 // registerFunctions registers all Conky API functions in the Lua environment.
@@ -126,11 +160,28 @@ var variablePattern = regexp.MustCompile(`\$\{([^}]+)\}`)
 //   - ${variable} - simple variable
 //   - ${variable arg} - variable with argument
 //   - ${variable arg1 arg2} - variable with multiple arguments
+//
+// Conditional blocks are also supported:
+//   - ${if_up interface}content${endif}
+//   - ${if_up interface}content${else}alternative${endif}
+//   - ${if_existing path}content${endif}
+//   - ${if_running process}content${endif}
+//   - ${if_match value pattern}content${endif}
+//   - ${if_empty value}content${endif}
+//   - ${if_mounted path}content${endif}
+//
+// Thread safety: This function does not hold locks during parsing to avoid
+// deadlocks when resolving variables that need to acquire locks (e.g., execi
+// with cache). The sysProvider is accessed via resolveVariable which does a
+// brief RLock to read the pointer. The provider's methods are expected to be
+// thread-safe. SetSystemDataProvider should not be called concurrently with
+// Parse in production; it's intended for initialization and testing.
 func (api *ConkyAPI) Parse(template string) string {
-	api.mu.RLock()
-	defer api.mu.RUnlock()
+	// First, process conditional blocks
+	processed := api.parseConditionals(template)
 
-	return variablePattern.ReplaceAllStringFunc(template, func(match string) string {
+	// Then replace variables
+	return variablePattern.ReplaceAllStringFunc(processed, func(match string) string {
 		// Extract variable name and arguments from ${variable args...}
 		inner := match[2 : len(match)-1] // Remove ${ and }
 		parts := strings.Fields(inner)
@@ -154,9 +205,18 @@ func formatUnknownVariable(name string, args []string) string {
 }
 
 // resolveVariable resolves a single Conky variable to its value.
+// Thread safety: Reads sysProvider with a brief RLock. The individual provider
+// methods (CPU(), Memory(), etc.) are expected to be thread-safe. The brief
+// lock protects against the provider pointer changing during nil check.
 func (api *ConkyAPI) resolveVariable(name string, args []string) string {
+	// Read sysProvider with read lock for safe concurrent access.
+	// We only lock briefly to get the pointer; provider methods are thread-safe.
+	api.mu.RLock()
+	provider := api.sysProvider
+	api.mu.RUnlock()
+
 	// Handle case where there's no system data provider
-	if api.sysProvider == nil {
+	if provider == nil {
 		return formatUnknownVariable(name, args)
 	}
 
@@ -417,13 +477,29 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "scroll":
 		return api.resolveScroll(args)
 	case "lua":
-		return "" // Lua function calls handled separately
+		return api.resolveLua(args, false)
 	case "lua_parse":
-		return "" // Lua function calls handled separately
-	case "template0", "template1", "template2", "template3",
-		"template4", "template5", "template6", "template7",
-		"template8", "template9":
-		return "" // Templates resolved during config parsing
+		return api.resolveLua(args, true)
+	case "template0":
+		return api.resolveTemplate(0, args)
+	case "template1":
+		return api.resolveTemplate(1, args)
+	case "template2":
+		return api.resolveTemplate(2, args)
+	case "template3":
+		return api.resolveTemplate(3, args)
+	case "template4":
+		return api.resolveTemplate(4, args)
+	case "template5":
+		return api.resolveTemplate(5, args)
+	case "template6":
+		return api.resolveTemplate(6, args)
+	case "template7":
+		return api.resolveTemplate(7, args)
+	case "template8":
+		return api.resolveTemplate(8, args)
+	case "template9":
+		return api.resolveTemplate(9, args)
 
 	// Pre/post text markers
 	case "pre_exec":
@@ -472,45 +548,62 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		}
 		return "off-line"
 
-	// Nvidia GPU variables
+	// Nvidia GPU monitoring
 	case "nvidia":
 		return api.resolveNvidia(args)
-	case "nvidia_temp", "nvidia_gpu_temp":
-		return api.sysProvider.GPU().GetField("temp")
-	case "nvidia_mem", "nvidia_memutil":
-		return api.sysProvider.GPU().GetField("memutil")
-	case "nvidia_gpu", "nvidia_gpuutil":
-		return api.sysProvider.GPU().GetField("gpuutil")
-	case "nvidia_fan", "nvidia_fanspeed":
-		return api.sysProvider.GPU().GetField("fan")
-	case "nvidia_power":
-		return api.sysProvider.GPU().GetField("power")
 	case "nvidiagraph":
-		return "" // Graph rendering handled elsewhere
+		return api.resolveNvidiaGraph(args)
+	case "nvidia_temp":
+		return api.resolveNvidia([]string{"temp"})
+	case "nvidia_gpu":
+		return api.resolveNvidia([]string{"gpuutil"})
+	case "nvidia_fan":
+		return api.resolveNvidia([]string{"fan"})
+	case "nvidia_mem":
+		return api.resolveNvidia([]string{"memutil"})
+	case "nvidia_memused":
+		return api.resolveNvidia([]string{"memused"})
+	case "nvidia_memtotal":
+		return api.resolveNvidia([]string{"memtotal"})
+	case "nvidia_driver":
+		return api.resolveNvidia([]string{"driver"})
+	case "nvidia_power":
+		return api.resolveNvidia([]string{"power"})
+	case "nvidia_name":
+		return api.resolveNvidia([]string{"name"})
 
-	// Apcupsd (UPS) stubs - requires apcaccess
-	case "apcupsd":
-		return ""
-	case "apcupsd_model":
-		return ""
-	case "apcupsd_status":
-		return ""
+	// Apcupsd (UPS) stubs - not implemented; requires APCUPSD daemon and NIS protocol.
+	// Users should use ${execi} with apcaccess command. See docs/migration.md.
+	case "apcupsd", "apcupsd_model", "apcupsd_status", "apcupsd_linev",
+		"apcupsd_load", "apcupsd_charge", "apcupsd_timeleft", "apcupsd_temp",
+		"apcupsd_battv", "apcupsd_cable", "apcupsd_driver", "apcupsd_upsmode",
+		"apcupsd_name", "apcupsd_hostname":
+		return "N/A"
 
-	// IMAP/POP3/mail stubs - requires network integration
-	case "imap_unseen", "imap_messages":
-		return "0"
-	case "pop3_unseen", "pop3_used":
-		return "0"
+	// IMAP/POP3/mail variables
+	case "imap_unseen":
+		return api.resolveImapUnseen(args)
+	case "imap_messages":
+		return api.resolveImapMessages(args)
+	case "pop3_unseen":
+		return api.resolvePop3Unseen(args)
+	case "pop3_used":
+		return api.resolvePop3Used(args)
 	case "new_mails", "mails":
-		return "0"
+		return api.resolveTotalMails(args)
 
-	// Weather stubs - requires API integration
+	// Weather variables
 	case "weather":
-		return ""
+		return api.resolveWeather(args)
 
-	// Stock ticker stub
+	// Image variable
+	case "image":
+		return api.resolveImage(args)
+
+	// Stock ticker stub - not implemented; requires external API keys.
+	// Users should use ${execi} with custom scripts. See docs/migration.md.
 	case "stockquote":
-		return ""
+		return "N/A"
 
 	default:
 		// Return original if unknown variable
@@ -952,6 +1045,23 @@ func formatTime(t time.Time, format string) string {
 	result = strings.ReplaceAll(result, "%u", fmt.Sprintf("%d", (int(t.Weekday())+6)%7+1))
 	result = strings.ReplaceAll(result, "%w", fmt.Sprintf("%d", int(t.Weekday())))
 
+	// ISO 8601 week number and year (%V, %G, %g)
+	isoYear, isoWeek := t.ISOWeek()
+	result = strings.ReplaceAll(result, "%V", fmt.Sprintf("%02d", isoWeek))
+	result = strings.ReplaceAll(result, "%G", fmt.Sprintf("%04d", isoYear))
+	result = strings.ReplaceAll(result, "%g", fmt.Sprintf("%02d", isoYear%100))
+
+	// Week number with Sunday as first day of week (%U)
+	// Week 01 starts on the first Sunday of the year
+	result = strings.ReplaceAll(result, "%U", fmt.Sprintf("%02d", sundayWeekNumber(t)))
+
+	// Week number with Monday as first day of week (%W)
+	// Week 01 starts on the first Monday of the year
+	result = strings.ReplaceAll(result, "%W", fmt.Sprintf("%02d", mondayWeekNumber(t)))
+
+	// Seconds since Unix epoch (%s)
+	result = strings.ReplaceAll(result, "%s", fmt.Sprintf("%d", t.Unix()))
+
 	// Map of strftime specifiers to Go time format values
 	// These are replaced with the formatted time value directly
 	staticReplacements := []struct {
@@ -1000,6 +1110,41 @@ func formatTime(t time.Time, format string) string {
 	result = strings.ReplaceAll(result, "\x00PERCENT\x00", "%")
 
 	return result
+}
+
+// sundayWeekNumber calculates the week number with Sunday as the first day of the week.
+// Week 01 starts on the first Sunday of the year. Days before the first Sunday are week 00.
+func sundayWeekNumber(t time.Time) int {
+	yearStart := time.Date(t.Year(), time.January, 1, 0, 0, 0, 0, t.Location())
+	// Days until first Sunday (0 = Sunday, so we need 0 days if Jan 1 is Sunday)
+	daysUntilFirstSunday := int((7 - yearStart.Weekday()) % 7)
+	firstSunday := yearStart.AddDate(0, 0, daysUntilFirstSunday)
+
+	if t.Before(firstSunday) {
+		return 0
+	}
+	// Days since first Sunday
+	daysSinceFirstSunday := int(t.Sub(firstSunday).Hours() / 24)
+	return (daysSinceFirstSunday / 7) + 1
+}
+
+// mondayWeekNumber calculates the week number with Monday as the first day of the week.
+// Week 01 starts on the first Monday of the year. Days before the first Monday are week 00.
+func mondayWeekNumber(t time.Time) int {
+	yearStart := time.Date(t.Year(), time.January, 1, 0, 0, 0, 0, t.Location())
+	// Days until first Monday (1 = Monday)
+	daysUntilFirstMonday := int((8 - int(yearStart.Weekday())) % 7)
+	if yearStart.Weekday() == time.Monday {
+		daysUntilFirstMonday = 0
+	}
+	firstMonday := yearStart.AddDate(0, 0, daysUntilFirstMonday)
+
+	if t.Before(firstMonday) {
+		return 0
+	}
+	// Days since first Monday
+	daysSinceFirstMonday := int(t.Sub(firstMonday).Hours() / 24)
+	return (daysSinceFirstMonday / 7) + 1
 }
 
 // resolveAddr resolves the ${addr interface} variable.
@@ -1195,35 +1340,44 @@ func (api *ConkyAPI) resolveHR(args []string) string {
 	return strings.Repeat("-", width)
 }
 
-// resolveFSBar returns a text-based bar for filesystem usage.
+// resolveFSBar returns a graphical bar widget for filesystem usage.
 // Usage: ${fs_bar height,width mountpoint}
 func (api *ConkyAPI) resolveFSBar(args []string) string {
 	mountPoint := "/"
-	width := 10
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
 
 	if len(args) > 0 {
-		// Check for size,mountpoint format
+		// Check for size,mountpoint format (height,width or just height)
 		parts := strings.Split(args[0], ",")
+		if len(parts) >= 1 {
+			if h, err := strconv.ParseFloat(parts[0], 64); err == nil {
+				height = h
+			}
+		}
 		if len(parts) >= 2 {
-			if w, err := strconv.Atoi(parts[1]); err == nil {
+			if w, err := strconv.ParseFloat(parts[1], 64); err == nil {
 				width = w
 			}
 		}
-		// Last arg is mount point
-		mountPoint = args[len(args)-1]
+		// Last arg is mount point if more than one arg
+		if len(args) > 1 {
+			mountPoint = args[len(args)-1]
+		} else if len(parts) == 1 {
+			// Single arg could be height or mount point
+			if _, err := strconv.ParseFloat(args[0], 64); err != nil {
+				mountPoint = args[0]
+			}
+		}
 	}
 
 	fsStats := api.sysProvider.Filesystem()
 	mount, ok := fsStats.Mounts[mountPoint]
 	if !ok {
-		return strings.Repeat("-", width)
+		return render.EncodeBarMarker(0, width, height)
 	}
 
-	filled := int(mount.UsagePercent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+	return render.EncodeBarMarker(mount.UsagePercent, width, height)
 }
 
 // resolveFSType returns the filesystem type for a mount point.
@@ -1243,38 +1397,49 @@ func (api *ConkyAPI) resolveFSType(args []string) string {
 // resolveBattery returns battery status string.
 func (api *ConkyAPI) resolveBattery(args []string) string {
 	batStats := api.sysProvider.Battery()
-	if len(batStats.Batteries) == 0 {
-		return "No battery"
-	}
 
 	batName := "BAT0"
 	if len(args) > 0 {
 		batName = args[0]
 	}
 
+	// Try to find specific battery first
 	if bat, ok := batStats.Batteries[batName]; ok {
 		return fmt.Sprintf("%s %d%%", bat.Status, bat.Capacity)
 	}
 
-	// Return aggregate status
-	status := "Unknown"
-	if batStats.ACOnline {
-		if batStats.IsCharging {
-			status = "Charging"
-		} else {
-			status = "Full"
+	// If a specific battery was requested but not found, or if no batteries exist,
+	// try aggregate status if available (based on ACOnline, IsCharging, IsDischarging, TotalCapacity)
+	hasAggregateInfo := batStats.ACOnline || batStats.IsCharging || batStats.IsDischarging || batStats.TotalCapacity > 0
+	if hasAggregateInfo {
+		status := "Unknown"
+		if batStats.ACOnline {
+			if batStats.IsCharging {
+				status = "Charging"
+			} else {
+				status = "Full"
+			}
+		} else if batStats.IsDischarging {
+			status = "Discharging"
 		}
-	} else if batStats.IsDischarging {
-		status = "Discharging"
+		return fmt.Sprintf("%s %.0f%%", status, batStats.TotalCapacity)
 	}
-	return fmt.Sprintf("%s %.0f%%", status, batStats.TotalCapacity)
+
+	return "No battery"
 }
 
-// resolveBatteryBar returns a text-based bar for battery level.
+// resolveBatteryBar returns a graphical bar widget for battery level.
 func (api *ConkyAPI) resolveBatteryBar(args []string) string {
-	width := 10
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
+
 	if len(args) > 0 {
-		if w, err := strconv.Atoi(args[0]); err == nil {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
 			width = w
 		}
 	}
@@ -1282,21 +1447,69 @@ func (api *ConkyAPI) resolveBatteryBar(args []string) string {
 	batStats := api.sysProvider.Battery()
 	percent := batStats.TotalCapacity
 
-	filled := int(percent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+	return render.EncodeBarMarker(percent, width, height)
 }
 
 // resolveBatteryTime returns estimated battery time remaining.
-func (api *ConkyAPI) resolveBatteryTime(_ []string) string {
+// Returns time in "H:MM" format for discharging/charging, "AC" when fully charged on AC,
+// or "Unknown" when time cannot be calculated.
+func (api *ConkyAPI) resolveBatteryTime(args []string) string {
 	batStats := api.sysProvider.Battery()
-	if !batStats.IsDischarging {
-		return "AC"
+
+	// Determine which battery to query (default: first found or specified)
+	batteryName := ""
+	if len(args) > 0 {
+		batteryName = args[0]
 	}
-	// Placeholder - actual time calculation requires power rate info
-	return "Unknown"
+
+	// Find the target battery
+	var targetBattery *monitor.BatteryInfo
+	if batteryName != "" {
+		if bat, ok := batStats.Batteries[batteryName]; ok {
+			targetBattery = &bat
+		}
+	} else {
+		// Use first battery found
+		for _, bat := range batStats.Batteries {
+			b := bat // Create a copy to take address of
+			targetBattery = &b
+			break
+		}
+	}
+
+	// No battery found
+	if targetBattery == nil {
+		if batStats.ACOnline {
+			return "AC"
+		}
+		return "Unknown"
+	}
+
+	// Calculate and format time based on charging status
+	var timeSeconds float64
+	switch targetBattery.Status {
+	case "Discharging":
+		timeSeconds = targetBattery.TimeToEmpty
+	case "Charging":
+		timeSeconds = targetBattery.TimeToFull
+	case "Full", "Not charging":
+		return "AC"
+	default:
+		if batStats.ACOnline {
+			return "AC"
+		}
+		return "Unknown"
+	}
+
+	// If no time estimate available
+	if timeSeconds <= 0 {
+		return "Unknown"
+	}
+
+	// Format as "H:MM"
+	hours := int(timeSeconds / 3600)
+	minutes := int((timeSeconds - float64(hours)*3600) / 60)
+	return fmt.Sprintf("%d:%02d", hours, minutes)
 }
 
 // resolveNetworkSpeedF returns network speed as a float value.
@@ -1426,11 +1639,12 @@ func (api *ConkyAPI) resolveWirelessMode(args []string) string {
 	return "Managed"
 }
 
-// resolveTCPPortMon monitors TCP connections.
-// Usage: tcp_portmon port_begin port_end [item [index]]
-// Items: count, rip, rhost, rport, rservice, lip, lport, lservice
+// resolveTCPPortMon monitors TCP connections in a port range.
+// Syntax: ${tcp_portmon port_begin port_end item [index]}
+// Items: count, lip, lport, lservice, rip, rport, rservice, rhost
 func (api *ConkyAPI) resolveTCPPortMon(args []string) string {
-	if len(args) < 2 {
+	// Minimum args: port_begin, port_end, item
+	if len(args) < 3 {
 		return "0"
 	}
 
@@ -1438,25 +1652,28 @@ func (api *ConkyAPI) resolveTCPPortMon(args []string) string {
 	if err != nil {
 		return "0"
 	}
+
 	maxPort, err := strconv.Atoi(args[1])
 	if err != nil {
 		return "0"
 	}
 
-	// Default: return count
-	if len(args) < 3 {
-		return strconv.Itoa(api.sysProvider.TCPCountInRange(minPort, maxPort))
-	}
-
 	item := strings.ToLower(args[2])
+
+	// count doesn't need an index
 	if item == "count" {
-		return strconv.Itoa(api.sysProvider.TCPCountInRange(minPort, maxPort))
+		count := api.sysProvider.TCPCountInRange(minPort, maxPort)
+		return strconv.Itoa(count)
 	}
 
-	// Need index for other items
-	index := 0
-	if len(args) >= 4 {
-		index, _ = strconv.Atoi(args[3])
+	// All other items require an index
+	if len(args) < 4 {
+		return "0"
+	}
+
+	index, err := strconv.Atoi(args[3])
+	if err != nil {
+		return "0"
 	}
 
 	conn := api.sysProvider.TCPConnectionByIndex(minPort, maxPort, index)
@@ -1465,42 +1682,67 @@ func (api *ConkyAPI) resolveTCPPortMon(args []string) string {
 	}
 
 	switch item {
-	case "rip":
-		return conn.RemoteIP
-	case "rhost":
-		return conn.RemoteIP // Could do reverse DNS lookup
-	case "rport":
-		return strconv.Itoa(conn.RemotePort)
-	case "rservice":
-		return portToService(conn.RemotePort)
 	case "lip":
 		return conn.LocalIP
 	case "lport":
 		return strconv.Itoa(conn.LocalPort)
 	case "lservice":
 		return portToService(conn.LocalPort)
+	case "rip":
+		return conn.RemoteIP
+	case "rport":
+		return strconv.Itoa(conn.RemotePort)
+	case "rservice":
+		return portToService(conn.RemotePort)
+	case "rhost":
+		// Return remote IP as hostname (DNS lookup could be added)
+		return conn.RemoteIP
 	default:
 		return ""
 	}
 }
 
-// resolveNvidia returns NVIDIA GPU info.
-// Usage: nvidia [field] where field is temp, gpu, mem, fan, power, etc.
-func (api *ConkyAPI) resolveNvidia(args []string) string {
-	if len(args) == 0 {
-		return api.sysProvider.GPU().GetField("gpuutil")
-	}
-	return api.sysProvider.GPU().GetField(args[0])
-}
-
-// portToService converts common port numbers to service names.
+// portToService maps well-known port numbers to service names.
 func portToService(port int) string {
 	services := map[int]string{
-		21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp",
-		53: "dns", 80: "http", 110: "pop3", 143: "imap",
-		443: "https", 993: "imaps", 995: "pop3s",
-		3306: "mysql", 5432: "postgresql", 6379: "redis",
-		8080: "http-alt", 8443: "https-alt",
+		20:   "ftp-data",
+		21:   "ftp",
+		22:   "ssh",
+		23:   "telnet",
+		25:   "smtp",
+		53:   "domain",
+		67:   "bootps",
+		68:   "bootpc",
+		69:   "tftp",
+		80:   "http",
+		110:  "pop3",
+		119:  "nntp",
+		123:  "ntp",
+		143:  "imap",
+		161:  "snmp",
+		162:  "snmptrap",
+		194:  "irc",
+		389:  "ldap",
+		443:  "https",
+		445:  "microsoft-ds",
+		465:  "smtps",
+		514:  "syslog",
+		587:  "submission",
+		636:  "ldaps",
+		993:  "imaps",
+		995:  "pop3s",
+		1080: "socks",
+		1433: "ms-sql-s",
+		1521: "oracle",
+		3306: "mysql",
+		3389: "ms-wbt-server",
+		5432: "postgresql",
+		5900: "vnc",
+		6379: "redis",
+		8080: "http-proxy",
+		8443: "https-alt",
+		9200: "elasticsearch",
+		27017: "mongodb",
 	}
 	if name, ok := services[port]; ok {
 		return name
@@ -1560,28 +1802,35 @@ func (api *ConkyAPI) resolveEntropyPerc() string {
 	return fmt.Sprintf("%.0f", perc)
 }
 
-// resolveEntropyBar returns a text bar for entropy.
+// resolveEntropyBar returns a graphical bar widget for entropy.
 func (api *ConkyAPI) resolveEntropyBar(args []string) string {
-	width := 10
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
+
 	if len(args) > 0 {
-		if w, err := strconv.Atoi(args[0]); err == nil {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
 			width = w
 		}
 	}
+
 	data, err := os.ReadFile("/proc/sys/kernel/random/entropy_avail")
 	if err != nil {
-		return strings.Repeat("-", width)
+		return render.EncodeBarMarker(0, width, height)
 	}
 	avail, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
-		return strings.Repeat("-", width)
+		return render.EncodeBarMarker(0, width, height)
 	}
-	perc := float64(avail) / 4096.0
-	filled := int(perc * float64(width))
-	if filled > width {
-		filled = width
+	perc := float64(avail) / 4096.0 * 100
+	if perc > 100 {
+		perc = 100
 	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+	return render.EncodeBarMarker(perc, width, height)
 }
 
 // resolveStippledHR returns a stippled horizontal rule.
@@ -1603,13 +1852,114 @@ func (api *ConkyAPI) resolveStippledHR(args []string) string {
 	return result
 }
 
-// resolveScroll returns scrolling text (simplified - just returns the text).
+// resolveScroll returns scrolling text with animation.
+// Usage: ${scroll length step text}
+// - length: visible width in characters
+// - step: number of characters to scroll per update (default 1)
+// - text: the text to scroll (can contain spaces)
+// The text scrolls left by 'step' characters each update cycle, wrapping around.
 func (api *ConkyAPI) resolveScroll(args []string) string {
 	if len(args) < 2 {
 		return ""
 	}
-	// Skip the length/step args and return the text
-	return strings.Join(args[2:], " ")
+
+	// Parse length (visible width)
+	length, err := strconv.Atoi(args[0])
+	if err != nil || length <= 0 {
+		length = 20 // default width
+	}
+
+	// Parse step (characters to scroll per update)
+	step := 1
+	if len(args) >= 2 {
+		if s, err := strconv.Atoi(args[1]); err == nil && s > 0 {
+			step = s
+		}
+	}
+
+	// Get the text to scroll (join remaining args)
+	text := ""
+	if len(args) >= 3 {
+		text = strings.Join(args[2:], " ")
+	}
+
+	// Empty text returns empty
+	if text == "" {
+		return ""
+	}
+
+	// If text is shorter than or equal to length, no scrolling needed
+	textLen := len([]rune(text))
+	if textLen <= length {
+		// Pad to length for consistent width
+		return padRight(text, length)
+	}
+
+	// Create a unique key for this scroll instance (based on the original args)
+	scrollKey := strings.Join(args, "|")
+
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
+	// Get or create scroll state
+	state, exists := api.scrollStates[scrollKey]
+	if !exists {
+		state = &scrollState{
+			position:   0,
+			lastUpdate: time.Now(),
+		}
+		api.scrollStates[scrollKey] = state
+	}
+
+	// Advance scroll position (on each call, as update cycle advances)
+	// Use circular scrolling: when we reach the end, wrap around
+	now := time.Now()
+	if now.Sub(state.lastUpdate) > 0 {
+		state.position = (state.position + step) % textLen
+		state.lastUpdate = now
+	}
+
+	// Create the scrolled view by extracting a window from the text
+	// For smooth wrapping, duplicate the text
+	runes := []rune(text)
+	doubledRunes := append(runes, runes...)
+
+	start := state.position % textLen
+	end := start + length
+	if end > len(doubledRunes) {
+		end = len(doubledRunes)
+	}
+
+	return string(doubledRunes[start:end])
+}
+
+// resolveTemplate resolves a template variable by index with argument substitution.
+// Templates are defined as template0-template9 in the config and can contain
+// \1, \2, etc. placeholders that are replaced with the provided arguments.
+func (api *ConkyAPI) resolveTemplate(index int, args []string) string {
+	template := api.GetTemplate(index)
+	if template == "" {
+		return ""
+	}
+
+	// Substitute \1, \2, etc. with the provided arguments
+	result := template
+	for i, arg := range args {
+		placeholder := fmt.Sprintf("\\%d", i+1)
+		result = strings.ReplaceAll(result, placeholder, arg)
+	}
+
+	// Parse the result to resolve any embedded Conky variables
+	return api.Parse(result)
+}
+
+// padRight pads a string with spaces to reach the desired length.
+func padRight(s string, length int) string {
+	runes := []rune(s)
+	if len(runes) >= length {
+		return s
+	}
+	return s + strings.Repeat(" ", length-len(runes))
 }
 
 // resolveFSInodes returns total inodes for a mount point.
@@ -1651,49 +2001,78 @@ func (api *ConkyAPI) resolveFSInodesPerc(args []string) string {
 	return "0"
 }
 
-// resolveMemBar returns a text bar for memory usage.
+// resolveMemBar returns a graphical bar widget for memory usage.
 func (api *ConkyAPI) resolveMemBar(args []string) string {
-	width := 10
-	if len(args) > 0 {
-		if w, err := strconv.Atoi(args[0]); err == nil {
-			width = w
-		}
-	}
-	mem := api.sysProvider.Memory()
-	filled := int(mem.UsagePercent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
-}
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
 
-// resolveSwapBar returns a text bar for swap usage.
-func (api *ConkyAPI) resolveSwapBar(args []string) string {
-	width := 10
 	if len(args) > 0 {
-		if w, err := strconv.Atoi(args[0]); err == nil {
-			width = w
-		}
-	}
-	mem := api.sysProvider.Memory()
-	filled := int(mem.SwapPercent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
-}
-
-// resolveCPUBar returns a text bar for CPU usage.
-func (api *ConkyAPI) resolveCPUBar(args []string) string {
-	width := 10
-	cpuIdx := -1 // -1 means overall
-	if len(args) > 0 {
-		if idx, err := strconv.Atoi(args[0]); err == nil {
-			cpuIdx = idx - 1 // Convert to 0-based
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
 		}
 	}
 	if len(args) > 1 {
-		if w, err := strconv.Atoi(args[1]); err == nil {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
+			width = w
+		}
+	}
+
+	mem := api.sysProvider.Memory()
+	return render.EncodeBarMarker(mem.UsagePercent, width, height)
+}
+
+// resolveSwapBar returns a graphical bar widget for swap usage.
+func (api *ConkyAPI) resolveSwapBar(args []string) string {
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
+
+	if len(args) > 0 {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
+			width = w
+		}
+	}
+
+	mem := api.sysProvider.Memory()
+	return render.EncodeBarMarker(mem.SwapPercent, width, height)
+}
+
+// resolveCPUBar returns a graphical bar widget for CPU usage.
+func (api *ConkyAPI) resolveCPUBar(args []string) string {
+	width := float64(100)  // Default width in pixels
+	height := float64(8)   // Default height in pixels
+	cpuIdx := -1           // -1 means overall
+
+	// Parse arguments: ${cpubar cpu# height,width} or ${cpubar height}
+	if len(args) > 0 {
+		// First arg could be CPU number or height
+		if strings.HasPrefix(strings.ToLower(args[0]), "cpu") {
+			// It's a CPU specifier like "cpu0"
+			if idx, err := strconv.Atoi(strings.TrimPrefix(strings.ToLower(args[0]), "cpu")); err == nil {
+				cpuIdx = idx
+			}
+		} else if idx, err := strconv.Atoi(args[0]); err == nil {
+			// Check if it's a small number (likely a CPU core) or larger (likely height)
+			if idx <= 16 {
+				cpuIdx = idx - 1 // Convert to 0-based
+			} else {
+				height = float64(idx)
+			}
+		} else if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if h, err := strconv.ParseFloat(args[1], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 2 {
+		if w, err := strconv.ParseFloat(args[2], 64); err == nil {
 			width = w
 		}
 	}
@@ -1706,15 +2085,25 @@ func (api *ConkyAPI) resolveCPUBar(args []string) string {
 		percent = cpuStats.UsagePercent
 	}
 
-	filled := int(percent * float64(width) / 100)
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+	return render.EncodeBarMarker(percent, width, height)
 }
 
-// resolveLoadGraph returns a simple text representation of load.
-func (api *ConkyAPI) resolveLoadGraph(_ []string) string {
+// resolveLoadGraph returns a graphical representation of load.
+func (api *ConkyAPI) resolveLoadGraph(args []string) string {
+	width := float64(100)  // Default width in pixels
+	height := float64(20)  // Default height in pixels
+
+	if len(args) > 0 {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
+			width = w
+		}
+	}
+
 	sysInfo := api.sysProvider.SysInfo()
 	// Normalize load to percentage based on CPU count
 	cpuCount := api.sysProvider.CPU().CPUCount
@@ -1725,9 +2114,8 @@ func (api *ConkyAPI) resolveLoadGraph(_ []string) string {
 	if loadPerc > 100 {
 		loadPerc = 100
 	}
-	width := 10
-	filled := int(loadPerc * float64(width) / 100)
-	return strings.Repeat("#", filled) + strings.Repeat("-", width-filled)
+
+	return render.EncodeGraphMarker(loadPerc, width, height)
 }
 
 // resolveACPIFan returns ACPI fan status.
@@ -1739,6 +2127,40 @@ func (api *ConkyAPI) resolveACPIFan() string {
 		}
 	}
 	return "unknown"
+}
+
+// resolveNvidia resolves ${nvidia} variables.
+// Supports various GPU monitoring fields from nvidia-smi.
+// Usage: ${nvidia [field]}
+// Fields: temp, gpuutil, memutil, mem, fan, power, name, driver, memused, memtotal, memfree, memperc
+// Without a field, returns GPU utilization percentage.
+func (api *ConkyAPI) resolveNvidia(args []string) string {
+	gpuStats := api.sysProvider.GPU()
+
+	if !gpuStats.Available {
+		return "N/A"
+	}
+
+	// Default to GPU utilization if no field specified
+	if len(args) == 0 {
+		return gpuStats.GetField("gpuutil")
+	}
+
+	return gpuStats.GetField(args[0])
+}
+
+// resolveNvidiaGraph is a placeholder for ${nvidiagraph} which would render a graph.
+// Graph rendering is not yet implemented; returns the GPU utilization value.
+func (api *ConkyAPI) resolveNvidiaGraph(args []string) string {
+	gpuStats := api.sysProvider.GPU()
+
+	if !gpuStats.Available {
+		return "N/A"
+	}
+
+	// For now, return GPU utilization as a number (without %)
+	// Graphs need to be rendered by the renderer, not as text
+	return strconv.Itoa(gpuStats.UtilGPU)
 }
 
 // formatNumber formats a number with commas for readability.
@@ -1756,4 +2178,205 @@ func formatNumber(n uint64) string {
 		result += string(c)
 	}
 	return result
+}
+
+// resolveImapUnseen resolves the ${imap_unseen} variable.
+// Accepts an optional account name argument.
+// Without argument, returns the total unseen count across all accounts.
+func (api *ConkyAPI) resolveImapUnseen(args []string) string {
+	if len(args) > 0 {
+		// Get unseen count for specific IMAP account
+		return strconv.Itoa(api.sysProvider.MailUnseenCount(args[0]))
+	}
+	// Return total unseen across all accounts
+	return strconv.Itoa(api.sysProvider.MailTotalUnseen())
+}
+
+// resolveImapMessages resolves the ${imap_messages} variable.
+// Accepts an optional account name argument.
+// Without argument, returns the total message count across all accounts.
+func (api *ConkyAPI) resolveImapMessages(args []string) string {
+	if len(args) > 0 {
+		return strconv.Itoa(api.sysProvider.MailTotalCount(args[0]))
+	}
+	return strconv.Itoa(api.sysProvider.MailTotalMessages())
+}
+
+// resolvePop3Unseen resolves the ${pop3_unseen} variable.
+// Accepts an optional account name argument.
+// For POP3, unseen and total are the same since POP3 doesn't track read status.
+func (api *ConkyAPI) resolvePop3Unseen(args []string) string {
+	if len(args) > 0 {
+		return strconv.Itoa(api.sysProvider.MailUnseenCount(args[0]))
+	}
+	return strconv.Itoa(api.sysProvider.MailTotalUnseen())
+}
+
+// resolvePop3Used resolves the ${pop3_used} variable.
+// Accepts an optional account name argument.
+// Returns the total message count for the POP3 account.
+func (api *ConkyAPI) resolvePop3Used(args []string) string {
+	if len(args) > 0 {
+		return strconv.Itoa(api.sysProvider.MailTotalCount(args[0]))
+	}
+	return strconv.Itoa(api.sysProvider.MailTotalMessages())
+}
+
+// resolveTotalMails resolves the ${new_mails} and ${mails} variables.
+// ${new_mails} returns the total unseen count.
+// ${mails} returns the total message count.
+func (api *ConkyAPI) resolveTotalMails(args []string) string {
+	if len(args) > 0 {
+		// First arg could be account name
+		return strconv.Itoa(api.sysProvider.MailUnseenCount(args[0]))
+	}
+	return strconv.Itoa(api.sysProvider.MailTotalUnseen())
+}
+
+// resolveWeather resolves the ${weather} variable.
+// Syntax: ${weather station_id field}
+// Example: ${weather KJFK temp} returns temperature at JFK airport
+// Supported fields: temp, temp_f, dewpoint, humidity, pressure, pressure_inhg,
+// wind, wind_dir, wind_dir_compass, wind_gust, visibility, condition, cloud, raw
+func (api *ConkyAPI) resolveWeather(args []string) string {
+	if len(args) < 1 {
+		return ""
+	}
+
+	stationID := args[0]
+	field := "condition" // default field
+	if len(args) >= 2 {
+		field = args[1]
+	}
+
+	weather := api.sysProvider.Weather(stationID)
+	if weather.Error != "" && weather.RawMETAR == "" {
+		return "N/A"
+	}
+
+	result := weather.GetField(field)
+	if result == "" {
+		return "N/A"
+	}
+	return result
+}
+
+// resolveLua calls a Lua function and returns its result.
+// Usage: ${lua function_name arg1 arg2 ...}
+// If parse is true (${lua_parse}), the result is parsed for Conky variables.
+// Arguments are passed as strings to the Lua function.
+func (api *ConkyAPI) resolveLua(args []string, parse bool) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	funcName := args[0]
+
+	// Build Lua arguments from remaining args
+	luaArgs := make([]rt.Value, len(args)-1)
+	for i, arg := range args[1:] {
+		luaArgs[i] = rt.StringValue(arg)
+	}
+
+	// Call the Lua function
+	result, err := api.runtime.CallFunction(funcName, luaArgs...)
+	if err != nil {
+		// Function not found or error - return empty string
+		return ""
+	}
+
+	// Convert result to string
+	resultStr := luaValueToString(result)
+
+	// If lua_parse, parse the result for Conky variables
+	if parse && resultStr != "" {
+		return api.Parse(resultStr)
+	}
+
+	return resultStr
+}
+
+// resolveImage resolves the ${image} variable for embedding images.
+// Syntax: ${image path [-s widthxheight] [-p x,y] [-n]}
+// - path: file path to the image
+// - -s widthxheight: resize to specified dimensions
+// - -p x,y: absolute position from top-left corner
+// - -n: disable caching (for dynamic images)
+// Returns an image marker that the rendering layer will process.
+func (api *ConkyAPI) resolveImage(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	path := args[0]
+	var width, height float64
+	x, y := float64(-1), float64(-1) // -1 means inline
+	noCache := false
+
+	// Parse optional arguments
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "-s":
+			// Size: widthxheight
+			if i+1 < len(args) {
+				i++
+				sizeStr := args[i]
+				parts := strings.Split(sizeStr, "x")
+				if len(parts) == 2 {
+					w, err1 := strconv.ParseFloat(parts[0], 64)
+					h, err2 := strconv.ParseFloat(parts[1], 64)
+					if err1 == nil && err2 == nil {
+						width = w
+						height = h
+					}
+				}
+			}
+		case "-p":
+			// Position: x,y
+			if i+1 < len(args) {
+				i++
+				posStr := args[i]
+				parts := strings.Split(posStr, ",")
+				if len(parts) == 2 {
+					px, err1 := strconv.ParseFloat(parts[0], 64)
+					py, err2 := strconv.ParseFloat(parts[1], 64)
+					if err1 == nil && err2 == nil {
+						x = px
+						y = py
+					}
+				}
+			}
+		case "-n":
+			// No cache
+			noCache = true
+		}
+	}
+
+	return render.EncodeImageMarker(path, width, height, x, y, noCache)
+}
+
+// luaValueToString converts a Lua value to its string representation.
+func luaValueToString(v rt.Value) string {
+	switch v.Type() {
+	case rt.StringType:
+		s, _ := v.TryString()
+		return s
+	case rt.IntType:
+		i, _ := v.TryInt()
+		return strconv.FormatInt(i, 10)
+	case rt.FloatType:
+		f, _ := v.TryFloat()
+		return strconv.FormatFloat(f, 'f', -1, 64)
+	case rt.BoolType:
+		if v.AsBool() {
+			return "true"
+		}
+		return "false"
+	case rt.NilType:
+		return ""
+	default:
+		// For tables and other types, return empty
+		return ""
+	}
 }

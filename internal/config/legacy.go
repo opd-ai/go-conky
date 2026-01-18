@@ -97,6 +97,26 @@ func (p *LegacyParser) parseDirective(cfg *Config, line string, lineNum int) err
 		cfg.Window.OwnWindow = parseBool(value)
 	case "own_window_transparent":
 		cfg.Window.Transparent = parseBool(value)
+	case "own_window_argb_visual":
+		cfg.Window.ARGBVisual = parseBool(value)
+	case "own_window_argb_value":
+		val, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid own_window_argb_value: %w", lineNum, err)
+		}
+		// Clamp value to 0-255 range
+		if val < 0 {
+			val = 0
+		} else if val > 255 {
+			val = 255
+		}
+		cfg.Window.ARGBValue = val
+	case "own_window_colour", "own_window_color":
+		c, err := parseColor(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid own_window_colour: %w", lineNum, err)
+		}
+		cfg.Window.BackgroundColour = c
 
 	// Window type
 	case "own_window_type":
@@ -239,6 +259,56 @@ func (p *LegacyParser) parseDirective(cfg *Config, line string, lineNum int) err
 			return fmt.Errorf("line %d: invalid color9: %w", lineNum, err)
 		}
 		cfg.Colors.Color9 = c
+
+	// Template definitions (template0-template9)
+	case "template0":
+		cfg.Text.Templates[0] = value
+	case "template1":
+		cfg.Text.Templates[1] = value
+	case "template2":
+		cfg.Text.Templates[2] = value
+	case "template3":
+		cfg.Text.Templates[3] = value
+	case "template4":
+		cfg.Text.Templates[4] = value
+	case "template5":
+		cfg.Text.Templates[5] = value
+	case "template6":
+		cfg.Text.Templates[6] = value
+	case "template7":
+		cfg.Text.Templates[7] = value
+	case "template8":
+		cfg.Text.Templates[8] = value
+	case "template9":
+		cfg.Text.Templates[9] = value
+
+	// Display/rendering settings
+	case "draw_borders":
+		cfg.Display.DrawBorders = parseBool(value)
+	case "draw_outline":
+		cfg.Display.DrawOutline = parseBool(value)
+	case "draw_shades":
+		cfg.Display.DrawShades = parseBool(value)
+	case "stippled_borders":
+		cfg.Display.StippledBorders = parseBool(value)
+	case "border_width":
+		width, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid border_width: %w", lineNum, err)
+		}
+		cfg.Display.BorderWidth = width
+	case "border_inner_margin":
+		margin, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid border_inner_margin: %w", lineNum, err)
+		}
+		cfg.Display.BorderInnerMargin = margin
+	case "border_outer_margin":
+		margin, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid border_outer_margin: %w", lineNum, err)
+		}
+		cfg.Display.BorderOuterMargin = margin
 
 	default:
 		// Unknown directives are silently ignored for forward compatibility

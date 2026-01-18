@@ -481,3 +481,321 @@ $uptime
 		t.Errorf("Stop failed: %v", err)
 	}
 }
+
+func TestReloadConfig(t *testing.T) {
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	// Start the instance
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Track events
+	var events []Event
+	var eventsMu sync.Mutex
+	eventsCh := make(chan struct{}, 10)
+
+	c.SetEventHandler(func(e Event) {
+		eventsMu.Lock()
+		events = append(events, e)
+		eventsMu.Unlock()
+		eventsCh <- struct{}{}
+	})
+
+	// Drain any existing events
+	for len(eventsCh) > 0 {
+		<-eventsCh
+	}
+	eventsMu.Lock()
+	events = nil
+	eventsMu.Unlock()
+
+	// Reload config
+	if err := c.ReloadConfig(); err != nil {
+		t.Fatalf("ReloadConfig failed: %v", err)
+	}
+
+	// Should still be running
+	if !c.IsRunning() {
+		t.Error("instance should still be running after ReloadConfig()")
+	}
+
+	// Wait for config reload event
+	select {
+	case <-eventsCh:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for config reload event")
+	}
+
+	// Check that we got a config_reloaded event
+	eventsMu.Lock()
+	hasReloadEvent := false
+	for _, e := range events {
+		if e.Type == EventConfigReloaded {
+			hasReloadEvent = true
+			break
+		}
+	}
+	eventsMu.Unlock()
+
+	if !hasReloadEvent {
+		t.Error("expected EventConfigReloaded event")
+	}
+
+	// Clean up
+	if err := c.Stop(); err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+}
+
+func TestReloadConfigWhenNotRunning(t *testing.T) {
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	// ReloadConfig should fail when not running
+	err = c.ReloadConfig()
+	if err == nil {
+		t.Error("ReloadConfig should fail when instance is not running")
+	}
+	if !strings.Contains(err.Error(), "not running") {
+		t.Errorf("error should mention 'not running', got: %v", err)
+	}
+}
+
+func TestReloadConfigNoInterruption(t *testing.T) {
+	// This test verifies that ReloadConfig doesn't interrupt execution
+	// by checking the instance remains running throughout
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Perform multiple reloads in quick succession
+	for i := 0; i < 5; i++ {
+		if !c.IsRunning() {
+			t.Fatalf("instance stopped unexpectedly at reload %d", i)
+		}
+		if err := c.ReloadConfig(); err != nil {
+			t.Fatalf("ReloadConfig %d failed: %v", i, err)
+		}
+		// Verify still running after each reload
+		if !c.IsRunning() {
+			t.Fatalf("instance stopped after reload %d", i)
+		}
+	}
+
+	// Clean up
+	if err := c.Stop(); err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+}
+
+func TestMetricsAccessor(t *testing.T) {
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+
+	// Create with custom metrics
+	customMetrics := NewMetrics()
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+		Metrics:  customMetrics,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	// Metrics is nil before Start (initialized in Start)
+	// This is the current behavior
+
+	// Start should initialize metrics
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Get metrics accessor after Start
+	metrics := c.Metrics()
+	if metrics == nil {
+		t.Fatal("Metrics() returned nil after Start()")
+	}
+
+	// Metrics should be the same instance we provided
+	if metrics != customMetrics {
+		t.Error("Metrics() should return the custom metrics instance")
+	}
+
+	snap := metrics.Snapshot()
+	if snap.Starts < 1 {
+		t.Errorf("expected Starts >= 1, got %d", snap.Starts)
+	}
+
+	// Stop should increment stops counter
+	if err := c.Stop(); err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+
+	snap = metrics.Snapshot()
+	if snap.Stops < 1 {
+		t.Errorf("expected Stops >= 1, got %d", snap.Stops)
+	}
+}
+
+func TestMetricsDefaultWhenNil(t *testing.T) {
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+
+	// Create without custom metrics (should use default)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+		// Metrics is nil, should use default
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	// Start to initialize metrics
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Metrics should be non-nil after Start (uses default)
+	metrics := c.Metrics()
+	if metrics == nil {
+		t.Fatal("Metrics() should not return nil after Start()")
+	}
+
+	if err := c.Stop(); err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+}
+
+func TestEventWarning(t *testing.T) {
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	// Track warning events
+	var events []Event
+	var eventsMu sync.Mutex
+	eventsCh := make(chan struct{}, 10)
+
+	c.SetEventHandler(func(e Event) {
+		eventsMu.Lock()
+		events = append(events, e)
+		eventsMu.Unlock()
+		eventsCh <- struct{}{}
+	})
+
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Emit a warning event directly
+	impl := c.(*conkyImpl)
+	impl.emitEvent(EventWarning, "test warning message")
+
+	// Wait for the event
+	select {
+	case <-eventsCh:
+	case <-time.After(time.Second):
+		// May have already received start event
+	}
+
+	// Continue to receive any additional events
+	select {
+	case <-eventsCh:
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Check that we got a warning event
+	eventsMu.Lock()
+	hasWarningEvent := false
+	for _, e := range events {
+		if e.Type == EventWarning {
+			hasWarningEvent = true
+			if e.Message != "test warning message" {
+				t.Errorf("expected message 'test warning message', got '%s'", e.Message)
+			}
+		}
+	}
+	eventsMu.Unlock()
+
+	if !hasWarningEvent {
+		t.Error("expected EventWarning event")
+	}
+
+	if err := c.Stop(); err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+}
+
+func TestEmitEventWithoutHandler(t *testing.T) {
+	config := `# Minimal config
+TEXT
+$uptime
+`
+	reader := strings.NewReader(config)
+	c, err := NewFromReader(reader, "legacy", &Options{
+		Headless: true,
+	})
+	if err != nil {
+		t.Fatalf("NewFromReader failed: %v", err)
+	}
+
+	// Don't set any event handler
+
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Emit event directly - should not panic even without handler
+	impl := c.(*conkyImpl)
+	impl.emitEvent(EventWarning, "test warning")
+
+	if err := c.Stop(); err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+}

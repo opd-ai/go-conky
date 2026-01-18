@@ -245,6 +245,7 @@ type SystemData struct {
 	Battery    BatteryStats
 	Audio      AudioStats
 	SysInfo    SystemInfo
+	Mail       MailStats
 	mu         sync.RWMutex
 }
 
@@ -541,4 +542,30 @@ func (sd *SystemData) setSysInfo(sysInfo SystemInfo) {
 // Caller must hold at least a read lock on sd.mu.
 func (sd *SystemData) copySysInfo() SystemInfo {
 	return sd.SysInfo
+}
+
+// GetMail returns a copy of the mail statistics with proper locking.
+func (sd *SystemData) GetMail() MailStats {
+	sd.mu.RLock()
+	defer sd.mu.RUnlock()
+	return sd.copyMail()
+}
+
+// setMail updates the mail statistics with proper locking.
+func (sd *SystemData) setMail(mail MailStats) {
+	sd.mu.Lock()
+	defer sd.mu.Unlock()
+	sd.Mail = mail
+}
+
+// copyMail returns a deep copy of the mail statistics.
+// Caller must hold at least a read lock on sd.mu.
+func (sd *SystemData) copyMail() MailStats {
+	result := MailStats{
+		Accounts: make(map[string]MailAccountStats, len(sd.Mail.Accounts)),
+	}
+	for k, v := range sd.Mail.Accounts {
+		result.Accounts[k] = v
+	}
+	return result
 }

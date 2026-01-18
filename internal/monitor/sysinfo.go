@@ -51,7 +51,7 @@ func newSysInfoReader() *sysInfoReader {
 // ReadSystemInfo reads all system information.
 func (r *sysInfoReader) ReadSystemInfo() (SystemInfo, error) {
 	info := SystemInfo{
-		Sysname: "Linux", // Always Linux for this implementation
+		Sysname: getSysname(),
 		Machine: r.getMachine(),
 	}
 
@@ -160,5 +160,40 @@ func (r *sysInfoReader) getMachine() string {
 		return "armv7l"
 	default:
 		return runtime.GOARCH
+	}
+}
+
+// getSysname returns the system name (OS name) based on runtime.GOOS.
+// This maps Go's OS identifiers to conventional system names matching
+// what uname -s would return on POSIX systems.
+func getSysname() string {
+	switch runtime.GOOS {
+	case "linux":
+		return "Linux"
+	case "darwin":
+		return "Darwin"
+	case "windows":
+		return "Windows"
+	case "freebsd":
+		return "FreeBSD"
+	case "openbsd":
+		return "OpenBSD"
+	case "netbsd":
+		return "NetBSD"
+	case "dragonfly":
+		return "DragonFly"
+	case "android":
+		// Android uses Linux kernel, so return Linux for compatibility
+		return "Linux"
+	case "solaris", "illumos":
+		// Both Solaris and illumos report "SunOS" from uname -s for compatibility.
+		// illumos is a fork of OpenSolaris but shares the SunOS kernel interface.
+		return "SunOS"
+	default:
+		// For unknown platforms, return GOOS as-is.
+		// Go's runtime.GOOS values are lowercase identifiers, but for unknown
+		// platforms it's safer to return them unchanged rather than attempting
+		// case conversion that could fail on non-ASCII or edge cases.
+		return runtime.GOOS
 	}
 }

@@ -1,0 +1,56 @@
+-- Gradient Background Transparency Example
+-- Demonstrates gradient background with alpha channel support
+
+conky.config = {
+    -- Window configuration
+    own_window = true,
+    own_window_type = 'desktop',
+    own_window_transparent = false,  -- Using gradient, not full transparency
+    
+    -- Gradient background mode
+    background_mode = 'gradient',
+    
+    -- Gradient configuration (dark blue to dark purple)
+    gradient = {
+        start_color = '1a1a3e',
+        end_color = '3e1a3e',
+        direction = 'diagonal',  -- vertical, horizontal, diagonal, or radial
+    },
+    
+    -- Apply ARGB alpha to the gradient
+    own_window_argb_visual = true,
+    own_window_argb_value = 220,  -- Slightly transparent
+    
+    -- Window hints
+    own_window_hints = 'undecorated,below,sticky,skip_taskbar,skip_pager',
+    
+    -- Position
+    alignment = 'middle_right',
+    gap_x = 20,
+    gap_y = 0,
+    
+    -- Size
+    minimum_width = 280,
+    minimum_height = 180,
+    
+    -- Display settings
+    background = true,
+    font = 'DejaVu Sans Mono:size=10',
+    update_interval = 1.0,
+    double_buffer = true,
+    
+    -- Colors for text
+    default_color = 'e0e0ff',
+    color0 = 'ff88cc',  -- Accent color
+    color1 = 'aaaadd',  -- Labels
+}
+
+conky.text = [[
+${color0}Gradient Background${color}
+${hr 1}
+${color1}CPU:${color} ${cpu}%
+${color1}RAM:${color} ${memperc}%
+${color1}Disk:${color} ${fs_used_perc /}%
+${hr 1}
+${color1}Uptime:${color} ${uptime_short}
+]]
