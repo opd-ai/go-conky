@@ -17,7 +17,7 @@
 | internal/monitor | 80.2% | ✅ Good |
 | internal/lua | 71.7% | ⚠️ Needs improvement |
 | pkg/conky | 70.4% | ⚠️ Needs improvement |
-| internal/platform | 38.9% | ⚠️ Low coverage |
+| internal/platform | 40.5% | ⚠️ Low coverage (improved from 38.9%) |
 | cmd/conky-go | 15.2% | ❌ Poor |
 
 ## Test Results by Category
@@ -356,14 +356,18 @@
 
 ### Low Priority
 
-**BUG-007: Platform package low test coverage (38.9%)**
+**BUG-007: Platform package low test coverage (38.9%)** ⏳ PARTIAL
 - Severity: Low
 - Feature: Cross-platform support
 - Reproduce: Run coverage report
 - Expected: >70% coverage
-- Actual: 38.9% coverage
+- Actual: 40.5% coverage (improved from 38.9%)
 - Location: internal/platform/
-- Fix: Add tests for Windows, Darwin, Android stubs
+- Progress:
+  - Added tests for DiskIO function (0% → 89.3%)
+  - Added tests for timeFromMillis function (0% → 100%)
+  - Made linuxFilesystemProvider.procDiskstatsPath configurable for testing
+- Remaining: Tests for Windows, Darwin, Android stubs; remote platform functions
 
 **BUG-008: cmd/conky-go low test coverage (15.2%)**
 - Severity: Low
@@ -445,7 +449,7 @@ None - all tests pass, core functionality works
 1. BUG-003: Non-rectangular clipping (8h)
 2. ~~BUG-004: cairo_text_path (4h)~~ ✅ COMPLETED - Rectangular approximation in internal/render/cairo.go
 3. ~~BUG-005: conky_window documentation (1h)~~ ✅ COMPLETED - Added to docs/migration.md
-4. BUG-007/008: Test coverage (8h)
+4. BUG-007/008: Test coverage (8h) - ⏳ PARTIAL (BUG-007: 38.9% → 40.5%)
 5. ~~BUG-009: strftime specifiers (2h)~~ ✅ COMPLETED - Added %V, %G, %g, %U, %W, %s
 
 ## Recommendations

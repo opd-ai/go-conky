@@ -15,12 +15,14 @@ import (
 
 // linuxFilesystemProvider implements FilesystemProvider for Linux systems.
 type linuxFilesystemProvider struct {
-	procMountsPath string
+	procMountsPath    string
+	procDiskstatsPath string
 }
 
 func newLinuxFilesystemProvider() *linuxFilesystemProvider {
 	return &linuxFilesystemProvider{
-		procMountsPath: "/proc/mounts",
+		procMountsPath:    "/proc/mounts",
+		procDiskstatsPath: "/proc/diskstats",
 	}
 }
 
@@ -109,9 +111,13 @@ func (f *linuxFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, er
 
 func (f *linuxFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
 	// Read from /proc/diskstats
-	file, err := os.Open("/proc/diskstats")
+	path := f.procDiskstatsPath
+	if path == "" {
+		path = "/proc/diskstats"
+	}
+	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("opening /proc/diskstats: %w", err)
+		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}
 	defer file.Close()
 
