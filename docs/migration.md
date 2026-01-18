@@ -463,6 +463,39 @@ Conky-Go uses [Ebiten](https://github.com/hajimehoshi/ebiten) instead of Cairo f
 - **Most drawing operations** work identically
 - **Some advanced Cairo features** may have slight visual differences
 
+### conky_window Table
+
+The `conky_window` global table is available in Lua scripts, but with important differences from the original Conky:
+
+| Field | Status | Notes |
+|-------|--------|-------|
+| `width` | ✅ Supported | Window width in pixels |
+| `height` | ✅ Supported | Window height in pixels |
+| `drawable` | ⚠️ Placeholder | Returns a stub value (not a real X11 drawable) |
+| `display` | ⚠️ Placeholder | Returns a stub value (not a real X11 display pointer) |
+| `visual` | ⚠️ Placeholder | Returns a stub value (not a real X11 visual) |
+| `text_start_x` | ✅ Supported | X coordinate where text drawing begins |
+| `text_start_y` | ✅ Supported | Y coordinate where text drawing begins |
+| `text_width` | ✅ Supported | Width of the text drawing region |
+| `text_height` | ✅ Supported | Height of the text drawing region |
+
+**Why are `drawable`, `display`, and `visual` placeholders?**
+
+Conky-Go uses Ebiten for rendering, which abstracts away the underlying graphics system (X11, Wayland, etc.). This means there is no direct X11 drawable or display pointer to expose. The placeholder values allow existing scripts to execute without errors, but the values cannot be used for direct X11 operations.
+
+**Compatibility Note:**
+
+Most Conky Lua scripts use these fields only to pass to `cairo_xlib_surface_create()`, which Conky-Go intercepts and handles internally. The following pattern works correctly:
+
+```lua
+-- This works in Conky-Go despite placeholder values
+local cs = cairo_xlib_surface_create(conky_window.display,
+    conky_window.drawable, conky_window.visual,
+    conky_window.width, conky_window.height)
+```
+
+Scripts that try to use `drawable`, `display`, or `visual` for direct X11 manipulation will not work as expected. If you have such scripts, consider refactoring to use only Cairo drawing functions, which are fully supported.
+
 ### Font Handling
 
 Font specifications use the same format as Conky:

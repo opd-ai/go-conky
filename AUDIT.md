@@ -5,7 +5,7 @@
 - **Date**: 2026-01-17 (Updated: 2026-01-18)
 - **Version Tested**: 0.1.0
 - **Tests**: 2,674+ total, all passed, 0 failed
-- **Bugs**: 0 critical, 0 high (2 resolved), 2 medium (2 resolved), 4 low (1 resolved)
+- **Bugs**: 0 critical, 0 high (2 resolved), 2 medium (3 resolved), 4 low (1 resolved)
 - **Compatibility**: ~85%
 
 ## Test Coverage by Package
@@ -318,14 +318,19 @@
 - Location: internal/lua/cairo_bindings.go
 - Fix: Implement using Ebiten text bounds
 
-**BUG-005: conky_window.drawable returns stub value**
+**BUG-005: conky_window.drawable returns stub value** ✅ DOCUMENTED
 - Severity: Medium
 - Feature: conky_window table
 - Reproduce: Access conky_window.drawable in Lua
 - Expected: Valid X11 drawable
 - Actual: Placeholder value (Ebiten doesn't expose X11)
-- Location: internal/lua/api.go
-- Fix: Document as known difference; provide Ebiten surface alternative
+- Location: internal/lua/cairo_module.go
+- Resolution: Documented as known difference in docs/migration.md
+  - Added conky_window table section explaining all fields
+  - Documented that drawable, display, visual are placeholders
+  - Explained why (Ebiten abstracts underlying graphics system)
+  - Confirmed that common patterns (cairo_xlib_surface_create) work correctly
+  - Advised users with direct X11 manipulation scripts to refactor
 
 **BUG-006: Conditional variables not fully implemented** ✅ RESOLVED
 - Severity: Medium
@@ -432,7 +437,7 @@ None - all tests pass, core functionality works
 ### Can Defer (Post-Release)
 1. BUG-003: Non-rectangular clipping (8h)
 2. BUG-004: cairo_text_path (4h)
-3. BUG-005: conky_window documentation (1h)
+3. ~~BUG-005: conky_window documentation (1h)~~ ✅ COMPLETED - Added to docs/migration.md
 4. BUG-007/008: Test coverage (8h)
 5. ~~BUG-009: strftime specifiers (2h)~~ ✅ COMPLETED - Added %V, %G, %g, %U, %W, %s
 
