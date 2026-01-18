@@ -2440,7 +2440,7 @@ The SSH connection management has been implemented in `internal/platform/ssh_con
 - [ ] Achieve 80%+ test coverage for critical paths
 - [ ] Add integration tests for platform-specific code
 - [x] Create performance benchmarks for monitoring operations
-- [ ] Add fuzzing tests for configuration parsing
+- [x] Add fuzzing tests for configuration parsing
 
 **Implementation Summary** (Benchmarks):
 Performance benchmarks added in `internal/monitor/bench_test.go` covering:
@@ -2453,6 +2453,20 @@ Performance benchmarks added in `internal/monitor/bench_test.go` covering:
 - SystemData concurrent access (~15ns/op)
 
 All benchmarks confirm operations are well under the 16ms update latency target.
+
+**Implementation Summary** (Fuzzing Tests):
+Fuzzing tests added in `internal/config/fuzz_test.go` covering:
+- `FuzzLegacyParser` - Tests legacy .conkyrc parser with arbitrary input
+- `FuzzLuaParser` - Tests Lua configuration parser with arbitrary Lua code
+- `FuzzParseColor` - Tests color parsing (hex and named colors)
+- `FuzzParseWindowHints` - Tests window hints parsing (comma-separated lists)
+- `FuzzParseAlignment` - Tests alignment parsing (9 valid positions)
+- `FuzzParseWindowType` - Tests window type parsing
+- `FuzzParseBackgroundMode` - Tests background mode parsing
+- `FuzzIsLuaConfig` - Tests format detection function
+
+All fuzzing tests include seed corpus with valid inputs and edge cases.
+Run with: `go test -fuzz=FuzzLegacyParser -fuzztime=30s ./internal/config/`
 
 **Current Coverage Analysis** (Updated 2026-01-18):
 - `internal/profiling/` - 97.0% ✅ Excellent
