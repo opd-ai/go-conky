@@ -44,16 +44,16 @@ func (s ConnectionState) String() string {
 
 // ConnectionStats provides statistics about the SSH connection.
 type ConnectionStats struct {
-	State              ConnectionState
-	ConnectedSince     time.Time
-	ReconnectAttempts  int64
-	TotalReconnects    int64
-	LastError          error
-	LastErrorTime      time.Time
-	SessionsCreated    int64
-	SessionsReused     int64
-	KeepalivesSent     int64
-	KeepalivesFailed   int64
+	State             ConnectionState
+	ConnectedSince    time.Time
+	ReconnectAttempts int64
+	TotalReconnects   int64
+	LastError         error
+	LastErrorTime     time.Time
+	SessionsCreated   int64
+	SessionsReused    int64
+	KeepalivesSent    int64
+	KeepalivesFailed  int64
 }
 
 // SSHConnectionConfig configures SSH connection management.
@@ -92,30 +92,30 @@ type SSHConnectionConfig struct {
 
 // sshConnectionManager manages SSH connections with pooling, keepalive, and reconnection.
 type sshConnectionManager struct {
-	config     SSHConnectionConfig
-	sshConfig  *ssh.ClientConfig
-	address    string
-	client     *ssh.Client
-	mu         sync.RWMutex
-	state      atomic.Int32
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
+	config    SSHConnectionConfig
+	sshConfig *ssh.ClientConfig
+	address   string
+	client    *ssh.Client
+	mu        sync.RWMutex
+	state     atomic.Int32
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
 
 	// Stats
-	connectedSince     time.Time
-	reconnectAttempts  atomic.Int64
-	totalReconnects    atomic.Int64
-	lastError          error
-	lastErrorTime      time.Time
-	sessionsCreated    atomic.Int64
-	sessionsReused     atomic.Int64
-	keepalivesSent     atomic.Int64
-	keepalivesFailed   atomic.Int64
+	connectedSince    time.Time
+	reconnectAttempts atomic.Int64
+	totalReconnects   atomic.Int64
+	lastError         error
+	lastErrorTime     time.Time
+	sessionsCreated   atomic.Int64
+	sessionsReused    atomic.Int64
+	keepalivesSent    atomic.Int64
+	keepalivesFailed  atomic.Int64
 
 	// Session pool
-	sessionPool     []*pooledSession
-	sessionPoolMu   sync.Mutex
+	sessionPool   []*pooledSession
+	sessionPoolMu sync.Mutex
 }
 
 // pooledSession wraps an SSH session with metadata for pooling.
@@ -253,16 +253,16 @@ func (m *sshConnectionManager) Stats() ConnectionStats {
 	defer m.mu.RUnlock()
 
 	return ConnectionStats{
-		State:              ConnectionState(m.state.Load()),
-		ConnectedSince:     m.connectedSince,
-		ReconnectAttempts:  m.reconnectAttempts.Load(),
-		TotalReconnects:    m.totalReconnects.Load(),
-		LastError:          m.lastError,
-		LastErrorTime:      m.lastErrorTime,
-		SessionsCreated:    m.sessionsCreated.Load(),
-		SessionsReused:     m.sessionsReused.Load(),
-		KeepalivesSent:     m.keepalivesSent.Load(),
-		KeepalivesFailed:   m.keepalivesFailed.Load(),
+		State:             ConnectionState(m.state.Load()),
+		ConnectedSince:    m.connectedSince,
+		ReconnectAttempts: m.reconnectAttempts.Load(),
+		TotalReconnects:   m.totalReconnects.Load(),
+		LastError:         m.lastError,
+		LastErrorTime:     m.lastErrorTime,
+		SessionsCreated:   m.sessionsCreated.Load(),
+		SessionsReused:    m.sessionsReused.Load(),
+		KeepalivesSent:    m.keepalivesSent.Load(),
+		KeepalivesFailed:  m.keepalivesFailed.Load(),
 	}
 }
 

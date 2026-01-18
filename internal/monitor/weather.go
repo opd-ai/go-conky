@@ -386,8 +386,10 @@ func degreesToCompass(degrees int) string {
 	if degrees < 0 {
 		return "VRB"
 	}
-	directions := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-		"S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"}
+	directions := []string{
+		"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+		"S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+	}
 	index := ((degrees + 11) / 22) % 16
 	return directions[index]
 }

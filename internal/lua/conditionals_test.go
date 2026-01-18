@@ -163,7 +163,7 @@ func TestIfExisting(t *testing.T) {
 	// Create a temp file for testing
 	tmpDir := t.TempDir()
 	existingFile := filepath.Join(tmpDir, "existing.txt")
-	if err := os.WriteFile(existingFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(existingFile, []byte("test"), 0o644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	nonExistingFile := filepath.Join(tmpDir, "nonexisting.txt")

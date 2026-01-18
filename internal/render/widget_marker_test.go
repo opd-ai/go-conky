@@ -210,10 +210,10 @@ func TestContainsWidgetMarker(t *testing.T) {
 
 func TestParseWidgetSegments(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		wantLen  int
-		checkFn  func(t *testing.T, segments []WidgetSegment)
+		name    string
+		input   string
+		wantLen int
+		checkFn func(t *testing.T, segments []WidgetSegment)
 	}{
 		{
 			name:    "plain text only",

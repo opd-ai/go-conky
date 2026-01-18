@@ -613,5 +613,3 @@ func TestNewPseudoBackgroundRenderer(t *testing.T) {
 		t.Error("imageProvider should be set when provider is passed")
 	}
 }
-
-

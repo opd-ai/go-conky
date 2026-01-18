@@ -53,6 +53,7 @@ func (m *mockSystemDataProvider) TCPCountInRange(minPort, maxPort int) int {
 	}
 	return count
 }
+
 func (m *mockSystemDataProvider) TCPConnectionByIndex(minPort, maxPort, index int) *monitor.TCPConnection {
 	var matching []monitor.TCPConnection
 	for _, c := range m.tcp.Connections {
@@ -76,6 +77,7 @@ func (m *mockSystemDataProvider) MailUnseenCount(name string) int {
 	}
 	return 0
 }
+
 func (m *mockSystemDataProvider) MailTotalCount(name string) int {
 	if m.mail.Accounts == nil {
 		return 0
@@ -85,6 +87,7 @@ func (m *mockSystemDataProvider) MailTotalCount(name string) int {
 	}
 	return 0
 }
+
 func (m *mockSystemDataProvider) MailTotalUnseen() int {
 	if m.mail.Accounts == nil {
 		return 0
@@ -95,6 +98,7 @@ func (m *mockSystemDataProvider) MailTotalUnseen() int {
 	}
 	return total
 }
+
 func (m *mockSystemDataProvider) MailTotalMessages() int {
 	if m.mail.Accounts == nil {
 		return 0
@@ -105,6 +109,7 @@ func (m *mockSystemDataProvider) MailTotalMessages() int {
 	}
 	return total
 }
+
 func (m *mockSystemDataProvider) Weather(stationID string) monitor.WeatherStats {
 	return m.weather
 }
@@ -3266,371 +3271,371 @@ func TestResolveImageEmptyArgs(t *testing.T) {
 
 // TestResolveFSBar tests the filesystem bar widget resolver.
 func TestResolveFSBar(t *testing.T) {
-runtime, err := New(DefaultConfig())
-if err != nil {
-t.Fatalf("failed to create runtime: %v", err)
-}
-defer runtime.Close()
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
 
-provider := newMockProvider()
-api, err := NewConkyAPI(runtime, provider)
-if err != nil {
-t.Fatalf("failed to create API: %v", err)
-}
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
 
-tests := []struct {
-name       string
-template   string
-checkPerc  float64 // Expected percentage encoded in bar
-checkWidth float64
-}{
-{
-name:       "default mount point",
-template:   "${fs_bar}",
-checkPerc:  40.0, // "/" mount is 40% in mock
-checkWidth: 100,
-},
-{
-name:       "specific mount point",
-template:   "${fs_bar /home}",
-checkPerc:  50.0, // "/home" mount is 50% in mock
-checkWidth: 100,
-},
-{
-name:       "with height",
-template:   "${fs_bar 12}",
-checkPerc:  40.0,
-checkWidth: 100,
-},
-{
-name:       "with height,width",
-template:   "${fs_bar 10,80}",
-checkPerc:  40.0,
-checkWidth: 80,
-},
-{
-name:       "with size and mount point",
-template:   "${fs_bar 10,80 /home}",
-checkPerc:  50.0,
-checkWidth: 80,
-},
-{
-name:       "unknown mount point",
-template:   "${fs_bar /unknown}",
-checkPerc:  0.0,
-checkWidth: 100,
-},
-}
+	tests := []struct {
+		name       string
+		template   string
+		checkPerc  float64 // Expected percentage encoded in bar
+		checkWidth float64
+	}{
+		{
+			name:       "default mount point",
+			template:   "${fs_bar}",
+			checkPerc:  40.0, // "/" mount is 40% in mock
+			checkWidth: 100,
+		},
+		{
+			name:       "specific mount point",
+			template:   "${fs_bar /home}",
+			checkPerc:  50.0, // "/home" mount is 50% in mock
+			checkWidth: 100,
+		},
+		{
+			name:       "with height",
+			template:   "${fs_bar 12}",
+			checkPerc:  40.0,
+			checkWidth: 100,
+		},
+		{
+			name:       "with height,width",
+			template:   "${fs_bar 10,80}",
+			checkPerc:  40.0,
+			checkWidth: 80,
+		},
+		{
+			name:       "with size and mount point",
+			template:   "${fs_bar 10,80 /home}",
+			checkPerc:  50.0,
+			checkWidth: 80,
+		},
+		{
+			name:       "unknown mount point",
+			template:   "${fs_bar /unknown}",
+			checkPerc:  0.0,
+			checkWidth: 100,
+		},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-result := api.Parse(tt.template)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
 
-// Should return a widget marker
-if !strings.Contains(result, "\x00WGT:") {
-t.Errorf("expected widget marker in result, got %q", result)
-return
-}
+			// Should return a widget marker
+			if !strings.Contains(result, "\x00WGT:") {
+				t.Errorf("expected widget marker in result, got %q", result)
+				return
+			}
 
-// Decode and check widget marker
-marker := render.DecodeWidgetMarker(result)
-if marker == nil {
-t.Errorf("failed to decode widget marker from %q", result)
-return
-}
+			// Decode and check widget marker
+			marker := render.DecodeWidgetMarker(result)
+			if marker == nil {
+				t.Errorf("failed to decode widget marker from %q", result)
+				return
+			}
 
-if marker.Value != tt.checkPerc {
-t.Errorf("Value = %v, want %v", marker.Value, tt.checkPerc)
-}
-if marker.Width != tt.checkWidth {
-t.Errorf("Width = %v, want %v", marker.Width, tt.checkWidth)
-}
-})
-}
+			if marker.Value != tt.checkPerc {
+				t.Errorf("Value = %v, want %v", marker.Value, tt.checkPerc)
+			}
+			if marker.Width != tt.checkWidth {
+				t.Errorf("Width = %v, want %v", marker.Width, tt.checkWidth)
+			}
+		})
+	}
 }
 
 // TestResolveBatteryBar tests the battery bar widget resolver.
 func TestResolveBatteryBar(t *testing.T) {
-runtime, err := New(DefaultConfig())
-if err != nil {
-t.Fatalf("failed to create runtime: %v", err)
-}
-defer runtime.Close()
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
 
-provider := newMockProvider()
-api, err := NewConkyAPI(runtime, provider)
-if err != nil {
-t.Fatalf("failed to create API: %v", err)
-}
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
 
-tests := []struct {
-name       string
-template   string
-checkPerc  float64
-checkWidth float64
-}{
-{
-name:       "default size",
-template:   "${battery_bar}",
-checkPerc:  85.0, // TotalCapacity from mock
-checkWidth: 100,
-},
-{
-name:       "with height",
-template:   "${battery_bar 12}",
-checkPerc:  85.0,
-checkWidth: 100,
-},
-{
-name:       "with height and width",
-template:   "${battery_bar 15 150}",
-checkPerc:  85.0,
-checkWidth: 150,
-},
-}
+	tests := []struct {
+		name       string
+		template   string
+		checkPerc  float64
+		checkWidth float64
+	}{
+		{
+			name:       "default size",
+			template:   "${battery_bar}",
+			checkPerc:  85.0, // TotalCapacity from mock
+			checkWidth: 100,
+		},
+		{
+			name:       "with height",
+			template:   "${battery_bar 12}",
+			checkPerc:  85.0,
+			checkWidth: 100,
+		},
+		{
+			name:       "with height and width",
+			template:   "${battery_bar 15 150}",
+			checkPerc:  85.0,
+			checkWidth: 150,
+		},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-result := api.Parse(tt.template)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
 
-if !strings.Contains(result, "\x00WGT:") {
-t.Errorf("expected widget marker in result, got %q", result)
-return
-}
+			if !strings.Contains(result, "\x00WGT:") {
+				t.Errorf("expected widget marker in result, got %q", result)
+				return
+			}
 
-marker := render.DecodeWidgetMarker(result)
-if marker == nil {
-t.Errorf("failed to decode widget marker from %q", result)
-return
-}
+			marker := render.DecodeWidgetMarker(result)
+			if marker == nil {
+				t.Errorf("failed to decode widget marker from %q", result)
+				return
+			}
 
-if marker.Value != tt.checkPerc {
-t.Errorf("Value = %v, want %v", marker.Value, tt.checkPerc)
-}
-if marker.Width != tt.checkWidth {
-t.Errorf("Width = %v, want %v", marker.Width, tt.checkWidth)
-}
-})
-}
+			if marker.Value != tt.checkPerc {
+				t.Errorf("Value = %v, want %v", marker.Value, tt.checkPerc)
+			}
+			if marker.Width != tt.checkWidth {
+				t.Errorf("Width = %v, want %v", marker.Width, tt.checkWidth)
+			}
+		})
+	}
 }
 
 // TestResolveIfRunning tests the if_running process check resolver.
 func TestResolveIfRunning(t *testing.T) {
-runtime, err := New(DefaultConfig())
-if err != nil {
-t.Fatalf("failed to create runtime: %v", err)
-}
-defer runtime.Close()
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
 
-provider := newMockProvider()
-api, err := NewConkyAPI(runtime, provider)
-if err != nil {
-t.Fatalf("failed to create API: %v", err)
-}
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
 
-tests := []struct {
-name     string
-template string
-want     string
-}{
-{
-name:     "running process",
-template: "${if_running firefox}yes${else}no${endif}",
-want:     "yes",
-},
-{
-name:     "partial match",
-template: "${if_running fire}yes${else}no${endif}",
-want:     "yes",
-},
-{
-name:     "not running process",
-template: "${if_running nonexistent}yes${else}no${endif}",
-want:     "no",
-},
-{
-name:     "another running process",
-template: "${if_running chrome}yes${else}no${endif}",
-want:     "yes",
-},
-{
-name:     "case sensitivity",
-template: "${if_running FIREFOX}yes${else}no${endif}",
-want:     "no", // Process name is lowercase "firefox"
-},
-}
+	tests := []struct {
+		name     string
+		template string
+		want     string
+	}{
+		{
+			name:     "running process",
+			template: "${if_running firefox}yes${else}no${endif}",
+			want:     "yes",
+		},
+		{
+			name:     "partial match",
+			template: "${if_running fire}yes${else}no${endif}",
+			want:     "yes",
+		},
+		{
+			name:     "not running process",
+			template: "${if_running nonexistent}yes${else}no${endif}",
+			want:     "no",
+		},
+		{
+			name:     "another running process",
+			template: "${if_running chrome}yes${else}no${endif}",
+			want:     "yes",
+		},
+		{
+			name:     "case sensitivity",
+			template: "${if_running FIREFOX}yes${else}no${endif}",
+			want:     "no", // Process name is lowercase "firefox"
+		},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-result := api.Parse(tt.template)
-if result != tt.want {
-t.Errorf("Parse(%q) = %q, want %q", tt.template, result, tt.want)
-}
-})
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.template)
+			if result != tt.want {
+				t.Errorf("Parse(%q) = %q, want %q", tt.template, result, tt.want)
+			}
+		})
+	}
 }
 
 // TestResolveACPIFan tests the ACPI fan status resolver.
 func TestResolveACPIFan(t *testing.T) {
-runtime, err := New(DefaultConfig())
-if err != nil {
-t.Fatalf("failed to create runtime: %v", err)
-}
-defer runtime.Close()
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
 
-tests := []struct {
-name   string
-hwmon  monitor.HwmonStats
-want   string
-}{
-{
-name: "fan device present",
-hwmon: monitor.HwmonStats{
-Devices: map[string]monitor.HwmonDevice{
-"coretemp": {Name: "coretemp"},
-"thinkpad_fan": {Name: "thinkpad_fan"},
-},
-},
-want: "running",
-},
-{
-name: "fan in name case insensitive",
-hwmon: monitor.HwmonStats{
-Devices: map[string]monitor.HwmonDevice{
-"CPU_FAN": {Name: "CPU_FAN"},
-},
-},
-want: "running",
-},
-{
-name: "no fan device",
-hwmon: monitor.HwmonStats{
-Devices: map[string]monitor.HwmonDevice{
-"coretemp": {Name: "coretemp"},
-"amdgpu": {Name: "amdgpu"},
-},
-},
-want: "unknown",
-},
-{
-name:  "empty devices",
-hwmon: monitor.HwmonStats{},
-want:  "unknown",
-},
-}
+	tests := []struct {
+		name  string
+		hwmon monitor.HwmonStats
+		want  string
+	}{
+		{
+			name: "fan device present",
+			hwmon: monitor.HwmonStats{
+				Devices: map[string]monitor.HwmonDevice{
+					"coretemp":     {Name: "coretemp"},
+					"thinkpad_fan": {Name: "thinkpad_fan"},
+				},
+			},
+			want: "running",
+		},
+		{
+			name: "fan in name case insensitive",
+			hwmon: monitor.HwmonStats{
+				Devices: map[string]monitor.HwmonDevice{
+					"CPU_FAN": {Name: "CPU_FAN"},
+				},
+			},
+			want: "running",
+		},
+		{
+			name: "no fan device",
+			hwmon: monitor.HwmonStats{
+				Devices: map[string]monitor.HwmonDevice{
+					"coretemp": {Name: "coretemp"},
+					"amdgpu":   {Name: "amdgpu"},
+				},
+			},
+			want: "unknown",
+		},
+		{
+			name:  "empty devices",
+			hwmon: monitor.HwmonStats{},
+			want:  "unknown",
+		},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-provider := newMockProvider()
-provider.hwmon = tt.hwmon
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := newMockProvider()
+			provider.hwmon = tt.hwmon
 
-api, err := NewConkyAPI(runtime, provider)
-if err != nil {
-t.Fatalf("failed to create API: %v", err)
-}
+			api, err := NewConkyAPI(runtime, provider)
+			if err != nil {
+				t.Fatalf("failed to create API: %v", err)
+			}
 
-result := api.Parse("${acpifan}")
-if result != tt.want {
-t.Errorf("Parse(${acpifan}) = %q, want %q", result, tt.want)
-}
-})
-}
+			result := api.Parse("${acpifan}")
+			if result != tt.want {
+				t.Errorf("Parse(${acpifan}) = %q, want %q", result, tt.want)
+			}
+		})
+	}
 }
 
 // TestResolveBattery tests the battery status string resolver.
 func TestResolveBattery(t *testing.T) {
-runtime, err := New(DefaultConfig())
-if err != nil {
-t.Fatalf("failed to create runtime: %v", err)
-}
-defer runtime.Close()
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
 
-tests := []struct {
-name    string
-battery monitor.BatteryStats
-args    string
-want    string
-}{
-{
-name:    "no battery",
-battery: monitor.BatteryStats{},
-args:    "",
-want:    "No battery",
-},
-{
-name: "specific battery",
-battery: monitor.BatteryStats{
-Batteries: map[string]monitor.BatteryInfo{
-"BAT0": {Capacity: 75, Status: "Charging"},
-},
-},
-args: "BAT0",
-want: "Charging 75%",
-},
-{
-name: "default battery",
-battery: monitor.BatteryStats{
-Batteries: map[string]monitor.BatteryInfo{
-"BAT0": {Capacity: 50, Status: "Discharging"},
-},
-},
-args: "",
-want: "Discharging 50%",
-},
-{
-name: "aggregate charging on AC",
-battery: monitor.BatteryStats{
-Batteries:     map[string]monitor.BatteryInfo{},
-ACOnline:      true,
-IsCharging:    true,
-TotalCapacity: 80.0,
-},
-args: "UNKNOWN",
-want: "Charging 80%",
-},
-{
-name: "aggregate full on AC",
-battery: monitor.BatteryStats{
-Batteries:     map[string]monitor.BatteryInfo{},
-ACOnline:      true,
-IsCharging:    false,
-TotalCapacity: 100.0,
-},
-args: "UNKNOWN",
-want: "Full 100%",
-},
-{
-name: "aggregate discharging",
-battery: monitor.BatteryStats{
-Batteries:     map[string]monitor.BatteryInfo{},
-ACOnline:      false,
-IsDischarging: true,
-TotalCapacity: 45.0,
-},
-args: "UNKNOWN",
-want: "Discharging 45%",
-},
-}
+	tests := []struct {
+		name    string
+		battery monitor.BatteryStats
+		args    string
+		want    string
+	}{
+		{
+			name:    "no battery",
+			battery: monitor.BatteryStats{},
+			args:    "",
+			want:    "No battery",
+		},
+		{
+			name: "specific battery",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Capacity: 75, Status: "Charging"},
+				},
+			},
+			args: "BAT0",
+			want: "Charging 75%",
+		},
+		{
+			name: "default battery",
+			battery: monitor.BatteryStats{
+				Batteries: map[string]monitor.BatteryInfo{
+					"BAT0": {Capacity: 50, Status: "Discharging"},
+				},
+			},
+			args: "",
+			want: "Discharging 50%",
+		},
+		{
+			name: "aggregate charging on AC",
+			battery: monitor.BatteryStats{
+				Batteries:     map[string]monitor.BatteryInfo{},
+				ACOnline:      true,
+				IsCharging:    true,
+				TotalCapacity: 80.0,
+			},
+			args: "UNKNOWN",
+			want: "Charging 80%",
+		},
+		{
+			name: "aggregate full on AC",
+			battery: monitor.BatteryStats{
+				Batteries:     map[string]monitor.BatteryInfo{},
+				ACOnline:      true,
+				IsCharging:    false,
+				TotalCapacity: 100.0,
+			},
+			args: "UNKNOWN",
+			want: "Full 100%",
+		},
+		{
+			name: "aggregate discharging",
+			battery: monitor.BatteryStats{
+				Batteries:     map[string]monitor.BatteryInfo{},
+				ACOnline:      false,
+				IsDischarging: true,
+				TotalCapacity: 45.0,
+			},
+			args: "UNKNOWN",
+			want: "Discharging 45%",
+		},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-provider := newMockProvider()
-provider.battery = tt.battery
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := newMockProvider()
+			provider.battery = tt.battery
 
-api, err := NewConkyAPI(runtime, provider)
-if err != nil {
-t.Fatalf("failed to create API: %v", err)
-}
+			api, err := NewConkyAPI(runtime, provider)
+			if err != nil {
+				t.Fatalf("failed to create API: %v", err)
+			}
 
-template := "${battery}"
-if tt.args != "" {
-template = fmt.Sprintf("${battery %s}", tt.args)
-}
+			template := "${battery}"
+			if tt.args != "" {
+				template = fmt.Sprintf("${battery %s}", tt.args)
+			}
 
-result := api.Parse(template)
-if result != tt.want {
-t.Errorf("Parse(%q) = %q, want %q", template, result, tt.want)
-}
-})
-}
+			result := api.Parse(template)
+			if result != tt.want {
+				t.Errorf("Parse(%q) = %q, want %q", template, result, tt.want)
+			}
+		})
+	}
 }

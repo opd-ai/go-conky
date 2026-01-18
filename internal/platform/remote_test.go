@@ -369,7 +369,7 @@ func TestBuildHostKeyCallbackWithValidKnownHosts(t *testing.T) {
 	// Write a valid known_hosts entry using ed25519 key
 	// This is a valid OpenSSH public key format
 	knownHostsContent := "example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBaLR4I4jx/L5oqjNBl0r/QJLCC0BFmPdCLzU4mQD8vS\n"
-	if err := os.WriteFile(knownHostsPath, []byte(knownHostsContent), 0600); err != nil {
+	if err := os.WriteFile(knownHostsPath, []byte(knownHostsContent), 0o600); err != nil {
 		t.Fatalf("Failed to write known_hosts file: %v", err)
 	}
 

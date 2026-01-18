@@ -117,12 +117,12 @@ func (p *sshPlatform) Initialize(ctx context.Context) error {
 	// Set up connection manager with keepalive and reconnection
 	addr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
 	connConfig := SSHConnectionConfig{
-		KeepAliveInterval:    p.config.KeepAliveInterval,
-		KeepAliveTimeout:     p.config.KeepAliveTimeout,
-		MaxReconnectAttempts: p.config.MaxReconnectAttempts,
+		KeepAliveInterval:     p.config.KeepAliveInterval,
+		KeepAliveTimeout:      p.config.KeepAliveTimeout,
+		MaxReconnectAttempts:  p.config.MaxReconnectAttempts,
 		InitialReconnectDelay: p.config.InitialReconnectDelay,
-		MaxReconnectDelay:    p.config.MaxReconnectDelay,
-		OnStateChange:        p.config.OnConnectionStateChange,
+		MaxReconnectDelay:     p.config.MaxReconnectDelay,
+		OnStateChange:         p.config.OnConnectionStateChange,
 	}
 	p.connManager = newSSHConnectionManager(addr, sshConfig, connConfig)
 
@@ -247,8 +247,8 @@ func (p *sshPlatform) buildHostKeyCallback() (ssh.HostKeyCallback, error) {
 
 	// Priority 2: Use insecure mode if explicitly requested
 	if p.config.InsecureIgnoreHostKey {
-		log.Printf("WARNING: SSH host key verification is disabled for %s. " +
-			"This makes the connection vulnerable to man-in-the-middle attacks. " +
+		log.Printf("WARNING: SSH host key verification is disabled for %s. "+
+			"This makes the connection vulnerable to man-in-the-middle attacks. "+
 			"Set InsecureIgnoreHostKey=false and use known_hosts for production.",
 			p.config.Host)
 		return ssh.InsecureIgnoreHostKey(), nil

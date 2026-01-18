@@ -596,7 +596,7 @@ func TestParseWindowHints(t *testing.T) {
 
 // TestLegacyParserTemplates tests parsing of template0-template9 directives.
 func TestLegacyParserTemplates(t *testing.T) {
-content := []byte(`
+	content := []byte(`
 template0 Hello World
 template1 Core \1 usage: ${cpu \1}%
 template2 FS \1 is \2% full
@@ -606,35 +606,35 @@ TEXT
 Test line
 `)
 
-parser := NewLegacyParser()
-cfg, err := parser.Parse(content)
-if err != nil {
-t.Fatalf("Parse failed: %v", err)
-}
+	parser := NewLegacyParser()
+	cfg, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
 
-tests := []struct {
-index    int
-expected string
-}{
-{0, "Hello World"},
-{1, "Core \\1 usage: ${cpu \\1}%"},
-{2, "FS \\1 is \\2% full"},
-{3, ""},
-{4, ""},
-{5, ""},
-{6, ""},
-{7, ""},
-{8, ""},
-{9, "Last template with arg \\1"},
-}
+	tests := []struct {
+		index    int
+		expected string
+	}{
+		{0, "Hello World"},
+		{1, "Core \\1 usage: ${cpu \\1}%"},
+		{2, "FS \\1 is \\2% full"},
+		{3, ""},
+		{4, ""},
+		{5, ""},
+		{6, ""},
+		{7, ""},
+		{8, ""},
+		{9, "Last template with arg \\1"},
+	}
 
-for _, tt := range tests {
-t.Run("template"+string(rune('0'+tt.index)), func(t *testing.T) {
-if cfg.Text.Templates[tt.index] != tt.expected {
-t.Errorf("Templates[%d] = %q, want %q", tt.index, cfg.Text.Templates[tt.index], tt.expected)
-}
-})
-}
+	for _, tt := range tests {
+		t.Run("template"+string(rune('0'+tt.index)), func(t *testing.T) {
+			if cfg.Text.Templates[tt.index] != tt.expected {
+				t.Errorf("Templates[%d] = %q, want %q", tt.index, cfg.Text.Templates[tt.index], tt.expected)
+			}
+		})
+	}
 }
 
 // TestLegacyParserDisplayDirectives tests parsing of display/rendering directives.

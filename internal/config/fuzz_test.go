@@ -25,13 +25,13 @@ TEXT
 ${mem}/${memmax}`))
 
 	// Edge cases
-	f.Add([]byte(""))           // empty
-	f.Add([]byte("TEXT"))       // only TEXT marker
-	f.Add([]byte("TEXT\n"))     // TEXT with newline
-	f.Add([]byte("\n\n\n"))     // only newlines
-	f.Add([]byte("# comment"))  // only comment
-	f.Add([]byte("key"))        // key without value
-	f.Add([]byte("key value"))  // minimal directive
+	f.Add([]byte(""))          // empty
+	f.Add([]byte("TEXT"))      // only TEXT marker
+	f.Add([]byte("TEXT\n"))    // TEXT with newline
+	f.Add([]byte("\n\n\n"))    // only newlines
+	f.Add([]byte("# comment")) // only comment
+	f.Add([]byte("key"))       // key without value
+	f.Add([]byte("key value")) // minimal directive
 
 	// Malformed inputs
 	f.Add([]byte("update_interval not_a_number"))
@@ -77,11 +77,11 @@ CPU: ${cpu}%
 conky.text = ''`))
 
 	// Edge cases
-	f.Add([]byte(""))                   // empty
-	f.Add([]byte("conky.config = {}"))  // minimal valid config
-	f.Add([]byte("conky.text = ''"))    // only text
-	f.Add([]byte("-- comment only"))    // Lua comment
-	f.Add([]byte("local x = 1"))        // valid Lua but no conky table
+	f.Add([]byte(""))                  // empty
+	f.Add([]byte("conky.config = {}")) // minimal valid config
+	f.Add([]byte("conky.text = ''"))   // only text
+	f.Add([]byte("-- comment only"))   // Lua comment
+	f.Add([]byte("local x = 1"))       // valid Lua but no conky table
 
 	// Malformed Lua
 	f.Add([]byte("conky.config = {"))   // unclosed brace
@@ -125,12 +125,12 @@ func FuzzParseColor(f *testing.F) {
 	f.Add("")
 	f.Add("#")
 	f.Add("###")
-	f.Add("#FFF")                // 3-char hex (not supported)
-	f.Add("#FFFFFFFF")           // 8-char hex (with alpha)
+	f.Add("#FFF")      // 3-char hex (not supported)
+	f.Add("#FFFFFFFF") // 8-char hex (with alpha)
 	f.Add("notacolor")
-	f.Add("RED")                 // uppercase
-	f.Add("  white  ")           // whitespace
-	f.Add("#GGG000")             // invalid hex chars
+	f.Add("RED")       // uppercase
+	f.Add("  white  ") // whitespace
+	f.Add("#GGG000")   // invalid hex chars
 
 	f.Fuzz(func(t *testing.T, data string) {
 		// parseColor should not panic
@@ -249,9 +249,9 @@ func FuzzIsLuaConfig(f *testing.F) {
 	f.Add([]byte(""))
 
 	// Edge cases
-	f.Add([]byte("conky.config"))        // no equals
-	f.Add([]byte("conky.config={}"))     // no space
-	f.Add([]byte("CONKY.CONFIG = {}"))   // uppercase
+	f.Add([]byte("conky.config"))      // no equals
+	f.Add([]byte("conky.config={}"))   // no space
+	f.Add([]byte("CONKY.CONFIG = {}")) // uppercase
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// isLuaConfig should not panic

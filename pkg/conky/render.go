@@ -163,8 +163,8 @@ func parseWindowHints(hints []config.WindowHint) (bool, bool, bool, bool) {
 			skipTaskbar = true
 		case config.WindowHintSkipPager:
 			skipPager = true
-		// WindowHintBelow, WindowHintSticky are not supported by Ebiten
-		// but are parsed and documented for completeness
+			// WindowHintBelow, WindowHintSticky are not supported by Ebiten
+			// but are parsed and documented for completeness
 		}
 	}
 	return undecorated, floating, skipTaskbar, skipPager

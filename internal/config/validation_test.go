@@ -692,11 +692,11 @@ func TestVariablePatternMatching(t *testing.T) {
 
 func TestValidatorARGBSettings(t *testing.T) {
 	tests := []struct {
-		name          string
-		argbVisual    bool
-		argbValue     int
-		wantErrors    bool
-		wantWarnings  bool
+		name         string
+		argbVisual   bool
+		argbValue    int
+		wantErrors   bool
+		wantWarnings bool
 	}{
 		{
 			name:         "valid settings - disabled",

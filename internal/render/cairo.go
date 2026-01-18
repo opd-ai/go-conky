@@ -609,11 +609,11 @@ type CairoRenderer struct {
 	// Group rendering state - stack of group surfaces
 	groupStack []*groupState
 	// Source surface for SetSourceSurface
-	sourceSurface   *ebiten.Image
-	sourceSurfaceX  float64
-	sourceSurfaceY  float64
+	sourceSurface    *ebiten.Image
+	sourceSurfaceX   float64
+	sourceSurfaceY   float64
 	hasSourceSurface bool
-	mu              sync.Mutex
+	mu               sync.Mutex
 }
 
 // cairoState holds a snapshot of the drawing state for save/restore.
@@ -652,9 +652,9 @@ type cairoState struct {
 
 // groupState holds the state for a push_group operation.
 type groupState struct {
-	surface       *ebiten.Image // The group's temporary surface
+	surface        *ebiten.Image // The group's temporary surface
 	previousScreen *ebiten.Image // The screen before push_group was called
-	content       CairoContent  // Content type for the group
+	content        CairoContent  // Content type for the group
 }
 
 // CairoContent represents the content type for group surfaces.

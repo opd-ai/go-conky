@@ -40,6 +40,6 @@ func IsWayland() bool {
 
 // CheckTransparencySupport returns an empty string on non-Linux platforms
 // because Windows (DWM) and macOS always have compositing enabled.
-func CheckTransparencySupport(argbVisual bool, transparent bool) string {
+func CheckTransparencySupport(argbVisual, transparent bool) string {
 	return ""
 }

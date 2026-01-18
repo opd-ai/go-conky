@@ -1344,8 +1344,8 @@ func (api *ConkyAPI) resolveHR(args []string) string {
 // Usage: ${fs_bar height,width mountpoint}
 func (api *ConkyAPI) resolveFSBar(args []string) string {
 	mountPoint := "/"
-	width := float64(100)  // Default width in pixels
-	height := float64(8)   // Default height in pixels
+	width := float64(100) // Default width in pixels
+	height := float64(8)  // Default height in pixels
 
 	if len(args) > 0 {
 		// Check for size,mountpoint format (height,width or just height)
@@ -1430,8 +1430,8 @@ func (api *ConkyAPI) resolveBattery(args []string) string {
 
 // resolveBatteryBar returns a graphical bar widget for battery level.
 func (api *ConkyAPI) resolveBatteryBar(args []string) string {
-	width := float64(100)  // Default width in pixels
-	height := float64(8)   // Default height in pixels
+	width := float64(100) // Default width in pixels
+	height := float64(8)  // Default height in pixels
 
 	if len(args) > 0 {
 		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
@@ -1705,43 +1705,43 @@ func (api *ConkyAPI) resolveTCPPortMon(args []string) string {
 // portToService maps well-known port numbers to service names.
 func portToService(port int) string {
 	services := map[int]string{
-		20:   "ftp-data",
-		21:   "ftp",
-		22:   "ssh",
-		23:   "telnet",
-		25:   "smtp",
-		53:   "domain",
-		67:   "bootps",
-		68:   "bootpc",
-		69:   "tftp",
-		80:   "http",
-		110:  "pop3",
-		119:  "nntp",
-		123:  "ntp",
-		143:  "imap",
-		161:  "snmp",
-		162:  "snmptrap",
-		194:  "irc",
-		389:  "ldap",
-		443:  "https",
-		445:  "microsoft-ds",
-		465:  "smtps",
-		514:  "syslog",
-		587:  "submission",
-		636:  "ldaps",
-		993:  "imaps",
-		995:  "pop3s",
-		1080: "socks",
-		1433: "ms-sql-s",
-		1521: "oracle",
-		3306: "mysql",
-		3389: "ms-wbt-server",
-		5432: "postgresql",
-		5900: "vnc",
-		6379: "redis",
-		8080: "http-proxy",
-		8443: "https-alt",
-		9200: "elasticsearch",
+		20:    "ftp-data",
+		21:    "ftp",
+		22:    "ssh",
+		23:    "telnet",
+		25:    "smtp",
+		53:    "domain",
+		67:    "bootps",
+		68:    "bootpc",
+		69:    "tftp",
+		80:    "http",
+		110:   "pop3",
+		119:   "nntp",
+		123:   "ntp",
+		143:   "imap",
+		161:   "snmp",
+		162:   "snmptrap",
+		194:   "irc",
+		389:   "ldap",
+		443:   "https",
+		445:   "microsoft-ds",
+		465:   "smtps",
+		514:   "syslog",
+		587:   "submission",
+		636:   "ldaps",
+		993:   "imaps",
+		995:   "pop3s",
+		1080:  "socks",
+		1433:  "ms-sql-s",
+		1521:  "oracle",
+		3306:  "mysql",
+		3389:  "ms-wbt-server",
+		5432:  "postgresql",
+		5900:  "vnc",
+		6379:  "redis",
+		8080:  "http-proxy",
+		8443:  "https-alt",
+		9200:  "elasticsearch",
 		27017: "mongodb",
 	}
 	if name, ok := services[port]; ok {
@@ -1804,8 +1804,8 @@ func (api *ConkyAPI) resolveEntropyPerc() string {
 
 // resolveEntropyBar returns a graphical bar widget for entropy.
 func (api *ConkyAPI) resolveEntropyBar(args []string) string {
-	width := float64(100)  // Default width in pixels
-	height := float64(8)   // Default height in pixels
+	width := float64(100) // Default width in pixels
+	height := float64(8)  // Default height in pixels
 
 	if len(args) > 0 {
 		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
@@ -2003,8 +2003,8 @@ func (api *ConkyAPI) resolveFSInodesPerc(args []string) string {
 
 // resolveMemBar returns a graphical bar widget for memory usage.
 func (api *ConkyAPI) resolveMemBar(args []string) string {
-	width := float64(100)  // Default width in pixels
-	height := float64(8)   // Default height in pixels
+	width := float64(100) // Default width in pixels
+	height := float64(8)  // Default height in pixels
 
 	if len(args) > 0 {
 		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
@@ -2023,8 +2023,8 @@ func (api *ConkyAPI) resolveMemBar(args []string) string {
 
 // resolveSwapBar returns a graphical bar widget for swap usage.
 func (api *ConkyAPI) resolveSwapBar(args []string) string {
-	width := float64(100)  // Default width in pixels
-	height := float64(8)   // Default height in pixels
+	width := float64(100) // Default width in pixels
+	height := float64(8)  // Default height in pixels
 
 	if len(args) > 0 {
 		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
@@ -2043,9 +2043,9 @@ func (api *ConkyAPI) resolveSwapBar(args []string) string {
 
 // resolveCPUBar returns a graphical bar widget for CPU usage.
 func (api *ConkyAPI) resolveCPUBar(args []string) string {
-	width := float64(100)  // Default width in pixels
-	height := float64(8)   // Default height in pixels
-	cpuIdx := -1           // -1 means overall
+	width := float64(100) // Default width in pixels
+	height := float64(8)  // Default height in pixels
+	cpuIdx := -1          // -1 means overall
 
 	// Parse arguments: ${cpubar cpu# height,width} or ${cpubar height}
 	if len(args) > 0 {
@@ -2090,8 +2090,8 @@ func (api *ConkyAPI) resolveCPUBar(args []string) string {
 
 // resolveLoadGraph returns a graphical representation of load.
 func (api *ConkyAPI) resolveLoadGraph(args []string) string {
-	width := float64(100)  // Default width in pixels
-	height := float64(20)  // Default height in pixels
+	width := float64(100) // Default width in pixels
+	height := float64(20) // Default height in pixels
 
 	if len(args) > 0 {
 		if h, err := strconv.ParseFloat(args[0], 64); err == nil {

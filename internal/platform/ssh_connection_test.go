@@ -55,13 +55,13 @@ func TestSSHConnectionConfig_Defaults(t *testing.T) {
 
 func TestSSHConnectionConfig_CustomValues(t *testing.T) {
 	config := SSHConnectionConfig{
-		KeepAliveInterval:    1 * time.Minute,
-		KeepAliveTimeout:     30 * time.Second,
+		KeepAliveInterval:     1 * time.Minute,
+		KeepAliveTimeout:      30 * time.Second,
 		InitialReconnectDelay: 5 * time.Second,
-		MaxReconnectDelay:    10 * time.Minute,
-		SessionPoolSize:      10,
-		SessionIdleTimeout:   5 * time.Minute,
-		MaxReconnectAttempts: 3,
+		MaxReconnectDelay:     10 * time.Minute,
+		SessionPoolSize:       10,
+		SessionIdleTimeout:    5 * time.Minute,
+		MaxReconnectAttempts:  3,
 	}
 
 	cm := newSSHConnectionManager("example.com:22", nil, config)
@@ -347,7 +347,7 @@ func TestSSHConnectionManager_ReconnectAttemptsTracking(t *testing.T) {
 
 func TestSSHConnectionManager_SetStateWithCallback(t *testing.T) {
 	callbackCalled := atomic.Bool{}
-	
+
 	config := SSHConnectionConfig{
 		OnStateChange: func(from, to ConnectionState) {
 			callbackCalled.Store(true)

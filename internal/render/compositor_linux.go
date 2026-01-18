@@ -141,7 +141,7 @@ func IsWayland() bool {
 // CheckTransparencySupport returns a warning message if transparency may not work,
 // or an empty string if transparency should work fine.
 // This is intended to be called at startup when ARGB transparency is enabled.
-func CheckTransparencySupport(argbVisual bool, transparent bool) string {
+func CheckTransparencySupport(argbVisual, transparent bool) string {
 	// If transparency is not requested, no warning needed
 	if !argbVisual && !transparent {
 		return ""

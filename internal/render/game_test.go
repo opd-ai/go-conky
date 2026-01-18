@@ -832,10 +832,10 @@ func TestDrawStippledLine(t *testing.T) {
 	clr := color.RGBA{R: 255, G: 255, B: 255, A: 255}
 
 	tests := []struct {
-		name                string
-		x1, y1, x2, y2      float32
-		strokeWidth         float32
-		dashLen, gapLen     float32
+		name            string
+		x1, y1, x2, y2  float32
+		strokeWidth     float32
+		dashLen, gapLen float32
 	}{
 		{"horizontal line", 10, 10, 100, 10, 1, 4, 2},
 		{"vertical line", 10, 10, 10, 100, 1, 4, 2},

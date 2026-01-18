@@ -73,7 +73,7 @@ func TestParseWindowHints(t *testing.T) {
 			name: "all hints including unsupported",
 			hints: []config.WindowHint{
 				config.WindowHintUndecorated,
-				config.WindowHintBelow,  // Not supported by Ebiten
+				config.WindowHintBelow, // Not supported by Ebiten
 				config.WindowHintAbove,
 				config.WindowHintSticky, // Not supported by Ebiten
 				config.WindowHintSkipTaskbar,

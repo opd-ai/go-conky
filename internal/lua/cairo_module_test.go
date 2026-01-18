@@ -500,13 +500,13 @@ func TestCairoModule_UpdateWindowInfoAllFields(t *testing.T) {
 		{"display", 1},
 		{"drawable", 2},
 		{"visual", 3},
-		{"text_start_x", 10},         // default margin
-		{"text_start_y", 20},         // default margin
-		{"text_width", 780},          // 800 - 20
-		{"text_height", 570},         // 600 - 30
-		{"border_inner_margin", 0},   // default
-		{"border_outer_margin", 0},   // default
-		{"border_width", 0},          // default
+		{"text_start_x", 10},       // default margin
+		{"text_start_y", 20},       // default margin
+		{"text_width", 780},        // 800 - 20
+		{"text_height", 570},       // 600 - 30
+		{"border_inner_margin", 0}, // default
+		{"border_outer_margin", 0}, // default
+		{"border_width", 0},        // default
 	}
 
 	for _, tc := range tests {
