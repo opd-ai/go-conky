@@ -163,16 +163,80 @@ func TestIsVirtualFS(t *testing.T) {
 }
 
 func TestLinuxFilesystemProvider_Stats(t *testing.T) {
-	// We can't easily test Stats() without actually mounting filesystems,
-	// but we can at least test that it returns an error for non-existent paths
 	provider := &linuxFilesystemProvider{
 		procMountsPath: "/proc/mounts",
 	}
 
-	_, err := provider.Stats("/nonexistent/path/that/does/not/exist")
-	if err == nil {
-		t.Error("Stats() should fail for non-existent path")
-	}
+	t.Run("non-existent path", func(t *testing.T) {
+		_, err := provider.Stats("/nonexistent/path/that/does/not/exist")
+		if err == nil {
+			t.Error("Stats() should fail for non-existent path")
+		}
+	})
+
+	t.Run("root filesystem", func(t *testing.T) {
+		// Test against root filesystem which always exists
+		stats, err := provider.Stats("/")
+		if err != nil {
+			t.Fatalf("Stats('/') failed: %v", err)
+		}
+
+		// Basic sanity checks
+		if stats.Total == 0 {
+			t.Error("Total should be greater than 0")
+		}
+		if stats.Free > stats.Total {
+			t.Errorf("Free (%d) should not exceed Total (%d)", stats.Free, stats.Total)
+		}
+		if stats.Used > stats.Total {
+			t.Errorf("Used (%d) should not exceed Total (%d)", stats.Used, stats.Total)
+		}
+		if stats.UsedPercent < 0 || stats.UsedPercent > 100 {
+			t.Errorf("UsedPercent should be between 0-100, got %f", stats.UsedPercent)
+		}
+
+		// Verify Used + Free approximately equals Total (allow for reserved blocks)
+		// Reserved blocks for root can cause Used + Free < Total
+		calculatedTotal := stats.Used + stats.Free
+		if calculatedTotal > stats.Total*2 {
+			t.Errorf("Used + Free (%d) is unreasonably high compared to Total (%d)",
+				calculatedTotal, stats.Total)
+		}
+	})
+
+	t.Run("tmp filesystem", func(t *testing.T) {
+		// Test against /tmp which should exist on any Linux system
+		stats, err := provider.Stats("/tmp")
+		if err != nil {
+			t.Fatalf("Stats('/tmp') failed: %v", err)
+		}
+
+		// /tmp might be a tmpfs or regular partition, either way Total should be > 0
+		if stats.Total == 0 {
+			t.Error("Total should be greater than 0 for /tmp")
+		}
+	})
+
+	t.Run("inode statistics", func(t *testing.T) {
+		// Test inode statistics
+		stats, err := provider.Stats("/")
+		if err != nil {
+			t.Fatalf("Stats('/') failed: %v", err)
+		}
+
+		// Root filesystem should have inodes
+		if stats.InodesTotal == 0 {
+			t.Log("InodesTotal is 0 - filesystem may not support inode tracking")
+		}
+		if stats.InodesUsed > stats.InodesTotal && stats.InodesTotal > 0 {
+			t.Errorf("InodesUsed (%d) should not exceed InodesTotal (%d)",
+				stats.InodesUsed, stats.InodesTotal)
+		}
+		if stats.InodesFree > stats.InodesTotal && stats.InodesTotal > 0 {
+			t.Errorf("InodesFree (%d) should not exceed InodesTotal (%d)",
+				stats.InodesFree, stats.InodesTotal)
+		}
+	})
 }
 
 func TestLinuxFilesystemProvider_DiskIO(t *testing.T) {

@@ -12,12 +12,13 @@
 
 | Package | Coverage | Status |
 |---------|----------|--------|
+| internal/profiling | 97.0% | ✅ Excellent |
 | internal/config | 93.3% | ✅ Excellent |
-| internal/render | 86.9% | ✅ Good |
+| internal/render | 86.6% | ✅ Good |
 | internal/monitor | 80.2% | ✅ Good |
-| internal/lua | 71.7% | ⚠️ Needs improvement |
-| pkg/conky | 70.4% | ⚠️ Needs improvement |
-| internal/platform | 40.5% | ⚠️ Low coverage (improved from 38.9%) |
+| internal/lua | 73.0% | ⚠️ Needs improvement |
+| pkg/conky | 69.7% | ⚠️ Needs improvement |
+| internal/platform | 43.8% | ⚠️ Low coverage (improved from 40.5%) |
 | cmd/conky-go | 15.2% | ❌ Poor |
 
 ## Test Results by Category
@@ -361,13 +362,16 @@
 - Feature: Cross-platform support
 - Reproduce: Run coverage report
 - Expected: >70% coverage
-- Actual: 40.5% coverage (improved from 38.9%)
+- Actual: 43.8% coverage (improved from 40.5% → 43.8%)
 - Location: internal/platform/
 - Progress:
   - Added tests for DiskIO function (0% → 89.3%)
   - Added tests for timeFromMillis function (0% → 100%)
   - Made linuxFilesystemProvider.procDiskstatsPath configurable for testing
-- Remaining: Tests for Windows, Darwin, Android stubs; remote platform functions
+  - Added tests for Stats function (16.7% → 100%) - tests against real filesystem paths
+  - Created parse_helpers.go with reusable parsing functions for remote providers
+  - Added remote_linux_parsing_test.go with mock-based tests for memory/CPU parsing (95%+ coverage)
+- Remaining: Tests for Windows, Darwin, Android stubs; additional remote platform functions
 
 **BUG-008: cmd/conky-go low test coverage (15.2%)**
 - Severity: Low
