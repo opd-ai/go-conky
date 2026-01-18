@@ -5,7 +5,7 @@
 - **Date**: 2026-01-17 (Updated: 2026-01-18)
 - **Version Tested**: 0.1.0
 - **Tests**: 2,674+ total, all passed, 0 failed
-- **Bugs**: 0 critical, 0 high (2 resolved), 1 medium (4 resolved), 4 low (1 resolved)
+- **Bugs**: 0 critical, 0 high (2 resolved), 1 medium (4 resolved), 4 low (2 resolved)
 - **Compatibility**: ~85%
 
 ## Test Coverage by Package
@@ -18,8 +18,8 @@
 | internal/monitor | 80.2% | ✅ Good |
 | internal/lua | 73.0% | ⚠️ Needs improvement |
 | pkg/conky | 69.7% | ⚠️ Needs improvement |
+| cmd/conky-go | 55.3% | ⚠️ Improved (was 15.2%) |
 | internal/platform | 43.8% | ⚠️ Low coverage (improved from 40.5%) |
-| cmd/conky-go | 15.2% | ❌ Poor |
 
 ## Test Results by Category
 
@@ -373,14 +373,20 @@
   - Added remote_linux_parsing_test.go with mock-based tests for memory/CPU parsing (95%+ coverage)
 - Remaining: Tests for Windows, Darwin, Android stubs; additional remote platform functions
 
-**BUG-008: cmd/conky-go low test coverage (15.2%)**
+**BUG-008: cmd/conky-go low test coverage (15.2%)** ✅ RESOLVED
 - Severity: Low
 - Feature: Main executable
 - Reproduce: Run coverage report
 - Expected: >50% coverage
-- Actual: 15.2% coverage
+- Actual: ✅ 55.3% coverage (improved from 15.2%)
 - Location: cmd/conky-go/
-- Fix: Add integration tests for CLI flags
+- Resolution: Added comprehensive CLI tests
+  - Refactored `run()` to `runWithArgs()` for testability with injectable writers
+  - Added `parseFlags()` function for testable flag parsing (100% coverage)
+  - Added `runConvertWithWriter()` for testable convert functionality (100% coverage)
+  - Added tests for version flag, missing config, nonexistent config, invalid flags
+  - Added tests for convert command with valid, invalid, and nonexistent files
+  - Full test coverage for all error paths in CLI handling
 
 **BUG-009: Some strftime specifiers missing** ✅ RESOLVED
 - Severity: Low
@@ -453,8 +459,9 @@ None - all tests pass, core functionality works
 1. BUG-003: Non-rectangular clipping (8h)
 2. ~~BUG-004: cairo_text_path (4h)~~ ✅ COMPLETED - Rectangular approximation in internal/render/cairo.go
 3. ~~BUG-005: conky_window documentation (1h)~~ ✅ COMPLETED - Added to docs/migration.md
-4. BUG-007/008: Test coverage (8h) - ⏳ PARTIAL (BUG-007: 38.9% → 40.5%)
-5. ~~BUG-009: strftime specifiers (2h)~~ ✅ COMPLETED - Added %V, %G, %g, %U, %W, %s
+4. BUG-007: Platform test coverage (8h) - ⏳ PARTIAL (43.8% → need >70%)
+5. ~~BUG-008: cmd test coverage (2h)~~ ✅ COMPLETED - Improved 15.2% → 55.3%
+6. ~~BUG-009: strftime specifiers (2h)~~ ✅ COMPLETED - Added %V, %G, %g, %U, %W, %s
 
 ## Recommendations
 
