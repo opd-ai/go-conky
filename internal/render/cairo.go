@@ -2051,6 +2051,61 @@ func (cr *CairoRenderer) TextExtentsResult(text string) TextExtents {
 	}
 }
 
+// TextPath adds the outline of the given text to the current path.
+// This is equivalent to cairo_text_path.
+//
+// Implementation Note: Since Ebiten does not expose the actual glyph outlines
+// from the underlying font library, this implementation creates a rectangular
+// approximation using the text bounding box. The rectangle path can then be
+// stroked or filled. For true glyph outline support, a CGO-based font library
+// would be required.
+//
+// The text outline is added at the current path position (or 0,0 if no path exists).
+// After calling TextPath, the current point is advanced by the text width.
+func (cr *CairoRenderer) TextPath(text string) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	// Get current position (or 0,0 if no path)
+	x := float64(cr.pathCurrentX)
+	y := float64(cr.pathCurrentY)
+
+	// Measure the text
+	w, h := cr.textRenderer.MeasureText(text)
+	if w == 0 || h == 0 {
+		return
+	}
+
+	// Add a rectangle path representing the text bounds.
+	// In Cairo, text is drawn with the baseline at the specified y position,
+	// so the rectangle should extend upward from the baseline by the height.
+	// The y-bearing is typically negative (extends above baseline).
+	rectX := x
+	rectY := y - h // Text extends upward from baseline
+
+	// Add the rectangle as path segments (using internal method to avoid deadlock)
+	cr.path.MoveTo(float32(rectX), float32(rectY))
+	cr.path.LineTo(float32(rectX+w), float32(rectY))
+	cr.path.LineTo(float32(rectX+w), float32(rectY+h))
+	cr.path.LineTo(float32(rectX), float32(rectY+h))
+	cr.path.Close()
+
+	// Track path segments for CopyPath
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: rectX, Y: rectY})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: rectX + w, Y: rectY})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: rectX + w, Y: rectY + h})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: rectX, Y: rectY + h})
+	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+
+	// Update path bounds
+	cr.expandPathBounds(float32(rectX), float32(rectY))
+	cr.expandPathBounds(float32(rectX+w), float32(rectY+h))
+
+	// Update current point by advancing by text width
+	cr.pathCurrentX = float32(x + w)
+	cr.hasPath = true
+}
+
 // --- Transformation Functions ---
 
 // Translate moves the coordinate system origin.

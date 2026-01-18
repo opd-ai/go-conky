@@ -5,7 +5,7 @@
 - **Date**: 2026-01-17 (Updated: 2026-01-18)
 - **Version Tested**: 0.1.0
 - **Tests**: 2,674+ total, all passed, 0 failed
-- **Bugs**: 0 critical, 0 high (2 resolved), 2 medium (3 resolved), 4 low (1 resolved)
+- **Bugs**: 0 critical, 0 high (2 resolved), 1 medium (4 resolved), 4 low (1 resolved)
 - **Compatibility**: ~85%
 
 ## Test Coverage by Package
@@ -114,11 +114,11 @@
 | cairo_surface_destroy | ✅ PASS | Tested |
 | cairo_create | ✅ PASS | Tested |
 | cairo_destroy | ✅ PASS | Tested |
+| cairo_text_path | ✅ PASS | Rectangular approximation |
 
-**Total Cairo Functions Implemented: 102**
+**Total Cairo Functions Implemented: 103**
 
 **Missing Cairo Functions:**
-- `cairo_text_path` - ⚠️ Not implemented
 - `cairo_glyph_extents` - ⚠️ Not implemented
 - `cairo_set_font_matrix` - ⚠️ Not implemented
 - `cairo_get_font_matrix` - ⚠️ Not implemented
@@ -309,14 +309,21 @@
 - Location: internal/render/cairo.go:2310
 - Fix: Implement path-based clipping with stencil buffer
 
-**BUG-004: cairo_text_path not implemented**
+**BUG-004: cairo_text_path not implemented** ✅ RESOLVED
 - Severity: Medium
 - Feature: Cairo text paths
 - Reproduce: Call cairo_text_path() from Lua
 - Expected: Text outline added to path
-- Actual: Function not available
-- Location: internal/lua/cairo_bindings.go
-- Fix: Implement using Ebiten text bounds
+- Actual: ✅ Function implemented with rectangular approximation
+- Location: internal/render/cairo.go, internal/lua/cairo_bindings.go
+- Resolution: Implemented cairo_text_path using rectangular bounding box approximation
+  - Added TextPath() method to CairoRenderer that creates a rectangle path from text bounds
+  - Added cairo_text_path Lua binding that accepts optional context argument
+  - Text rectangle extends upward from baseline (standard Cairo behavior)
+  - Current point advances by text width after path creation
+  - Path can be stroked or filled like any other path
+  - Note: True glyph outline support would require CGO-based font library
+  - Comprehensive test coverage in cairo_test.go and cairo_bindings_test.go
 
 **BUG-005: conky_window.drawable returns stub value** ✅ DOCUMENTED
 - Severity: Medium
@@ -436,7 +443,7 @@ None - all tests pass, core functionality works
 
 ### Can Defer (Post-Release)
 1. BUG-003: Non-rectangular clipping (8h)
-2. BUG-004: cairo_text_path (4h)
+2. ~~BUG-004: cairo_text_path (4h)~~ ✅ COMPLETED - Rectangular approximation in internal/render/cairo.go
 3. ~~BUG-005: conky_window documentation (1h)~~ ✅ COMPLETED - Added to docs/migration.md
 4. BUG-007/008: Test coverage (8h)
 5. ~~BUG-009: strftime specifiers (2h)~~ ✅ COMPLETED - Added %V, %G, %g, %U, %W, %s

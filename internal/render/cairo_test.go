@@ -635,6 +635,117 @@ func TestCairoRenderer_TextExtentsEmptyString(t *testing.T) {
 	}
 }
 
+func TestCairoRenderer_TextPath(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(200, 200)
+	cr.SetScreen(screen)
+
+	// Set up font
+	cr.SelectFontFace("GoMono", FontSlantNormal, FontWeightNormal)
+	cr.SetFontSize(12)
+
+	// Move to a starting position
+	cr.MoveTo(10, 50)
+
+	// Add text path
+	cr.TextPath("Hello")
+
+	// Verify the path was created
+	if !cr.HasCurrentPoint() {
+		t.Error("Expected TextPath to create a path")
+	}
+
+	// Copy the path and verify it has segments
+	segments := cr.CopyPath()
+	if len(segments) < 4 {
+		t.Errorf("Expected at least 4 path segments (rectangle), got %d", len(segments))
+	}
+
+	// Verify the first segment is a MoveTo
+	if segments[0].Type != PathMoveTo {
+		t.Errorf("Expected first segment to be MoveTo, got %v", segments[0].Type)
+	}
+
+	// The current point should have advanced by the text width
+	extents := cr.TextExtentsResult("Hello")
+	expectedX := 10 + extents.Width
+	currentX, _, hasPoint := cr.GetCurrentPoint()
+	if !hasPoint {
+		t.Error("Expected to have a current point after TextPath")
+	}
+	if math.Abs(currentX-expectedX) > 1 {
+		t.Errorf("Expected current X to be approximately %f, got %f", expectedX, currentX)
+	}
+}
+
+func TestCairoRenderer_TextPathEmptyString(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(200, 200)
+	cr.SetScreen(screen)
+
+	// Set up font
+	cr.SelectFontFace("GoMono", FontSlantNormal, FontWeightNormal)
+	cr.SetFontSize(12)
+
+	// Start fresh
+	cr.NewPath()
+
+	// Add empty text path
+	cr.TextPath("")
+
+	// Empty string should not create a path
+	segments := cr.CopyPath()
+	if len(segments) > 0 {
+		t.Errorf("Expected no path segments for empty string, got %d", len(segments))
+	}
+}
+
+func TestCairoRenderer_TextPathWithStroke(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(200, 200)
+	cr.SetScreen(screen)
+
+	// Set up font and color
+	cr.SelectFontFace("GoMono", FontSlantNormal, FontWeightNormal)
+	cr.SetFontSize(14)
+	cr.SetSourceRGBA(1, 0, 0, 1) // Red
+
+	// Move to position and add text path
+	cr.MoveTo(20, 40)
+	cr.TextPath("Test")
+
+	// Stroke the text outline
+	cr.Stroke()
+
+	// Path should be cleared after stroke
+	if cr.HasCurrentPoint() {
+		t.Error("Expected path to be cleared after Stroke")
+	}
+}
+
+func TestCairoRenderer_TextPathWithFill(t *testing.T) {
+	cr := NewCairoRenderer()
+	screen := createTestScreen(200, 200)
+	cr.SetScreen(screen)
+
+	// Set up font and color
+	cr.SelectFontFace("GoMono", FontSlantNormal, FontWeightNormal)
+	cr.SetFontSize(14)
+	cr.SetSourceRGBA(0, 0, 1, 0.5) // Semi-transparent blue
+
+	// Move to position and add text path
+	cr.MoveTo(10, 30)
+	cr.TextPath("Fill")
+
+	// Fill the text area
+	cr.Fill()
+
+	// Path should be cleared after fill
+	if cr.HasCurrentPoint() {
+		t.Error("Expected path to be cleared after Fill")
+	}
+}
+
 func TestCairoRenderer_FontSlantConstants(t *testing.T) {
 	// Verify font slant constants have correct values
 	if FontSlantNormal != 0 {

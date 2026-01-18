@@ -688,6 +688,80 @@ func TestCairoBindings_TextExtentsFields(t *testing.T) {
 	}
 }
 
+func TestCairoBindings_TextPath(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test that cairo_text_path adds to the current path
+	_, err = runtime.ExecuteString("test_text_path", `
+		-- Set up font first
+		cairo_select_font_face("GoMono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL)
+		cairo_set_font_size(14)
+		
+		-- Move to a position
+		cairo_move_to(10, 50)
+		
+		-- Add text path
+		cairo_text_path("Hello World")
+		
+		-- Should be able to stroke it
+		cairo_set_source_rgb(1, 0, 0)
+		cairo_stroke()
+	`)
+	if err != nil {
+		t.Errorf("Failed to execute cairo_text_path: %v", err)
+	}
+}
+
+func TestCairoBindings_TextPathWithContext(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	_, err = NewCairoBindings(runtime)
+	if err != nil {
+		t.Fatalf("Failed to create CairoBindings: %v", err)
+	}
+
+	// Test that cairo_text_path works with explicit context argument
+	_, err = runtime.ExecuteString("test_text_path_ctx", `
+		-- Create a surface and context
+		local surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 100, 100)
+		local cr = cairo_create(surface)
+		
+		-- Set up font
+		cairo_select_font_face(cr, "GoMono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL)
+		cairo_set_font_size(cr, 12)
+		
+		-- Move to position
+		cairo_move_to(cr, 5, 20)
+		
+		-- Add text path with context
+		cairo_text_path(cr, "Test")
+		
+		-- Fill the text background
+		cairo_set_source_rgba(cr, 0, 0, 1, 0.5)
+		cairo_fill(cr)
+		
+		-- Clean up
+		cairo_destroy(cr)
+		cairo_surface_destroy(surface)
+	`)
+	if err != nil {
+		t.Errorf("Failed to execute cairo_text_path with context: %v", err)
+	}
+}
+
 func TestCairoBindings_FontConstants(t *testing.T) {
 	runtime, err := New(DefaultConfig())
 	if err != nil {

@@ -83,6 +83,7 @@ func (cb *CairoBindings) registerFunctions() {
 	cb.runtime.SetGoFunction("cairo_set_font_size", cb.setFontSize, 1, true)
 	cb.runtime.SetGoFunction("cairo_show_text", cb.showText, 1, true)
 	cb.runtime.SetGoFunction("cairo_text_extents", cb.textExtents, 1, true)
+	cb.runtime.SetGoFunction("cairo_text_path", cb.textPath, 1, true)
 
 	// Transformation functions
 	cb.runtime.SetGoFunction("cairo_translate", cb.translate, 2, true)
@@ -911,6 +912,23 @@ func (cb *CairoBindings) textExtents(t *rt.Thread, c *rt.GoCont) (rt.Cont, error
 	extentsTable.Set(rt.StringValue("y_advance"), rt.FloatValue(extents.YAdvance))
 
 	return c.PushingNext1(t.Runtime, rt.TableValue(extentsTable)), nil
+}
+
+// textPath handles cairo_text_path(cr, text)
+// Adds the text outline to the current path. Since Ebiten doesn't expose
+// glyph outlines, this creates a rectangular approximation using the text bounds.
+// The cr argument is optional for backward compatibility.
+func (cb *CairoBindings) textPath(t *rt.Thread, c *rt.GoCont) (rt.Cont, error) {
+	renderer, offset := cb.getRendererFromContext(c)
+	args := getAllArgs(c)
+
+	text, err := getStringArg(args, 0+offset)
+	if err != nil {
+		return nil, fmt.Errorf("cairo_text_path: %w", err)
+	}
+
+	renderer.TextPath(text)
+	return c.Next(), nil
 }
 
 // --- Transformation Functions ---
