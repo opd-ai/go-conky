@@ -8,18 +8,25 @@ import (
 
 // remoteDarwinCPUProvider collects CPU metrics from remote macOS systems via SSH.
 type remoteDarwinCPUProvider struct {
-	platform *sshPlatform
+	runner commandRunner
 }
 
 func newRemoteDarwinCPUProvider(p *sshPlatform) *remoteDarwinCPUProvider {
 	return &remoteDarwinCPUProvider{
-		platform: p,
+		runner: p,
+	}
+}
+
+// newTestableRemoteDarwinCPUProviderWithRunner creates a provider with an injectable runner for testing.
+func newTestableRemoteDarwinCPUProviderWithRunner(runner commandRunner) *remoteDarwinCPUProvider {
+	return &remoteDarwinCPUProvider{
+		runner: runner,
 	}
 }
 
 func (c *remoteDarwinCPUProvider) TotalUsage() (float64, error) {
 	// Use iostat to get CPU usage on macOS
-	output, err := c.platform.runCommand("iostat -c 2 | tail -n 1")
+	output, err := c.runner.runCommand("iostat -c 2 | tail -n 1")
 	if err != nil {
 		return 0, fmt.Errorf("failed to read CPU stats: %w", err)
 	}
@@ -68,7 +75,7 @@ func (c *remoteDarwinCPUProvider) Usage() ([]float64, error) {
 }
 
 func (c *remoteDarwinCPUProvider) LoadAverage() (float64, float64, float64, error) {
-	output, err := c.platform.runCommand("sysctl -n vm.loadavg")
+	output, err := c.runner.runCommand("sysctl -n vm.loadavg")
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("failed to read load average: %w", err)
 	}
@@ -104,19 +111,19 @@ func (c *remoteDarwinCPUProvider) Info() (*CPUInfo, error) {
 	info := &CPUInfo{}
 
 	// Get CPU model
-	output, err := c.platform.runCommand("sysctl -n machdep.cpu.brand_string")
+	output, err := c.runner.runCommand("sysctl -n machdep.cpu.brand_string")
 	if err == nil {
 		info.Model = strings.TrimSpace(output)
 	}
 
 	// Get CPU vendor
-	output, err = c.platform.runCommand("sysctl -n machdep.cpu.vendor")
+	output, err = c.runner.runCommand("sysctl -n machdep.cpu.vendor")
 	if err == nil {
 		info.Vendor = strings.TrimSpace(output)
 	}
 
 	// Get core count
-	output, err = c.platform.runCommand("sysctl -n hw.physicalcpu")
+	output, err = c.runner.runCommand("sysctl -n hw.physicalcpu")
 	if err == nil {
 		if cores, err := strconv.Atoi(strings.TrimSpace(output)); err == nil {
 			info.Cores = cores
@@ -124,7 +131,7 @@ func (c *remoteDarwinCPUProvider) Info() (*CPUInfo, error) {
 	}
 
 	// Get thread count
-	output, err = c.platform.runCommand("sysctl -n hw.logicalcpu")
+	output, err = c.runner.runCommand("sysctl -n hw.logicalcpu")
 	if err == nil {
 		if threads, err := strconv.Atoi(strings.TrimSpace(output)); err == nil {
 			info.Threads = threads
@@ -132,7 +139,7 @@ func (c *remoteDarwinCPUProvider) Info() (*CPUInfo, error) {
 	}
 
 	// Get cache size
-	output, err = c.platform.runCommand("sysctl -n hw.l3cachesize")
+	output, err = c.runner.runCommand("sysctl -n hw.l3cachesize")
 	if err == nil {
 		if cache, err := strconv.ParseInt(strings.TrimSpace(output), 10, 64); err == nil {
 			info.CacheSize = cache
@@ -144,7 +151,7 @@ func (c *remoteDarwinCPUProvider) Info() (*CPUInfo, error) {
 
 func (c *remoteDarwinCPUProvider) Frequency() ([]float64, error) {
 	// Get CPU frequency
-	output, err := c.platform.runCommand("sysctl -n hw.cpufrequency")
+	output, err := c.runner.runCommand("sysctl -n hw.cpufrequency")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read CPU frequency: %w", err)
 	}

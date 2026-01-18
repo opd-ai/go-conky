@@ -4,8 +4,8 @@
 
 - **Date**: 2026-01-17 (Updated: 2026-01-18)
 - **Version Tested**: 0.1.0
-- **Tests**: 2,796 total, all passed, 0 failed
-- **Bugs**: 0 critical, 0 high (2 resolved), 1 medium (4 resolved), 4 low (2 resolved)
+- **Tests**: 2,820+ total, all passed, 0 failed
+- **Bugs**: 0 critical, 0 high (2 resolved), 0 medium (5 resolved), 3 low (3 resolved)
 - **Compatibility**: ~85%
 
 ## Test Coverage by Package
@@ -18,7 +18,7 @@
 | internal/monitor | 80.2% | ✅ Good |
 | internal/lua | 73.0% | ⚠️ Needs improvement |
 | pkg/conky | 69.7% | ⚠️ Needs improvement |
-| internal/platform | 57.4% | ⚠️ Improved (was 43.8%) |
+| internal/platform | 74.5% | ✅ Good (was 57.4%) |
 | cmd/conky-go | 55.3% | ⚠️ Improved (was 15.2%) | |
 
 ## Test Results by Category
@@ -357,27 +357,25 @@
 
 ### Low Priority
 
-**BUG-007: Platform package low test coverage (38.9%)** ⏳ PARTIAL
+**BUG-007: Platform package low test coverage (38.9%)** ✅ RESOLVED
 - Severity: Low
 - Feature: Cross-platform support
 - Reproduce: Run coverage report
 - Expected: >70% coverage
-- Actual: 57.4% coverage (improved from 43.8% → 57.4%)
+- Actual: ✅ 74.5% coverage (improved from 57.4%)
 - Location: internal/platform/
-- Progress:
-  - Added tests for DiskIO function (0% → 89.3%)
-  - Added tests for timeFromMillis function (0% → 100%)
-  - Made linuxFilesystemProvider.procDiskstatsPath configurable for testing
-  - Added tests for Stats function (16.7% → 100%) - tests against real filesystem paths
-  - Created parse_helpers.go with reusable parsing functions for remote providers
-  - Added remote_linux_parsing_test.go with mock-based tests for memory/CPU parsing (95%+ coverage)
-  - Refactored remote Linux providers to use commandRunner interface for testability
+- Resolution: Added comprehensive mock-based tests for remote providers
+  - Refactored remote Darwin providers (CPU, Memory, Network, Filesystem) to use commandRunner interface
+  - Refactored remote Linux sensors provider to use commandRunner interface
   - Added newTestable*ProviderWithRunner() constructors for all remote providers
-  - Added comprehensive tests for remote CPU (TotalUsage, LoadAverage, Info, Frequency, Usage)
-  - Added comprehensive tests for remote Memory (Stats, SwapStats)
-  - Added comprehensive tests for remote Network (Interfaces, Stats, AllStats)
-  - Added comprehensive tests for remote Filesystem (Mounts, Stats, DiskIO)
-- Remaining: Tests for Windows, Darwin, Android stubs (build-tag protected, limited testability on Linux)
+  - Created remote_darwin_parsing_test.go with comprehensive test coverage
+  - Tests cover TotalUsage, Usage, LoadAverage, Info, Frequency for Darwin CPU
+  - Tests cover Stats, SwapStats for Darwin Memory
+  - Tests cover Interfaces, Stats, AllStats for Darwin Network
+  - Tests cover Mounts, Stats, DiskIO for Darwin Filesystem
+  - Tests cover Temperatures, Fans, extractSensorName for Linux Sensors
+  - Tests include error cases and edge cases
+  - Note: Windows/Darwin stubs remain at 0% (build-tag protected, not testable on Linux)
 
 **BUG-008: cmd/conky-go low test coverage (15.2%)** ✅ RESOLVED
 - Severity: Low
@@ -465,7 +463,7 @@ None - all tests pass, core functionality works
 1. BUG-003: Non-rectangular clipping (8h)
 2. ~~BUG-004: cairo_text_path (4h)~~ ✅ COMPLETED - Rectangular approximation in internal/render/cairo.go
 3. ~~BUG-005: conky_window documentation (1h)~~ ✅ COMPLETED - Added to docs/migration.md
-4. BUG-007: Platform test coverage (8h) - ⏳ PARTIAL (43.8% → need >70%)
+4. ~~BUG-007: Platform test coverage (8h)~~ ✅ COMPLETED - Improved 57.4% → 74.5%
 5. ~~BUG-008: cmd test coverage (2h)~~ ✅ COMPLETED - Improved 15.2% → 55.3%
 6. ~~BUG-009: strftime specifiers (2h)~~ ✅ COMPLETED - Added %V, %G, %g, %U, %W, %s
 

@@ -8,17 +8,24 @@ import (
 
 // remoteDarwinFilesystemProvider collects filesystem metrics from remote macOS systems via SSH.
 type remoteDarwinFilesystemProvider struct {
-	platform *sshPlatform
+	runner commandRunner
 }
 
 func newRemoteDarwinFilesystemProvider(p *sshPlatform) *remoteDarwinFilesystemProvider {
 	return &remoteDarwinFilesystemProvider{
-		platform: p,
+		runner: p,
+	}
+}
+
+// newTestableRemoteDarwinFilesystemProviderWithRunner creates a provider with an injectable runner for testing.
+func newTestableRemoteDarwinFilesystemProviderWithRunner(runner commandRunner) *remoteDarwinFilesystemProvider {
+	return &remoteDarwinFilesystemProvider{
+		runner: runner,
 	}
 }
 
 func (f *remoteDarwinFilesystemProvider) Mounts() ([]MountInfo, error) {
-	output, err := f.platform.runCommand("mount")
+	output, err := f.runner.runCommand("mount")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read mounts: %w", err)
 	}
@@ -74,7 +81,7 @@ func (f *remoteDarwinFilesystemProvider) Mounts() ([]MountInfo, error) {
 func (f *remoteDarwinFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, error) {
 	// Use df command with shell-escaped mount point
 	cmd := fmt.Sprintf("df -k %s | tail -n 1", shellEscape(mountPoint))
-	output, err := f.platform.runCommand(cmd)
+	output, err := f.runner.runCommand(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get filesystem stats for %s: %w", mountPoint, err)
 	}
@@ -113,7 +120,7 @@ func (f *remoteDarwinFilesystemProvider) Stats(mountPoint string) (*FilesystemSt
 
 	// Try to get inode statistics with shell-escaped mount point
 	cmd = fmt.Sprintf("df -i %s | tail -n 1", shellEscape(mountPoint))
-	output, err = f.platform.runCommand(cmd)
+	output, err = f.runner.runCommand(cmd)
 	if err == nil {
 		fields = strings.Fields(output)
 		if len(fields) >= 6 {
