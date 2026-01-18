@@ -2,7 +2,6 @@ package conky
 
 import (
 	"expvar"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -49,9 +48,6 @@ type Metrics struct {
 
 	// Registration tracking to prevent duplicate expvar registration
 	registered atomic.Bool
-
-	// Mutex for operations that need it
-	mu sync.Mutex
 }
 
 // NewMetrics creates a new Metrics instance.

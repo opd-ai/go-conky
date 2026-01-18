@@ -1216,11 +1216,13 @@ func (cr *CairoRenderer) Rectangle(x, y, width, height float64) {
 	cr.path.Close()
 
 	// Track all segments
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y + height})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y + height})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+	cr.pathSegments = append(cr.pathSegments,
+		PathSegment{Type: PathMoveTo, X: x, Y: y},
+		PathSegment{Type: PathLineTo, X: x + width, Y: y},
+		PathSegment{Type: PathLineTo, X: x + width, Y: y + height},
+		PathSegment{Type: PathLineTo, X: x, Y: y + height},
+		PathSegment{Type: PathClose},
+	)
 
 	cr.pathStartX = float32(x)
 	cr.pathStartY = float32(y)
@@ -1745,11 +1747,13 @@ func (cr *CairoRenderer) rectangleUnlocked(x, y, width, height float64) {
 	cr.path.Close()
 
 	// Track all segments
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: x, Y: y})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x + width, Y: y + height})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: x, Y: y + height})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+	cr.pathSegments = append(cr.pathSegments,
+		PathSegment{Type: PathMoveTo, X: x, Y: y},
+		PathSegment{Type: PathLineTo, X: x + width, Y: y},
+		PathSegment{Type: PathLineTo, X: x + width, Y: y + height},
+		PathSegment{Type: PathLineTo, X: x, Y: y + height},
+		PathSegment{Type: PathClose},
+	)
 
 	cr.pathStartX = float32(x)
 	cr.pathStartY = float32(y)
@@ -2091,11 +2095,13 @@ func (cr *CairoRenderer) TextPath(text string) {
 	cr.path.Close()
 
 	// Track path segments for CopyPath
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathMoveTo, X: rectX, Y: rectY})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: rectX + w, Y: rectY})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: rectX + w, Y: rectY + h})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathLineTo, X: rectX, Y: rectY + h})
-	cr.pathSegments = append(cr.pathSegments, PathSegment{Type: PathClose})
+	cr.pathSegments = append(cr.pathSegments,
+		PathSegment{Type: PathMoveTo, X: rectX, Y: rectY},
+		PathSegment{Type: PathLineTo, X: rectX + w, Y: rectY},
+		PathSegment{Type: PathLineTo, X: rectX + w, Y: rectY + h},
+		PathSegment{Type: PathLineTo, X: rectX, Y: rectY + h},
+		PathSegment{Type: PathClose},
+	)
 
 	// Update path bounds
 	cr.expandPathBounds(float32(rectX), float32(rectY))

@@ -477,19 +477,20 @@ func (c *conkyImpl) Health() HealthCheck {
 	}
 
 	// Check monitor component
-	if c.monitor != nil && running {
+	switch {
+	case c.monitor != nil && running:
 		components["monitor"] = ComponentHealth{
 			Status:      HealthOK,
 			Message:     fmt.Sprintf("Monitor active, %d updates completed", c.updateCount.Load()),
 			LastUpdated: now,
 		}
-	} else if c.monitor != nil {
+	case c.monitor != nil:
 		components["monitor"] = ComponentHealth{
 			Status:      HealthDegraded,
 			Message:     "Monitor initialized but not active",
 			LastUpdated: now,
 		}
-	} else {
+	default:
 		components["monitor"] = ComponentHealth{
 			Status:      HealthUnhealthy,
 			Message:     "Monitor not initialized",
@@ -517,13 +518,14 @@ func (c *conkyImpl) Health() HealthCheck {
 	overallStatus := HealthOK
 	var message string
 
-	if !running {
+	switch {
+	case !running:
 		overallStatus = HealthUnhealthy
 		message = "Instance is not running"
-	} else if lastErr != nil {
+	case lastErr != nil:
 		overallStatus = HealthDegraded
 		message = "Running with recent errors"
-	} else {
+	default:
 		message = "All components healthy"
 	}
 

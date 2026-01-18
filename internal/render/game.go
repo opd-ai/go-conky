@@ -194,18 +194,19 @@ func (g *Game) drawLineWithWidgets(screen *ebiten.Image, line TextLine) {
 	x := line.X
 
 	for _, seg := range segments {
-		if seg.IsWidget && seg.Widget != nil {
+		switch {
+		case seg.IsWidget && seg.Widget != nil:
 			// Render the widget
 			g.drawInlineWidget(screen, seg.Widget, x, line.Y, line.Color)
 			x += seg.Widget.Width
-		} else if seg.IsImage && seg.Image != nil {
+		case seg.IsImage && seg.Image != nil:
 			// Render the image
 			imgWidth := g.drawImageMarker(screen, seg.Image, x, line.Y)
 			// Only advance x position for inline images (x == -1)
 			if seg.Image.X < 0 {
 				x += imgWidth
 			}
-		} else {
+		default:
 			// Render text segment with effects
 			g.drawTextWithEffects(screen, seg.Text, x, line.Y, line.Color)
 			textWidth, _ := g.textRenderer.MeasureText(seg.Text)
@@ -503,12 +504,6 @@ func (g *Game) Run() error {
 	ebiten.SetWindowTitle(g.config.Title)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
-	// Enable screen transparency if configured
-	// This allows the window background to be transparent when the compositor supports it
-	if g.config.Transparent || g.config.ARGBVisual {
-		ebiten.SetScreenTransparent(true)
-	}
-
 	// Apply window hints for transparency and overlay behavior
 	// These settings help achieve proper desktop widget behavior
 
@@ -534,7 +529,12 @@ func (g *Game) Run() error {
 	g.running = true
 	g.mu.Unlock()
 
-	err := ebiten.RunGame(g)
+	// Use RunGameWithOptions to enable screen transparency if configured
+	// This allows the window background to be transparent when the compositor supports it
+	opts := &ebiten.RunGameOptions{
+		ScreenTransparent: g.config.Transparent || g.config.ARGBVisual,
+	}
+	err := ebiten.RunGameWithOptions(g, opts)
 
 	g.mu.Lock()
 	g.running = false

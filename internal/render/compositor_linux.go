@@ -126,7 +126,7 @@ func detectCompositorProcess() CompositorStatus {
 // Wayland compositors always provide compositing, so transparency works.
 func IsWayland() bool {
 	// Check XDG_SESSION_TYPE
-	if sessionType := os.Getenv("XDG_SESSION_TYPE"); strings.ToLower(sessionType) == "wayland" {
+	if sessionType := os.Getenv("XDG_SESSION_TYPE"); strings.EqualFold(sessionType, "wayland") {
 		return true
 	}
 

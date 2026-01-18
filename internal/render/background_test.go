@@ -372,22 +372,22 @@ func TestGradientBackgroundInterpolationFactor(t *testing.T) {
 		wantT     float64
 		tolerance float64
 	}{
-		// Vertical: t = y / (h-1)
+		// Vertical gradient: interpolation t equals y divided by (h-1)
 		{"vertical top", GradientDirectionVertical, 50, 0, 100, 100, 0.0, 0.01},
 		{"vertical bottom", GradientDirectionVertical, 50, 99, 100, 100, 1.0, 0.01},
 		{"vertical middle", GradientDirectionVertical, 50, 50, 100, 101, 0.5, 0.01},
 
-		// Horizontal: t = x / (w-1)
+		// Horizontal gradient: interpolation t equals x divided by (w-1)
 		{"horizontal left", GradientDirectionHorizontal, 0, 50, 100, 100, 0.0, 0.01},
 		{"horizontal right", GradientDirectionHorizontal, 99, 50, 100, 100, 1.0, 0.01},
 		{"horizontal middle", GradientDirectionHorizontal, 50, 50, 101, 100, 0.5, 0.01},
 
-		// Diagonal: t = (x/(w-1) + y/(h-1)) / 2
+		// Diagonal gradient: interpolation t equals average of x and y ratios
 		{"diagonal top-left", GradientDirectionDiagonal, 0, 0, 100, 100, 0.0, 0.01},
 		{"diagonal bottom-right", GradientDirectionDiagonal, 99, 99, 100, 100, 1.0, 0.01},
 		{"diagonal center", GradientDirectionDiagonal, 50, 50, 101, 101, 0.5, 0.01},
 
-		// Radial: t = distance from center / max distance
+		// Radial gradient: interpolation t equals distance from center divided by max distance
 		{"radial center", GradientDirectionRadial, 50, 50, 100, 100, 0.0, 0.01},
 		{"radial corner", GradientDirectionRadial, 0, 0, 100, 100, 1.0, 0.01},
 	}

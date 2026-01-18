@@ -120,9 +120,7 @@ type sshConnectionManager struct {
 
 // pooledSession wraps an SSH session with metadata for pooling.
 type pooledSession struct {
-	session   *ssh.Session
-	createdAt time.Time
-	inUse     bool
+	session *ssh.Session
 }
 
 // newSSHConnectionManager creates a new SSH connection manager.
@@ -492,7 +490,7 @@ func equalFold(s, t string) bool {
 }
 
 // calculateBackoff calculates the next backoff delay using exponential backoff with jitter.
-func calculateBackoff(attempt int, initial, max time.Duration) time.Duration {
+func calculateBackoff(attempt int, initial, maxDelay time.Duration) time.Duration {
 	if attempt <= 0 {
 		return initial
 	}
@@ -501,8 +499,8 @@ func calculateBackoff(attempt int, initial, max time.Duration) time.Duration {
 	multiplier := math.Pow(2, float64(attempt-1))
 	delay := time.Duration(float64(initial) * multiplier)
 
-	if delay > max {
-		delay = max
+	if delay > maxDelay {
+		delay = maxDelay
 	}
 
 	return delay

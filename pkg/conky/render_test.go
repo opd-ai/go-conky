@@ -172,7 +172,7 @@ func TestConfigToRenderBackgroundMode(t *testing.T) {
 func TestNewGameRunner(t *testing.T) {
 	gr := newGameRunner()
 	if gr == nil {
-		t.Error("newGameRunner() returned nil")
+		t.Fatal("newGameRunner() returned nil")
 	}
 	// Initially game should be nil (set during run)
 	if gr.game != nil {

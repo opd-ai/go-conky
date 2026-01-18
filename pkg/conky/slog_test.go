@@ -56,7 +56,7 @@ func TestNewSlogAdapterNil(t *testing.T) {
 	// Should not panic when nil is passed
 	adapter := NewSlogAdapter(nil)
 	if adapter == nil {
-		t.Error("NewSlogAdapter(nil) returned nil")
+		t.Fatal("NewSlogAdapter(nil) returned nil")
 	}
 	if adapter.logger == nil {
 		t.Error("NewSlogAdapter(nil) should use slog.Default()")
@@ -154,9 +154,6 @@ func TestNopLoggerInterface(t *testing.T) {
 }
 
 func TestSlogAdapterInterface(t *testing.T) {
-	// Verify SlogAdapter implements Logger interface
-	var logger Logger = &SlogAdapter{}
-	if logger == nil {
-		t.Error("SlogAdapter should implement Logger interface")
-	}
+	// Verify SlogAdapter implements Logger interface at compile time
+	var _ Logger = (*SlogAdapter)(nil)
 }
