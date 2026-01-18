@@ -58,15 +58,9 @@ func TestWithCorrelationID(t *testing.T) {
 }
 
 func TestCorrelationIDFromContext(t *testing.T) {
-	// Test with nil context
-	got := CorrelationIDFromContext(nil)
-	if got != "" {
-		t.Errorf("expected empty string for nil context, got '%s'", got)
-	}
-
 	// Test with context without correlation ID
 	ctx := context.Background()
-	got = CorrelationIDFromContext(ctx)
+	got := CorrelationIDFromContext(ctx)
 	if got != "" {
 		t.Errorf("expected empty string for context without ID, got '%s'", got)
 	}

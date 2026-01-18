@@ -144,10 +144,8 @@ func TestDecodeWidgetMarker(t *testing.T) {
 				if got.Height != tt.want.Height {
 					t.Errorf("Height = %v, want %v", got.Height, tt.want.Height)
 				}
-			} else {
-				if got != nil {
-					t.Errorf("DecodeWidgetMarker() = %v, want nil", got)
-				}
+			} else if got != nil {
+				t.Errorf("DecodeWidgetMarker() = %v, want nil", got)
 			}
 		})
 	}
@@ -476,10 +474,8 @@ func TestDecodeImageMarker(t *testing.T) {
 				if got.NoCache != tt.want.NoCache {
 					t.Errorf("NoCache = %v, want %v", got.NoCache, tt.want.NoCache)
 				}
-			} else {
-				if got != nil {
-					t.Errorf("DecodeImageMarker() = %v, want nil", got)
-				}
+			} else if got != nil {
+				t.Errorf("DecodeImageMarker() = %v, want nil", got)
 			}
 		})
 	}

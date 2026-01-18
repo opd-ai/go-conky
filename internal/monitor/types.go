@@ -551,13 +551,6 @@ func (sd *SystemData) GetMail() MailStats {
 	return sd.copyMail()
 }
 
-// setMail updates the mail statistics with proper locking.
-func (sd *SystemData) setMail(mail MailStats) {
-	sd.mu.Lock()
-	defer sd.mu.Unlock()
-	sd.Mail = mail
-}
-
 // copyMail returns a deep copy of the mail statistics.
 // Caller must hold at least a read lock on sd.mu.
 func (sd *SystemData) copyMail() MailStats {

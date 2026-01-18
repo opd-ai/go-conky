@@ -153,7 +153,7 @@ func ParseWidgetSegments(s string) []WidgetSegment {
 	var segments []WidgetSegment
 	remaining := s
 
-	for len(remaining) > 0 {
+	for remaining != "" {
 		// Find the next widget marker
 		widgetIdx := strings.Index(remaining, markerPrefix)
 		// Find the next image marker
@@ -161,7 +161,7 @@ func ParseWidgetSegments(s string) []WidgetSegment {
 
 		// If no more markers, rest is text
 		if widgetIdx == -1 && imageIdx == -1 {
-			if len(remaining) > 0 {
+			if remaining != "" {
 				segments = append(segments, WidgetSegment{IsWidget: false, IsImage: false, Text: remaining})
 			}
 			break
@@ -170,16 +170,17 @@ func ParseWidgetSegments(s string) []WidgetSegment {
 		// Determine which marker comes first
 		var startIdx int
 		var isImageMarker bool
-		if widgetIdx == -1 {
+		switch {
+		case widgetIdx == -1:
 			startIdx = imageIdx
 			isImageMarker = true
-		} else if imageIdx == -1 {
+		case imageIdx == -1:
 			startIdx = widgetIdx
 			isImageMarker = false
-		} else if imageIdx < widgetIdx {
+		case imageIdx < widgetIdx:
 			startIdx = imageIdx
 			isImageMarker = true
-		} else {
+		default:
 			startIdx = widgetIdx
 			isImageMarker = false
 		}

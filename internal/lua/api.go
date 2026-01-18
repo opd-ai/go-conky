@@ -1133,7 +1133,7 @@ func sundayWeekNumber(t time.Time) int {
 func mondayWeekNumber(t time.Time) int {
 	yearStart := time.Date(t.Year(), time.January, 1, 0, 0, 0, 0, t.Location())
 	// Days until first Monday (1 = Monday)
-	daysUntilFirstMonday := int((8 - int(yearStart.Weekday())) % 7)
+	daysUntilFirstMonday := (8 - int(yearStart.Weekday())) % 7
 	if yearStart.Weekday() == time.Monday {
 		daysUntilFirstMonday = 0
 	}
@@ -1922,7 +1922,9 @@ func (api *ConkyAPI) resolveScroll(args []string) string {
 	// Create the scrolled view by extracting a window from the text
 	// For smooth wrapping, duplicate the text
 	runes := []rune(text)
-	doubledRunes := append(runes, runes...)
+	doubledRunes := make([]rune, len(runes)*2)
+	copy(doubledRunes, runes)
+	copy(doubledRunes[len(runes):], runes)
 
 	start := state.position % textLen
 	end := start + length

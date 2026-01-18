@@ -132,7 +132,7 @@ conky.text = [[test]]
 	if err := c.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer c.Stop()
+	defer func() { _ = c.Stop() }()
 
 	// Wait for monitor to initialize
 	time.Sleep(50 * time.Millisecond)

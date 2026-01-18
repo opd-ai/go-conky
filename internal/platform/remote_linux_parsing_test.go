@@ -87,7 +87,7 @@ SwapCached:       512000 kB
 		t.Errorf("Cached = %d, want %d", stats.Cached, expectedCached)
 	}
 
-	// Used = Total - Free - Buffers - Cached
+	// Used memory is calculated as: Total - Free - Buffers - Cached
 	expectedUsed := expectedTotal - expectedFree - expectedBuffers - expectedCached
 	if stats.Used != expectedUsed {
 		t.Errorf("Used = %d, want %d", stats.Used, expectedUsed)
@@ -553,7 +553,7 @@ func TestRemoteLinuxFilesystem_DiskIO(t *testing.T) {
 	if stats.ReadCount != 123456 {
 		t.Errorf("ReadCount = %d, want 123456", stats.ReadCount)
 	}
-	// sectors_read (246912) * 512 = 126418944
+	// ReadBytes is calculated from sectors_read (246912) multiplied by 512 bytes per sector
 	expectedReadBytes := uint64(246912 * 512)
 	if stats.ReadBytes != expectedReadBytes {
 		t.Errorf("ReadBytes = %d, want %d", stats.ReadBytes, expectedReadBytes)
@@ -561,7 +561,7 @@ func TestRemoteLinuxFilesystem_DiskIO(t *testing.T) {
 	if stats.WriteCount != 654321 {
 		t.Errorf("WriteCount = %d, want 654321", stats.WriteCount)
 	}
-	// sectors_written (1308642) * 512 = 670024704
+	// WriteBytes is calculated from sectors_written (1308642) multiplied by 512 bytes per sector
 	expectedWriteBytes := uint64(1308642 * 512)
 	if stats.WriteBytes != expectedWriteBytes {
 		t.Errorf("WriteBytes = %d, want %d", stats.WriteBytes, expectedWriteBytes)
