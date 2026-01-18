@@ -383,3 +383,36 @@ func (m *mockLoggerForCorrelation) Error(msg string, args ...any) {
 		args  []any
 	}{"error", msg, args})
 }
+
+func TestCorrelatedJSONLogger(t *testing.T) {
+	// CorrelatedJSONLogger with nil writer outputs to stderr
+	// Just verify it creates a valid logger that doesn't panic
+	logger := CorrelatedJSONLogger(slog.LevelInfo)
+	if logger == nil {
+		t.Error("CorrelatedJSONLogger returned nil")
+	}
+	// Note: This logger writes to stderr since nil is passed as writer.
+	// We can only test that it doesn't panic on creation.
+}
+
+func TestCorrelatedJSONLogger_Levels(t *testing.T) {
+	// Test different log levels
+	tests := []struct {
+		level slog.Level
+		name  string
+	}{
+		{slog.LevelDebug, "debug"},
+		{slog.LevelInfo, "info"},
+		{slog.LevelWarn, "warn"},
+		{slog.LevelError, "error"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := CorrelatedJSONLogger(tt.level)
+			if logger == nil {
+				t.Errorf("CorrelatedJSONLogger(%v) returned nil", tt.level)
+			}
+		})
+	}
+}

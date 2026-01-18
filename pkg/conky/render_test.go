@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/opd-ai/go-conky/internal/config"
+	"github.com/opd-ai/go-conky/internal/render"
 )
 
 func TestParseWindowHints(t *testing.T) {
@@ -122,5 +123,59 @@ func TestParseWindowHints(t *testing.T) {
 				t.Errorf("skipPager = %v, want %v", skipPager, tt.wantSkipPager)
 			}
 		})
+	}
+}
+
+func TestConfigToRenderBackgroundMode(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    config.BackgroundMode
+		expected render.BackgroundMode
+	}{
+		{
+			name:     "solid mode",
+			input:    config.BackgroundModeSolid,
+			expected: render.BackgroundModeSolid,
+		},
+		{
+			name:     "none mode maps to none",
+			input:    config.BackgroundModeNone,
+			expected: render.BackgroundModeNone,
+		},
+		{
+			name:     "transparent mode maps to none",
+			input:    config.BackgroundModeTransparent,
+			expected: render.BackgroundModeNone,
+		},
+		{
+			name:     "gradient mode maps to solid (not fully implemented in render)",
+			input:    config.BackgroundModeGradient,
+			expected: render.BackgroundModeSolid,
+		},
+		{
+			name:     "pseudo mode maps to solid (fallback)",
+			input:    config.BackgroundModePseudo,
+			expected: render.BackgroundModeSolid,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := configToRenderBackgroundMode(tt.input)
+			if result != tt.expected {
+				t.Errorf("configToRenderBackgroundMode(%v) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNewGameRunner(t *testing.T) {
+	gr := newGameRunner()
+	if gr == nil {
+		t.Error("newGameRunner() returned nil")
+	}
+	// Initially game should be nil (set during run)
+	if gr.game != nil {
+		t.Error("newGameRunner() should have nil game initially")
 	}
 }

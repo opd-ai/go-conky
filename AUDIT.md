@@ -16,10 +16,10 @@
 | internal/config | 93.3% | ✅ Excellent |
 | internal/render | 86.6% | ✅ Good |
 | internal/monitor | 80.2% | ✅ Good |
-| internal/lua | 73.0% | ⚠️ Needs improvement |
-| pkg/conky | 69.7% | ⚠️ Needs improvement |
 | internal/platform | 74.5% | ✅ Good (was 57.4%) |
-| cmd/conky-go | 55.3% | ⚠️ Improved (was 15.2%) | |
+| internal/lua | 73.0% | ⚠️ Needs improvement |
+| pkg/conky | 71.1% | ⚠️ Improved (was 69.7%) |
+| cmd/conky-go | 55.3% | ⚠️ Improved (was 15.2%) |
 
 ## Test Results by Category
 

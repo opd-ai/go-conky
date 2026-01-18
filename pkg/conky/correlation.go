@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"os"
 )
 
 // correlationIDKey is the context key for storing correlation IDs.
@@ -158,7 +159,8 @@ func (h *CorrelatedSlogHandler) WithGroup(name string) slog.Handler {
 // CorrelatedJSONLogger returns a Logger that outputs JSON-formatted logs
 // with automatic correlation ID extraction from context.
 // Use slog.InfoContext, slog.DebugContext, etc. to include correlation IDs.
+// Logs are written to os.Stderr.
 func CorrelatedJSONLogger(level slog.Level) *slog.Logger {
-	handler := slog.NewJSONHandler(nil, &slog.HandlerOptions{Level: level})
+	handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})
 	return slog.New(NewCorrelatedSlogHandler(handler))
 }

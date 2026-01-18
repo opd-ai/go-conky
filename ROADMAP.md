@@ -2454,12 +2454,17 @@ Performance benchmarks added in `internal/monitor/bench_test.go` covering:
 
 All benchmarks confirm operations are well under the 16ms update latency target.
 
-**Current Coverage Analysis**:
-- `internal/config/` - Good coverage with unit tests
-- `internal/monitor/` - Good coverage with mock filesystem tests
-- `internal/platform/` - Good coverage with stub-based tests
-- `internal/lua/` - Moderate coverage, could add more edge cases
-- `internal/render/` - Limited due to Ebiten/graphics dependencies
+**Current Coverage Analysis** (Updated 2026-01-18):
+- `internal/profiling/` - 97.0% ✅ Excellent
+- `internal/config/` - 93.3% ✅ Excellent
+- `internal/render/` - 86.6% ✅ Good
+- `internal/monitor/` - 80.2% ✅ Good
+- `internal/platform/` - 74.5% ✅ Good
+- `internal/lua/` - 73.0% ⚠️ Needs improvement
+- `pkg/conky/` - 71.1% ⚠️ Improved from 69.7% (added tests for configToRenderBackgroundMode, newGameRunner, CorrelatedJSONLogger, Metrics accessor, emitEvent)
+- `cmd/conky-go/` - 55.3% ⚠️ Improved (limited by main() execution)
+
+**Bug Fix**: Fixed `CorrelatedJSONLogger` which was passing nil writer to JSON handler (now uses os.Stderr).
 
 #### Task 3.2: Error Tracking and Alerting
 **Acceptance Criteria**:
