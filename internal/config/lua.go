@@ -241,6 +241,20 @@ func (p *LuaConfigParser) extractConfigTable(cfg *Config, table *rt.Table) error
 		cfg.Display.BorderOuterMargin = *val
 	}
 
+	// Background mode
+	if val := getTableString(table, "background_mode"); val != nil {
+		bm, err := ParseBackgroundMode(*val)
+		if err != nil {
+			return fmt.Errorf("invalid background_mode: %w", err)
+		}
+		cfg.Window.BackgroundMode = bm
+	}
+
+	// Gradient configuration (nested table)
+	if err := p.extractGradient(cfg, table); err != nil {
+		return err
+	}
+
 	// Color settings
 	if err := p.extractColors(cfg, table); err != nil {
 		return err
@@ -279,6 +293,48 @@ func (p *LuaConfigParser) extractColors(cfg *Config, table *rt.Table) error {
 			}
 			*cf.target = c
 		}
+	}
+
+	return nil
+}
+
+// extractGradient extracts gradient configuration from a nested table.
+func (p *LuaConfigParser) extractGradient(cfg *Config, table *rt.Table) error {
+	gradientVal := table.Get(rt.StringValue("gradient"))
+	if gradientVal == rt.NilValue {
+		return nil
+	}
+
+	gradientTable, ok := gradientVal.TryTable()
+	if !ok {
+		return nil // Ignore if not a table
+	}
+
+	// Extract start_color
+	if val := getTableString(gradientTable, "start_color"); val != nil {
+		c, err := parseColor(*val)
+		if err != nil {
+			return fmt.Errorf("invalid gradient start_color: %w", err)
+		}
+		cfg.Window.Gradient.StartColor = c
+	}
+
+	// Extract end_color
+	if val := getTableString(gradientTable, "end_color"); val != nil {
+		c, err := parseColor(*val)
+		if err != nil {
+			return fmt.Errorf("invalid gradient end_color: %w", err)
+		}
+		cfg.Window.Gradient.EndColor = c
+	}
+
+	// Extract direction
+	if val := getTableString(gradientTable, "direction"); val != nil {
+		dir, err := ParseGradientDirection(*val)
+		if err != nil {
+			return fmt.Errorf("invalid gradient direction: %w", err)
+		}
+		cfg.Window.Gradient.Direction = dir
 	}
 
 	return nil
