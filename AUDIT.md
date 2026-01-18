@@ -169,17 +169,17 @@ The switch statement in `resolveVariable()` handles over 100 different Conky var
 
 ## Minor Internal Inconsistency
 
-### Item #7: if_match Conditional Parameter Naming
+### Item #7: if_match Conditional Parameter Naming ✅ RESOLVED
 **Documentation Reference:**
-> "Syntax: ${if_match value regex}content${endif}" (internal/lua/conditionals.go:31)
+> "Syntax: ${if_match value pattern}content${endif}" (internal/lua/conditionals.go:31)
 
 **Implementation Location:** `internal/lua/conditionals.go:331-354`
 
-**Issue:** The syntax documentation at line 31 uses "regex" as the parameter name, but the implementation comment at line 334 correctly states "Pattern is a string comparison (not regex for simplicity)."
+**Issue:** The syntax documentation at line 31 previously used "regex" as the parameter name, but the implementation comment at line 334 correctly states "Pattern is a string comparison (not regex for simplicity)."
 
-This is an internal code comment inconsistency, not a README.md vs implementation gap. The parameter should be renamed from "regex" to "pattern" in the code comment for clarity.
+**Resolution (2026-01-18):** Updated the code comment at line 31 to use "pattern" instead of "regex", aligning documentation with the implementation.
 
-**Impact:** Minor - This is internal documentation clarity, not user-facing.
+**Status:** RESOLVED - Documentation now matches implementation.
 
 ---
 
@@ -193,5 +193,6 @@ The README.md documentation is accurate and well-aligned with the actual impleme
 4. **60 FPS Performance** - Frame metrics and performance tracking implemented ✅
 5. **Cairo Compatibility** - 103 Cairo functions implemented ✅
 6. **Conky Variables** - 100+ variable handlers implemented ✅
+7. **if_match Parameter Naming** - Internal code comment updated to use "pattern" instead of "regex" ✅
 
-The codebase demonstrates high-quality implementation that matches its documentation. Only minor internal code comment inconsistencies were found (if_match "regex" parameter naming).
+The codebase demonstrates high-quality implementation that matches its documentation. All identified inconsistencies have been resolved.
