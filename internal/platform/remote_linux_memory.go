@@ -2,111 +2,50 @@ package platform
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 )
+
+// commandRunner defines the interface for running remote commands.
+// This allows testing without an actual SSH connection.
+type commandRunner interface {
+	runCommand(cmd string) (string, error)
+}
 
 // remoteLinuxMemoryProvider collects memory metrics from remote Linux systems via SSH.
 type remoteLinuxMemoryProvider struct {
-	platform *sshPlatform
+	runner commandRunner
 }
 
 func newRemoteLinuxMemoryProvider(p *sshPlatform) *remoteLinuxMemoryProvider {
 	return &remoteLinuxMemoryProvider{
-		platform: p,
+		runner: p,
 	}
 }
 
+// newTestableRemoteLinuxMemoryProviderWithRunner creates a provider with an injectable runner for testing.
+func newTestableRemoteLinuxMemoryProviderWithRunner(runner commandRunner) *remoteLinuxMemoryProvider {
+	return &remoteLinuxMemoryProvider{
+		runner: runner,
+	}
+}
+
+// Stats returns memory statistics from a remote Linux system.
+// Uses parseMemInfoOutput helper for parsing logic.
 func (m *remoteLinuxMemoryProvider) Stats() (*MemoryStats, error) {
-	output, err := m.platform.runCommand("cat /proc/meminfo")
+	output, err := m.runner.runCommand("cat /proc/meminfo")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read /proc/meminfo: %w", err)
 	}
 
-	stats := &MemoryStats{}
-	lines := strings.Split(output, "\n")
-
-	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-
-		key := strings.TrimSuffix(fields[0], ":")
-		value, err := strconv.ParseUint(fields[1], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		// Values in /proc/meminfo are in KB, convert to bytes
-		value *= 1024
-
-		switch key {
-		case "MemTotal":
-			stats.Total = value
-		case "MemFree":
-			stats.Free = value
-		case "MemAvailable":
-			stats.Available = value
-		case "Buffers":
-			stats.Buffers = value
-		case "Cached":
-			stats.Cached = value
-		}
-	}
-
-	// Calculate used memory
-	stats.Used = stats.Total - stats.Free - stats.Buffers - stats.Cached
-
-	// Calculate percentage
-	if stats.Total > 0 {
-		stats.UsedPercent = float64(stats.Used) / float64(stats.Total) * 100
-	}
-
-	return stats, nil
+	return parseMemInfoOutput(output)
 }
 
+// SwapStats returns swap statistics from a remote Linux system.
+// Uses parseSwapOutput helper for parsing logic.
 func (m *remoteLinuxMemoryProvider) SwapStats() (*SwapStats, error) {
-	output, err := m.platform.runCommand("cat /proc/meminfo | grep '^Swap'")
+	output, err := m.runner.runCommand("cat /proc/meminfo | grep '^Swap'")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read swap stats: %w", err)
 	}
 
-	stats := &SwapStats{}
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-
-	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-
-		key := strings.TrimSuffix(fields[0], ":")
-		value, err := strconv.ParseUint(fields[1], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		// Values in /proc/meminfo are in KB, convert to bytes
-		value *= 1024
-
-		switch key {
-		case "SwapTotal":
-			stats.Total = value
-		case "SwapFree":
-			stats.Free = value
-		}
-	}
-
-	// Calculate used swap
-	if stats.Total > stats.Free {
-		stats.Used = stats.Total - stats.Free
-	}
-
-	// Calculate percentage
-	if stats.Total > 0 {
-		stats.UsedPercent = float64(stats.Used) / float64(stats.Total) * 100
-	}
-
-	return stats, nil
+	return parseSwapOutput(output)
 }

@@ -8,17 +8,24 @@ import (
 
 // remoteLinuxFilesystemProvider collects filesystem metrics from remote Linux systems via SSH.
 type remoteLinuxFilesystemProvider struct {
-	platform *sshPlatform
+	runner commandRunner
 }
 
 func newRemoteLinuxFilesystemProvider(p *sshPlatform) *remoteLinuxFilesystemProvider {
 	return &remoteLinuxFilesystemProvider{
-		platform: p,
+		runner: p,
+	}
+}
+
+// newTestableRemoteLinuxFilesystemProviderWithRunner creates a provider with an injectable runner for testing.
+func newTestableRemoteLinuxFilesystemProviderWithRunner(runner commandRunner) *remoteLinuxFilesystemProvider {
+	return &remoteLinuxFilesystemProvider{
+		runner: runner,
 	}
 }
 
 func (f *remoteLinuxFilesystemProvider) Mounts() ([]MountInfo, error) {
-	output, err := f.platform.runCommand("cat /proc/mounts")
+	output, err := f.runner.runCommand("cat /proc/mounts")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read /proc/mounts: %w", err)
 	}
@@ -51,7 +58,7 @@ func (f *remoteLinuxFilesystemProvider) Mounts() ([]MountInfo, error) {
 func (f *remoteLinuxFilesystemProvider) Stats(mountPoint string) (*FilesystemStats, error) {
 	// Use df command with shell-escaped mount point
 	cmd := fmt.Sprintf("df -B1 %s | tail -n 1", shellEscape(mountPoint))
-	output, err := f.platform.runCommand(cmd)
+	output, err := f.runner.runCommand(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get filesystem stats for %s: %w", mountPoint, err)
 	}
@@ -90,7 +97,7 @@ func (f *remoteLinuxFilesystemProvider) Stats(mountPoint string) (*FilesystemSta
 
 	// Try to get inode statistics with shell-escaped mount point
 	cmd = fmt.Sprintf("df -i %s | tail -n 1", shellEscape(mountPoint))
-	output, err = f.platform.runCommand(cmd)
+	output, err = f.runner.runCommand(cmd)
 	if err == nil {
 		fields = strings.Fields(output)
 		if len(fields) >= 6 {
@@ -111,7 +118,7 @@ func (f *remoteLinuxFilesystemProvider) Stats(mountPoint string) (*FilesystemSta
 
 func (f *remoteLinuxFilesystemProvider) DiskIO(device string) (*DiskIOStats, error) {
 	// Read all disk stats and search for the requested device to avoid command injection
-	output, err := f.platform.runCommand("cat /proc/diskstats")
+	output, err := f.runner.runCommand("cat /proc/diskstats")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read disk stats for %s: %w", device, err)
 	}

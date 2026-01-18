@@ -4,7 +4,7 @@
 
 - **Date**: 2026-01-17 (Updated: 2026-01-18)
 - **Version Tested**: 0.1.0
-- **Tests**: 2,674+ total, all passed, 0 failed
+- **Tests**: 2,796 total, all passed, 0 failed
 - **Bugs**: 0 critical, 0 high (2 resolved), 1 medium (4 resolved), 4 low (2 resolved)
 - **Compatibility**: ~85%
 
@@ -18,8 +18,8 @@
 | internal/monitor | 80.2% | ✅ Good |
 | internal/lua | 73.0% | ⚠️ Needs improvement |
 | pkg/conky | 69.7% | ⚠️ Needs improvement |
-| cmd/conky-go | 55.3% | ⚠️ Improved (was 15.2%) |
-| internal/platform | 43.8% | ⚠️ Low coverage (improved from 40.5%) |
+| internal/platform | 57.4% | ⚠️ Improved (was 43.8%) |
+| cmd/conky-go | 55.3% | ⚠️ Improved (was 15.2%) | |
 
 ## Test Results by Category
 
@@ -362,7 +362,7 @@
 - Feature: Cross-platform support
 - Reproduce: Run coverage report
 - Expected: >70% coverage
-- Actual: 43.8% coverage (improved from 40.5% → 43.8%)
+- Actual: 57.4% coverage (improved from 43.8% → 57.4%)
 - Location: internal/platform/
 - Progress:
   - Added tests for DiskIO function (0% → 89.3%)
@@ -371,7 +371,13 @@
   - Added tests for Stats function (16.7% → 100%) - tests against real filesystem paths
   - Created parse_helpers.go with reusable parsing functions for remote providers
   - Added remote_linux_parsing_test.go with mock-based tests for memory/CPU parsing (95%+ coverage)
-- Remaining: Tests for Windows, Darwin, Android stubs; additional remote platform functions
+  - Refactored remote Linux providers to use commandRunner interface for testability
+  - Added newTestable*ProviderWithRunner() constructors for all remote providers
+  - Added comprehensive tests for remote CPU (TotalUsage, LoadAverage, Info, Frequency, Usage)
+  - Added comprehensive tests for remote Memory (Stats, SwapStats)
+  - Added comprehensive tests for remote Network (Interfaces, Stats, AllStats)
+  - Added comprehensive tests for remote Filesystem (Mounts, Stats, DiskIO)
+- Remaining: Tests for Windows, Darwin, Android stubs (build-tag protected, limited testability on Linux)
 
 **BUG-008: cmd/conky-go low test coverage (15.2%)** ✅ RESOLVED
 - Severity: Low
