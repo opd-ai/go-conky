@@ -35,6 +35,10 @@ type SystemDataProvider interface {
 	Battery() monitor.BatteryStats
 	Audio() monitor.AudioStats
 	SysInfo() monitor.SystemInfo
+	TCP() monitor.TCPStats
+	TCPCountInRange(minPort, maxPort int) int
+	TCPConnectionByIndex(minPort, maxPort, index int) *monitor.TCPConnection
+	GPU() monitor.GPUStats
 }
 
 // execCacheEntry stores cached output from execi commands.
@@ -468,13 +472,23 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		}
 		return "off-line"
 
-	// Nvidia GPU (stubs for compatibility)
+	// Nvidia GPU variables
 	case "nvidia":
-		return "" // Requires nvidia-smi integration
+		return api.resolveNvidia(args)
+	case "nvidia_temp", "nvidia_gpu_temp":
+		return api.sysProvider.GPU().GetField("temp")
+	case "nvidia_mem", "nvidia_memutil":
+		return api.sysProvider.GPU().GetField("memutil")
+	case "nvidia_gpu", "nvidia_gpuutil":
+		return api.sysProvider.GPU().GetField("gpuutil")
+	case "nvidia_fan", "nvidia_fanspeed":
+		return api.sysProvider.GPU().GetField("fan")
+	case "nvidia_power":
+		return api.sysProvider.GPU().GetField("power")
 	case "nvidiagraph":
-		return ""
+		return "" // Graph rendering handled elsewhere
 
-	// Apcupsd (UPS) stubs
+	// Apcupsd (UPS) stubs - requires apcaccess
 	case "apcupsd":
 		return ""
 	case "apcupsd_model":
@@ -482,7 +496,7 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "apcupsd_status":
 		return ""
 
-	// IMAP/POP3/mail stubs
+	// IMAP/POP3/mail stubs - requires network integration
 	case "imap_unseen", "imap_messages":
 		return "0"
 	case "pop3_unseen", "pop3_used":
@@ -490,7 +504,7 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	case "new_mails", "mails":
 		return "0"
 
-	// Weather stubs
+	// Weather stubs - requires API integration
 	case "weather":
 		return ""
 
@@ -1412,9 +1426,86 @@ func (api *ConkyAPI) resolveWirelessMode(args []string) string {
 	return "Managed"
 }
 
-// resolveTCPPortMon monitors TCP connections (stub).
-func (api *ConkyAPI) resolveTCPPortMon(_ []string) string {
-	return "0"
+// resolveTCPPortMon monitors TCP connections.
+// Usage: tcp_portmon port_begin port_end [item [index]]
+// Items: count, rip, rhost, rport, rservice, lip, lport, lservice
+func (api *ConkyAPI) resolveTCPPortMon(args []string) string {
+	if len(args) < 2 {
+		return "0"
+	}
+
+	minPort, err := strconv.Atoi(args[0])
+	if err != nil {
+		return "0"
+	}
+	maxPort, err := strconv.Atoi(args[1])
+	if err != nil {
+		return "0"
+	}
+
+	// Default: return count
+	if len(args) < 3 {
+		return strconv.Itoa(api.sysProvider.TCPCountInRange(minPort, maxPort))
+	}
+
+	item := strings.ToLower(args[2])
+	if item == "count" {
+		return strconv.Itoa(api.sysProvider.TCPCountInRange(minPort, maxPort))
+	}
+
+	// Need index for other items
+	index := 0
+	if len(args) >= 4 {
+		index, _ = strconv.Atoi(args[3])
+	}
+
+	conn := api.sysProvider.TCPConnectionByIndex(minPort, maxPort, index)
+	if conn == nil {
+		return ""
+	}
+
+	switch item {
+	case "rip":
+		return conn.RemoteIP
+	case "rhost":
+		return conn.RemoteIP // Could do reverse DNS lookup
+	case "rport":
+		return strconv.Itoa(conn.RemotePort)
+	case "rservice":
+		return portToService(conn.RemotePort)
+	case "lip":
+		return conn.LocalIP
+	case "lport":
+		return strconv.Itoa(conn.LocalPort)
+	case "lservice":
+		return portToService(conn.LocalPort)
+	default:
+		return ""
+	}
+}
+
+// resolveNvidia returns NVIDIA GPU info.
+// Usage: nvidia [field] where field is temp, gpu, mem, fan, power, etc.
+func (api *ConkyAPI) resolveNvidia(args []string) string {
+	if len(args) == 0 {
+		return api.sysProvider.GPU().GetField("gpuutil")
+	}
+	return api.sysProvider.GPU().GetField(args[0])
+}
+
+// portToService converts common port numbers to service names.
+func portToService(port int) string {
+	services := map[int]string{
+		21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp",
+		53: "dns", 80: "http", 110: "pop3", 143: "imap",
+		443: "https", 993: "imaps", 995: "pop3s",
+		3306: "mysql", 5432: "postgresql", 6379: "redis",
+		8080: "http-alt", 8443: "https-alt",
+	}
+	if name, ok := services[port]; ok {
+		return name
+	}
+	return strconv.Itoa(port)
 }
 
 // resolveIfExisting checks if a file or path exists.
