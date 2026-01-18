@@ -161,6 +161,15 @@ var variablePattern = regexp.MustCompile(`\$\{([^}]+)\}`)
 //   - ${variable arg} - variable with argument
 //   - ${variable arg1 arg2} - variable with multiple arguments
 //
+// Conditional blocks are also supported:
+//   - ${if_up interface}content${endif}
+//   - ${if_up interface}content${else}alternative${endif}
+//   - ${if_existing path}content${endif}
+//   - ${if_running process}content${endif}
+//   - ${if_match value pattern}content${endif}
+//   - ${if_empty value}content${endif}
+//   - ${if_mounted path}content${endif}
+//
 // Thread safety: This function does not hold locks during parsing to avoid
 // deadlocks when resolving variables that need to acquire locks (e.g., execi
 // with cache). The sysProvider is accessed via resolveVariable which does a
@@ -168,7 +177,11 @@ var variablePattern = regexp.MustCompile(`\$\{([^}]+)\}`)
 // thread-safe. SetSystemDataProvider should not be called concurrently with
 // Parse in production; it's intended for initialization and testing.
 func (api *ConkyAPI) Parse(template string) string {
-	return variablePattern.ReplaceAllStringFunc(template, func(match string) string {
+	// First, process conditional blocks
+	processed := api.parseConditionals(template)
+
+	// Then replace variables
+	return variablePattern.ReplaceAllStringFunc(processed, func(match string) string {
 		// Extract variable name and arguments from ${variable args...}
 		inner := match[2 : len(match)-1] // Remove ${ and }
 		parts := strings.Fields(inner)
