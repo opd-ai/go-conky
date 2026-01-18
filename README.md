@@ -92,6 +92,58 @@ ${color grey}RAM Usage:$color $mem/$memmax
 
 See the [Migration Guide](docs/migration.md) for detailed compatibility information.
 
+## Transparency and Window Options
+
+Conky-Go supports multiple transparency modes for seamless desktop integration:
+
+### True ARGB Transparency
+
+Requires a running compositor (picom, KWin, Mutter, etc.):
+
+```lua
+conky.config = {
+    own_window = true,
+    own_window_type = 'desktop',
+    own_window_transparent = true,
+    own_window_argb_visual = true,
+    own_window_argb_value = 180,  -- 0=transparent, 255=opaque
+    own_window_hints = 'undecorated,below,sticky,skip_taskbar,skip_pager',
+}
+```
+
+### Semi-Transparent Solid Background
+
+```lua
+conky.config = {
+    own_window = true,
+    own_window_type = 'desktop',
+    own_window_transparent = false,
+    own_window_colour = '1a1a2e',  -- Dark background
+    own_window_argb_visual = true,
+    own_window_argb_value = 200,
+}
+```
+
+### Gradient Background
+
+```lua
+conky.config = {
+    own_window = true,
+    background_mode = 'gradient',
+    gradient = {
+        start_color = '1a1a3e',
+        end_color = '3e1a3e',
+        direction = 'diagonal',  -- vertical, horizontal, diagonal, radial
+    },
+    own_window_argb_visual = true,
+    own_window_argb_value = 220,
+}
+```
+
+See [Transparency Guide](docs/transparency.md) for detailed setup instructions, compositor requirements, and troubleshooting.
+
+**Example configurations:** [`test/configs/transparency_*.conkyrc`](test/configs/)
+
 ## Development
 
 ### Building
@@ -143,6 +195,7 @@ conky-go/
 - [Architecture Guide](docs/architecture.md) - System design and component overview
 - [Cross-Platform Deployment](docs/cross-platform.md) - Multi-platform installation and configuration
 - [Migration Guide](docs/migration.md) - Migrating from Conky to Conky-Go
+- [Transparency Guide](docs/transparency.md) - Window transparency, compositors, and window hints
 - [SSH Remote Monitoring](docs/ssh-remote-monitoring.md) - Monitor remote systems without agent installation
 - [API Reference](docs/api.md) - Go packages and Lua API documentation
 
