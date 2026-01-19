@@ -28,6 +28,10 @@ const (
 	ErrorCategoryIO
 	// ErrorCategoryNetwork is for network-related errors.
 	ErrorCategoryNetwork
+
+	// errorCategoryCount is a sentinel value representing the total number of categories.
+	// Used for compile-time safety of the categoryCounters array size.
+	errorCategoryCount
 )
 
 // String returns a human-readable name for the error category.
@@ -129,6 +133,25 @@ func (e *CategorizedError) WithContext(key, value string) *CategorizedError {
 	return e
 }
 
+// deepCopyContext creates a deep copy of a Context map.
+// Returns nil if the input is nil.
+func deepCopyContext(ctx map[string]string) map[string]string {
+	if ctx == nil {
+		return nil
+	}
+	copy := make(map[string]string, len(ctx))
+	for k, v := range ctx {
+		copy[k] = v
+	}
+	return copy
+}
+
+// deepCopy returns a deep copy of the CategorizedError with its Context map copied.
+func (e CategorizedError) deepCopy() CategorizedError {
+	e.Context = deepCopyContext(e.Context)
+	return e
+}
+
 // AlertCondition defines when an alert should be triggered.
 type AlertCondition struct {
 	// Category filters alerts to a specific error category.
@@ -160,8 +183,9 @@ type ErrorTracker struct {
 	lastAlert     map[int]time.Time // Alert cooldown tracking (index = condition index)
 	alertCooldown time.Duration     // Minimum time between alerts for same condition
 
-	// Counters per category (atomic for fast access)
-	categoryCounters [8]atomic.Int64 // One per ErrorCategory (0-7)
+	// Counters per category (atomic for fast access).
+	// Size is determined by errorCategoryCount sentinel for compile-time safety.
+	categoryCounters [errorCategoryCount]atomic.Int64
 }
 
 // ErrorTrackerConfig configures an ErrorTracker.
@@ -233,8 +257,9 @@ func (t *ErrorTracker) Record(err *CategorizedError) {
 	}
 
 	t.mu.Lock()
-	// Add error to the list
-	t.errors = append(t.errors, *err)
+	// Add error to the list with a deep copy of the Context map to avoid
+	// sharing mutable state between the caller and the tracker.
+	t.errors = append(t.errors, err.deepCopy())
 
 	// Prune old errors if over capacity
 	if len(t.errors) > t.maxErrors {
@@ -305,7 +330,8 @@ func (t *ErrorTracker) checkCondition(index int, cond AlertCondition, handlers [
 		}
 		count++
 		if len(matching) < 10 { // Keep up to 10 recent examples
-			matching = append(matching, err)
+			// Deep copy to avoid sharing mutable Context map with handlers
+			matching = append(matching, err.deepCopy())
 		}
 	}
 	t.mu.RUnlock()
@@ -398,6 +424,7 @@ func (t *ErrorTracker) Stats() ErrorStats {
 }
 
 // RecentErrors returns the most recent errors, up to the specified limit.
+// The returned errors are deep copies; callers may safely modify the Context map.
 func (t *ErrorTracker) RecentErrors(limit int) []CategorizedError {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -411,8 +438,11 @@ func (t *ErrorTracker) RecentErrors(limit int) []CategorizedError {
 		start = 0
 	}
 
+	// Deep copy errors to avoid sharing mutable Context maps with callers
 	result := make([]CategorizedError, len(t.errors)-start)
-	copy(result, t.errors[start:])
+	for i := start; i < len(t.errors); i++ {
+		result[i-start] = t.errors[i].deepCopy()
+	}
 	return result
 }
 

@@ -112,6 +112,93 @@ func TestCategorizedError(t *testing.T) {
 	})
 }
 
+func TestDeepCopyContext(t *testing.T) {
+	t.Run("returns nil for nil input", func(t *testing.T) {
+		result := deepCopyContext(nil)
+		if result != nil {
+			t.Errorf("deepCopyContext(nil) = %v, want nil", result)
+		}
+	})
+
+	t.Run("creates independent copy", func(t *testing.T) {
+		original := map[string]string{"key": "value"}
+		copied := deepCopyContext(original)
+
+		// Modify original
+		original["key"] = "modified"
+		original["new"] = "added"
+
+		// Copied should be unaffected
+		if copied["key"] != "value" {
+			t.Errorf("copied[key] = %v, want value", copied["key"])
+		}
+		if _, exists := copied["new"]; exists {
+			t.Error("copied should not have 'new' key")
+		}
+	})
+}
+
+func TestCategorizedErrorDeepCopy(t *testing.T) {
+	t.Run("creates independent copy of Context", func(t *testing.T) {
+		original := NewCategorizedError(errors.New("test"), ErrorCategoryConfig, SeverityError).
+			WithContext("host", "original")
+
+		copied := original.deepCopy()
+
+		// Modify original
+		original.Context["host"] = "modified"
+		original.Context["new"] = "added"
+
+		// Copied should be unaffected
+		if copied.Context["host"] != "original" {
+			t.Errorf("copied.Context[host] = %v, want original", copied.Context["host"])
+		}
+		if _, exists := copied.Context["new"]; exists {
+			t.Error("copied.Context should not have 'new' key")
+		}
+	})
+}
+
+func TestErrorTracker_DeepCopyOnRecord(t *testing.T) {
+	tracker := NewErrorTracker(DefaultErrorTrackerConfig())
+
+	err := NewCategorizedError(errors.New("test"), ErrorCategoryConfig, SeverityError).
+		WithContext("key", "original")
+
+	tracker.Record(err)
+
+	// Modify original after recording
+	err.Context["key"] = "modified"
+
+	// Tracker should have independent copy
+	recent := tracker.RecentErrors(1)
+	if len(recent) != 1 {
+		t.Fatalf("Expected 1 recent error, got %d", len(recent))
+	}
+	if recent[0].Context["key"] != "original" {
+		t.Errorf("Tracker error context[key] = %v, want original", recent[0].Context["key"])
+	}
+}
+
+func TestErrorTracker_DeepCopyOnRecentErrors(t *testing.T) {
+	tracker := NewErrorTracker(DefaultErrorTrackerConfig())
+
+	tracker.Record(NewCategorizedError(errors.New("test"), ErrorCategoryConfig, SeverityError).
+		WithContext("key", "original"))
+
+	// Get recent errors
+	recent1 := tracker.RecentErrors(1)
+	recent1[0].Context["key"] = "modified"
+
+	// Get recent errors again
+	recent2 := tracker.RecentErrors(1)
+
+	// Second retrieval should have original value
+	if recent2[0].Context["key"] != "original" {
+		t.Errorf("recent2[0].Context[key] = %v, want original", recent2[0].Context["key"])
+	}
+}
+
 func TestNewErrorTracker(t *testing.T) {
 	t.Run("default configuration", func(t *testing.T) {
 		cfg := DefaultErrorTrackerConfig()
