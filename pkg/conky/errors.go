@@ -416,12 +416,26 @@ func (t *ErrorTracker) RecentErrors(limit int) []CategorizedError {
 	return result
 }
 
-// Clear removes all tracked errors.
+// Clear removes all tracked errors from the retention window and resets alert cooldowns.
+// Note: The lifetime category counters (TotalByCategory in Stats()) are NOT reset,
+// as they track total errors since tracker creation. Use ClearAll() to reset everything.
 func (t *ErrorTracker) Clear() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.errors = t.errors[:0]
 	t.lastAlert = make(map[int]time.Time)
+}
+
+// ClearAll removes all tracked errors and resets all counters including lifetime totals.
+func (t *ErrorTracker) ClearAll() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.errors = t.errors[:0]
+	t.lastAlert = make(map[int]time.Time)
+	// Reset lifetime counters
+	for i := range t.categoryCounters {
+		t.categoryCounters[i].Store(0)
+	}
 }
 
 // ErrorStats provides a summary of error statistics.

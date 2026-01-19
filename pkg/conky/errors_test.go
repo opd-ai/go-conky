@@ -444,6 +444,39 @@ func TestErrorTracker_Clear(t *testing.T) {
 	if stats.TotalErrors != 0 {
 		t.Errorf("TotalErrors after Clear = %d, want 0", stats.TotalErrors)
 	}
+
+	// Lifetime counters should NOT be reset by Clear
+	var totalLifetime int64
+	for _, cc := range stats.TotalByCategory {
+		totalLifetime += cc.Count
+	}
+	if totalLifetime != 5 {
+		t.Errorf("Lifetime total after Clear = %d, want 5 (lifetime counters should be preserved)", totalLifetime)
+	}
+}
+
+func TestErrorTracker_ClearAll(t *testing.T) {
+	tracker := NewErrorTracker(DefaultErrorTrackerConfig())
+
+	for i := 0; i < 5; i++ {
+		tracker.Record(NewCategorizedError(errors.New("test"), ErrorCategoryConfig, SeverityError))
+	}
+
+	tracker.ClearAll()
+
+	stats := tracker.Stats()
+	if stats.TotalErrors != 0 {
+		t.Errorf("TotalErrors after ClearAll = %d, want 0", stats.TotalErrors)
+	}
+
+	// Lifetime counters SHOULD be reset by ClearAll
+	var totalLifetime int64
+	for _, cc := range stats.TotalByCategory {
+		totalLifetime += cc.Count
+	}
+	if totalLifetime != 0 {
+		t.Errorf("Lifetime total after ClearAll = %d, want 0", totalLifetime)
+	}
 }
 
 func TestErrorTracker_ConcurrentAccess(t *testing.T) {
