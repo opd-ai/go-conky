@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"image/color"
+	"sync"
 	"testing"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -456,6 +457,152 @@ func absDiffFloat(x float64) float64 {
 		return -x
 	}
 	return x
+}
+
+func TestGradientBackgroundCaching(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	bg := NewGradientBackground(startColor, endColor, GradientDirectionVertical)
+
+	// Initially, no cached image should exist
+	if bg.HasCachedImage() {
+		t.Error("HasCachedImage() should be false before Draw() is called")
+	}
+}
+
+func TestGradientBackgroundClose(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	bg := NewGradientBackground(startColor, endColor, GradientDirectionVertical)
+
+	// Close should not panic even if no image is cached
+	bg.Close()
+
+	// After close, should not have cached image
+	if bg.HasCachedImage() {
+		t.Error("HasCachedImage() should be false after Close()")
+	}
+}
+
+func TestGradientBackgroundWithARGBInvalidatesCache(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	bg := NewGradientBackground(startColor, endColor, GradientDirectionVertical)
+
+	// Simulate having a cached state by setting cache tracking values
+	// This is white-box testing within the same package
+	bg.mu.Lock()
+	bg.cachedWidth = 100
+	bg.cachedHeight = 100
+	bg.mu.Unlock()
+
+	// Change ARGB settings - should invalidate cache
+	bg.WithARGB(true, 128)
+
+	// Verify cache tracking was reset via public API
+	// Note: HasCachedImage checks cachedImage, not dimensions
+	// The dimensions being reset is an internal implementation detail
+	bg.mu.RLock()
+	width := bg.cachedWidth
+	height := bg.cachedHeight
+	bg.mu.RUnlock()
+
+	if width != 0 || height != 0 {
+		t.Errorf("cached dimensions should be 0x0 after ARGB change, got %dx%d", width, height)
+	}
+}
+
+func TestGradientBackgroundWithARGBSameValueNoInvalidation(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	bg := NewGradientBackground(startColor, endColor, GradientDirectionVertical)
+
+	// Set initial ARGB value
+	bg.WithARGB(true, 128)
+
+	// Simulate having a cached state
+	bg.mu.Lock()
+	bg.cachedWidth = 100
+	bg.cachedHeight = 100
+	bg.mu.Unlock()
+
+	// Set same ARGB value - should NOT invalidate cache
+	bg.WithARGB(true, 128)
+
+	// Cache tracking should remain (since values didn't change)
+	bg.mu.RLock()
+	width := bg.cachedWidth
+	height := bg.cachedHeight
+	bg.mu.RUnlock()
+
+	if width != 100 || height != 100 {
+		t.Errorf("cached dimensions should remain 100x100 when ARGB unchanged, got %dx%d", width, height)
+	}
+}
+
+func TestGradientBackgroundConcurrentAccess(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	bg := NewGradientBackground(startColor, endColor, GradientDirectionVertical)
+
+	// Create a test screen for Draw calls
+	screen := ebiten.NewImage(100, 100)
+	defer screen.Deallocate()
+
+	var wg sync.WaitGroup
+	iterations := 100
+
+	// Start multiple goroutines that call Draw concurrently
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				bg.Draw(screen)
+			}
+		}()
+	}
+
+	// Start goroutines that call WithARGB concurrently
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				bg.WithARGB(j%2 == 0, j%256)
+			}
+		}(i)
+	}
+
+	// Start goroutines that call HasCachedImage concurrently
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				_ = bg.HasCachedImage()
+			}
+		}()
+	}
+
+	// Start a goroutine that calls Close
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for j := 0; j < iterations/10; j++ {
+			bg.Close()
+		}
+	}()
+
+	wg.Wait()
+
+	// The test passes if no race conditions cause panics
+	// Run with -race flag to detect races
 }
 
 func TestNewPseudoBackground(t *testing.T) {

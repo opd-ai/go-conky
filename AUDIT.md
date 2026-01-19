@@ -17,7 +17,7 @@ This audit compares the documented functionality in README.md against the actual
 | **FUNCTIONAL MISMATCH** | 3 |
 | **MISSING FEATURE** | 5 |
 | **EDGE CASE BUG** | 2 |
-| **PERFORMANCE ISSUE** | 1 |
+| **PERFORMANCE ISSUE** | 0 (1 resolved) |
 
 **Overall Assessment:** The codebase is well-implemented with solid architecture. Most documented features are functional. The identified issues are primarily related to incomplete feature parity with original Conky rather than implementation bugs.
 
@@ -286,36 +286,21 @@ if exists && now.Before(entry.expiresAt) {
 
 ---
 
-### PERFORMANCE ISSUE: Gradient Background Recalculated Every Frame
+### ~~PERFORMANCE ISSUE: Gradient Background Recalculated Every Frame~~ ✅ RESOLVED
 **File:** internal/render/background.go:149-176
 **Severity:** Medium
+**Status:** **RESOLVED** - Implemented gradient image caching on 2025-01-19
 **Description:** The `GradientBackground.Draw()` method creates a new pixel buffer and recalculates the entire gradient for every frame, even though the gradient is static.
 **Expected Behavior:** The gradient should be calculated once and cached as an image.
 **Actual Behavior:** Full gradient calculation occurs every frame (60 times per second).
 **Impact:** Unnecessary CPU usage when using gradient backgrounds. At 400×300 resolution, this is 120,000 pixels recalculated 60 times per second, totaling 7.2 million pixel calculations per second.
 **Reproduction:** Configure a gradient background and monitor CPU usage; compare against solid background.
-**Code Reference:**
-```go
-// Draw renders the gradient background to the screen.
-func (gb *GradientBackground) Draw(screen *ebiten.Image) {
-    bounds := screen.Bounds()
-    w := bounds.Dx()
-    h := bounds.Dy()
-
-    // Create a pixel buffer for the gradient - EVERY FRAME
-    pixels := make([]byte, w*h*4)
-
-    for y := 0; y < h; y++ {
-        for x := 0; x < w; x++ {
-            t := gb.interpolationFactor(x, y, w, h)
-            c := gb.lerpColor(t)
-            // ... per-pixel calculation
-        }
-    }
-
-    screen.WritePixels(pixels)
-}
-```
+**Resolution:** Added caching mechanism to `GradientBackground`:
+- Added `cachedImage`, `cachedWidth`, `cachedHeight` fields to track cached gradient
+- Modified `Draw()` to generate gradient once and reuse cached image on subsequent calls
+- Added cache invalidation when window dimensions change or ARGB settings are modified
+- Added `Close()` method for proper resource cleanup
+- Added `HasCachedImage()` method for introspection and testing
 
 ---
 

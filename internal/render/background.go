@@ -4,6 +4,7 @@ package render
 import (
 	"image/color"
 	"math"
+	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -119,6 +120,14 @@ type GradientBackground struct {
 	direction  GradientDirection
 	argbValue  int  // Alpha value override (0-255) when ARGB is enabled
 	argbOn     bool // Whether ARGB visual is enabled
+
+	// mu protects cachedImage, cachedWidth, and cachedHeight from concurrent access
+	mu sync.RWMutex
+	// cachedImage holds the pre-rendered gradient to avoid recalculating every frame
+	cachedImage *ebiten.Image
+	// cachedWidth and cachedHeight track dimensions to detect when regeneration is needed
+	cachedWidth  int
+	cachedHeight int
 }
 
 // NewGradientBackground creates a new gradient background renderer.
@@ -128,25 +137,36 @@ func NewGradientBackground(startColor, endColor color.RGBA, direction GradientDi
 		endColor:   endColor,
 		direction:  direction,
 		argbValue:  255,
-		argbOn:     false,
 	}
 }
 
 // WithARGB configures ARGB visual settings for the gradient background.
 // When enabled, the argbValue overrides both colors' alpha channel.
+// This invalidates the cached gradient image, requiring regeneration on next draw.
+// Thread-safe: protected by mutex.
 func (gb *GradientBackground) WithARGB(enabled bool, value int) *GradientBackground {
-	gb.argbOn = enabled
 	// Clamp ARGB value to valid range
 	if value < 0 {
 		value = 0
 	} else if value > 255 {
 		value = 255
 	}
+
+	gb.mu.Lock()
+	defer gb.mu.Unlock()
+
+	// Invalidate cache if settings changed
+	if gb.argbOn != enabled || gb.argbValue != value {
+		gb.invalidateCacheLocked()
+	}
+	gb.argbOn = enabled
 	gb.argbValue = value
 	return gb
 }
 
 // Draw renders the gradient background to the screen.
+// The gradient is calculated once and cached; subsequent calls reuse the cached image.
+// Thread-safe: protected by mutex.
 func (gb *GradientBackground) Draw(screen *ebiten.Image) {
 	bounds := screen.Bounds()
 	w := bounds.Dx()
@@ -154,6 +174,29 @@ func (gb *GradientBackground) Draw(screen *ebiten.Image) {
 
 	if w == 0 || h == 0 {
 		return
+	}
+
+	gb.mu.Lock()
+	defer gb.mu.Unlock()
+
+	// Check if we need to regenerate the cached image
+	if gb.cachedImage == nil || gb.cachedWidth != w || gb.cachedHeight != h {
+		gb.generateCachedImageLocked(w, h)
+	}
+
+	// Draw the cached gradient image to the screen
+	if gb.cachedImage != nil {
+		op := &ebiten.DrawImageOptions{}
+		screen.DrawImage(gb.cachedImage, op)
+	}
+}
+
+// generateCachedImageLocked creates and caches the gradient image at the specified dimensions.
+// Must be called with mu held.
+func (gb *GradientBackground) generateCachedImageLocked(w, h int) {
+	// Clean up old cached image
+	if gb.cachedImage != nil {
+		gb.cachedImage.Deallocate()
 	}
 
 	// Create a pixel buffer for the gradient
@@ -172,7 +215,22 @@ func (gb *GradientBackground) Draw(screen *ebiten.Image) {
 		}
 	}
 
-	screen.WritePixels(pixels)
+	// Create and cache the gradient image
+	gb.cachedImage = ebiten.NewImage(w, h)
+	gb.cachedImage.WritePixels(pixels)
+	gb.cachedWidth = w
+	gb.cachedHeight = h
+}
+
+// invalidateCacheLocked clears the cached gradient image, forcing regeneration on next draw.
+// Must be called with mu held.
+func (gb *GradientBackground) invalidateCacheLocked() {
+	if gb.cachedImage != nil {
+		gb.cachedImage.Deallocate()
+		gb.cachedImage = nil
+	}
+	gb.cachedWidth = 0
+	gb.cachedHeight = 0
 }
 
 // interpolationFactor calculates the gradient interpolation factor (0.0 to 1.0)
@@ -251,6 +309,23 @@ func (gb *GradientBackground) EndColor() color.RGBA {
 // Direction returns the gradient direction.
 func (gb *GradientBackground) Direction() GradientDirection {
 	return gb.direction
+}
+
+// HasCachedImage returns true if a gradient image has been cached.
+// Thread-safe: protected by read lock.
+func (gb *GradientBackground) HasCachedImage() bool {
+	gb.mu.RLock()
+	defer gb.mu.RUnlock()
+	return gb.cachedImage != nil
+}
+
+// Close releases resources held by the GradientBackground.
+// Should be called when the background is no longer needed.
+// Thread-safe: protected by mutex.
+func (gb *GradientBackground) Close() {
+	gb.mu.Lock()
+	defer gb.mu.Unlock()
+	gb.invalidateCacheLocked()
 }
 
 // PseudoBackground renders a cached screenshot of the desktop as the background.
