@@ -1,4 +1,4 @@
-# Functional Audit Report: go-conky
+# Functional Audit Report: Conky-Go
 
 **Audit Date:** 2025-01-19
 **Auditor:** Automated Code Audit System
