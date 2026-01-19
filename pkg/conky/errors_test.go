@@ -104,7 +104,7 @@ func TestCategorizedError(t *testing.T) {
 
 	t.Run("WithContext handles nil context", func(t *testing.T) {
 		err := &CategorizedError{}
-		err.WithContext("key", "value")
+		err = err.WithContext("key", "value")
 
 		if err.Context["key"] != "value" {
 			t.Errorf("Context[key] = %v, want value", err.Context["key"])

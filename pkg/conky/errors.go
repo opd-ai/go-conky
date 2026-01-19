@@ -139,11 +139,11 @@ func deepCopyContext(ctx map[string]string) map[string]string {
 	if ctx == nil {
 		return nil
 	}
-	copy := make(map[string]string, len(ctx))
+	result := make(map[string]string, len(ctx))
 	for k, v := range ctx {
-		copy[k] = v
+		result[k] = v
 	}
-	return copy
+	return result
 }
 
 // deepCopy returns a deep copy of the CategorizedError with its Context map copied.
@@ -348,7 +348,7 @@ func (t *ErrorTracker) checkCondition(index int, cond AlertCondition, handlers [
 			// Call in goroutine to avoid blocking
 			go func(h AlertHandler) {
 				defer func() {
-					recover() // Prevent panic in handler from crashing
+					_ = recover() // Prevent panic in handler from crashing
 				}()
 				h(cond, count, matching)
 			}(handler)
@@ -402,7 +402,7 @@ func (t *ErrorTracker) Stats() ErrorStats {
 	defer t.mu.RUnlock()
 
 	stats := ErrorStats{
-		TotalErrors:     len(t.errors),
+		TotalErrors:      len(t.errors),
 		ErrorsByCategory: make(map[ErrorCategory]int),
 		ErrorsBySeverity: make(map[ErrorSeverity]int),
 	}
