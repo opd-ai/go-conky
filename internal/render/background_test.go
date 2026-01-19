@@ -458,6 +458,84 @@ func absDiffFloat(x float64) float64 {
 	return x
 }
 
+func TestGradientBackgroundCaching(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	bg := NewGradientBackground(startColor, endColor, GradientDirectionVertical)
+
+	// Initially, no cached image should exist
+	if bg.HasCachedImage() {
+		t.Error("HasCachedImage() should be false before Draw() is called")
+	}
+
+	// Verify cached dimensions are initially zero
+	if bg.cachedWidth != 0 || bg.cachedHeight != 0 {
+		t.Errorf("cached dimensions should be 0x0, got %dx%d", bg.cachedWidth, bg.cachedHeight)
+	}
+}
+
+func TestGradientBackgroundClose(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	bg := NewGradientBackground(startColor, endColor, GradientDirectionVertical)
+
+	// Close should not panic even if no image is cached
+	bg.Close()
+
+	// After close, should not have cached image
+	if bg.HasCachedImage() {
+		t.Error("HasCachedImage() should be false after Close()")
+	}
+	if bg.cachedWidth != 0 || bg.cachedHeight != 0 {
+		t.Errorf("cached dimensions should be 0x0 after Close(), got %dx%d", bg.cachedWidth, bg.cachedHeight)
+	}
+}
+
+func TestGradientBackgroundWithARGBInvalidatesCache(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	bg := NewGradientBackground(startColor, endColor, GradientDirectionVertical)
+
+	// Simulate having a cached image by setting cache tracking values
+	bg.cachedWidth = 100
+	bg.cachedHeight = 100
+
+	// Change ARGB settings - should invalidate cache
+	bg.WithARGB(true, 128)
+
+	// Cache tracking should be reset
+	if bg.cachedWidth != 0 || bg.cachedHeight != 0 {
+		t.Errorf("cached dimensions should be 0x0 after ARGB change, got %dx%d",
+			bg.cachedWidth, bg.cachedHeight)
+	}
+}
+
+func TestGradientBackgroundWithARGBSameValueNoInvalidation(t *testing.T) {
+	startColor := color.RGBA{R: 255, G: 0, B: 0, A: 255}
+	endColor := color.RGBA{R: 0, G: 0, B: 255, A: 255}
+
+	bg := NewGradientBackground(startColor, endColor, GradientDirectionVertical)
+
+	// Set initial ARGB value
+	bg.WithARGB(true, 128)
+
+	// Simulate having a cached image by setting cache tracking values
+	bg.cachedWidth = 100
+	bg.cachedHeight = 100
+
+	// Set same ARGB value - should NOT invalidate cache
+	bg.WithARGB(true, 128)
+
+	// Cache tracking should remain (since values didn't change)
+	if bg.cachedWidth != 100 || bg.cachedHeight != 100 {
+		t.Errorf("cached dimensions should remain 100x100 when ARGB unchanged, got %dx%d",
+			bg.cachedWidth, bg.cachedHeight)
+	}
+}
+
 func TestNewPseudoBackground(t *testing.T) {
 	fallbackColor := color.RGBA{R: 100, G: 150, B: 200, A: 255}
 	pb := NewPseudoBackground(100, 200, 400, 300, fallbackColor)
