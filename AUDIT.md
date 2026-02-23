@@ -985,13 +985,14 @@ The following methodology was applied during this audit:
 ## AUDIT SCOPE
 
 **Files Analyzed:** 218 Go files across:
-- `pkg/conky/` (10 files)
-- `internal/config/` (12 files)
+- [x] `pkg/conky/` — Complete — 4 issues (0 high, 0 med, 4 low)
+- [x] `internal/config/` — Complete — 2 issues (0 high, 0 med, 2 low)
+- [x] `internal/lua/` — Complete — 6 issues (0 high, 1 med, 5 low)
 - `internal/render/` (30 files)
 - `internal/monitor/` (25 files)
 - `internal/platform/` (110+ files for all platforms)
 - `internal/lua/` (8 files)
-- `internal/profiling/` (3 files)
+- [x] `internal/profiling/` — Complete — 2 issues (0 high, 0 med, 2 low)
 - `cmd/conky-go/` (1 file)
 
 **Lines of Code Reviewed:** Estimated ~35,000 lines of Go code
