@@ -88,7 +88,7 @@ func (gr *gameRunner) run(c *conkyImpl) {
 	}
 
 	// Parse window hints into render config flags
-	undecorated, floating, skipTaskbar, skipPager := parseWindowHints(windowHints)
+	undecorated, floating, skipTaskbar, skipPager := parseWindowHints(windowHints, logger)
 
 	// Create render configuration with transparency and window hint settings
 	renderConfig := render.Config{
@@ -151,7 +151,8 @@ func configToRenderBackgroundMode(mode config.BackgroundMode) render.BackgroundM
 
 // parseWindowHints converts config.WindowHint slice to individual render flags.
 // Returns: undecorated, floating (above), skipTaskbar, skipPager
-func parseWindowHints(hints []config.WindowHint) (bool, bool, bool, bool) {
+// Emits warnings via logger for unsupported hints (below, sticky).
+func parseWindowHints(hints []config.WindowHint, logger Logger) (bool, bool, bool, bool) {
 	var undecorated, floating, skipTaskbar, skipPager bool
 	for _, hint := range hints {
 		switch hint {
@@ -163,8 +164,14 @@ func parseWindowHints(hints []config.WindowHint) (bool, bool, bool, bool) {
 			skipTaskbar = true
 		case config.WindowHintSkipPager:
 			skipPager = true
-			// WindowHintBelow, WindowHintSticky are not supported by Ebiten
-			// but are parsed and documented for completeness
+		case config.WindowHintBelow:
+			if logger != nil {
+				logger.Warn("window hint 'below' is not supported by Ebiten and will be ignored")
+			}
+		case config.WindowHintSticky:
+			if logger != nil {
+				logger.Warn("window hint 'sticky' is not supported by Ebiten and will be ignored")
+			}
 		}
 	}
 	return undecorated, floating, skipTaskbar, skipPager

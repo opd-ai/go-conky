@@ -108,7 +108,7 @@ func TestParseWindowHints(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			undecorated, floating, skipTaskbar, skipPager := parseWindowHints(tt.hints)
+			undecorated, floating, skipTaskbar, skipPager := parseWindowHints(tt.hints, nil)
 
 			if undecorated != tt.wantUndecorated {
 				t.Errorf("undecorated = %v, want %v", undecorated, tt.wantUndecorated)
@@ -121,6 +121,80 @@ func TestParseWindowHints(t *testing.T) {
 			}
 			if skipPager != tt.wantSkipPager {
 				t.Errorf("skipPager = %v, want %v", skipPager, tt.wantSkipPager)
+			}
+		})
+	}
+}
+
+// mockLogger implements Logger interface for testing warning emissions.
+type mockLogger struct {
+	warnings []string
+}
+
+func (m *mockLogger) Debug(msg string, args ...any) {}
+func (m *mockLogger) Info(msg string, args ...any)  {}
+func (m *mockLogger) Warn(msg string, args ...any)  { m.warnings = append(m.warnings, msg) }
+func (m *mockLogger) Error(msg string, args ...any) {}
+
+func TestParseWindowHintsWarnings(t *testing.T) {
+	tests := []struct {
+		name         string
+		hints        []config.WindowHint
+		wantWarnings []string
+	}{
+		{
+			name:         "no warnings for supported hints",
+			hints:        []config.WindowHint{config.WindowHintUndecorated, config.WindowHintAbove},
+			wantWarnings: nil,
+		},
+		{
+			name:         "warn on below hint",
+			hints:        []config.WindowHint{config.WindowHintBelow},
+			wantWarnings: []string{"window hint 'below' is not supported by Ebiten and will be ignored"},
+		},
+		{
+			name:         "warn on sticky hint",
+			hints:        []config.WindowHint{config.WindowHintSticky},
+			wantWarnings: []string{"window hint 'sticky' is not supported by Ebiten and will be ignored"},
+		},
+		{
+			name: "warn on both below and sticky",
+			hints: []config.WindowHint{
+				config.WindowHintBelow,
+				config.WindowHintSticky,
+			},
+			wantWarnings: []string{
+				"window hint 'below' is not supported by Ebiten and will be ignored",
+				"window hint 'sticky' is not supported by Ebiten and will be ignored",
+			},
+		},
+		{
+			name: "mixed supported and unsupported hints",
+			hints: []config.WindowHint{
+				config.WindowHintUndecorated,
+				config.WindowHintBelow,
+				config.WindowHintAbove,
+			},
+			wantWarnings: []string{"window hint 'below' is not supported by Ebiten and will be ignored"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := &mockLogger{}
+			parseWindowHints(tt.hints, logger)
+
+			if len(logger.warnings) != len(tt.wantWarnings) {
+				t.Errorf("got %d warnings, want %d", len(logger.warnings), len(tt.wantWarnings))
+				t.Logf("got: %v", logger.warnings)
+				t.Logf("want: %v", tt.wantWarnings)
+				return
+			}
+
+			for i, want := range tt.wantWarnings {
+				if logger.warnings[i] != want {
+					t.Errorf("warning[%d] = %q, want %q", i, logger.warnings[i], want)
+				}
 			}
 		})
 	}

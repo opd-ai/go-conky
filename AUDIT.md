@@ -18,7 +18,7 @@ This audit compares the documented functionality in README.md against the actual
 | Category | Count | Priority |
 |----------|-------|----------|
 | **CRITICAL BUG** | 5 (3 Resolved) | 🔴 Immediate |
-| **FUNCTIONAL MISMATCH** | 6 (1 Resolved) | 🟠 High |
+| **FUNCTIONAL MISMATCH** | 6 (2 Resolved) | 🟠 High |
 | **MISSING FEATURE** | 8 | 🟡 Medium |
 | **EDGE CASE BUG** | 8 (1 Resolved) | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
@@ -31,6 +31,7 @@ This audit compares the documented functionality in README.md against the actual
 - Memory leaks in Lua API (unbounded cache growth) have been resolved ✅
 - PseudoBackground thread safety has been resolved ✅
 - Gauge widget API has been connected to Lua variables ✅
+- Unsupported window hints now emit warnings ✅
 - Platform abstraction exists but not integrated (Linux-only monitoring)
 - New graph infrastructure present but disconnected from rendering pipeline
 - Several Conky features documented as "supported" but return stub values
@@ -320,43 +321,42 @@ case WidgetTypeGauge:
 ~~~~
 
 ~~~~
-### FUNCTIONAL MISMATCH: Window Hints "below" and "sticky" Silently Ignored
+### FUNCTIONAL MISMATCH: Window Hints "below" and "sticky" Silently Ignored (RESOLVED ✅)
 
-**File:** pkg/conky/render.go:166-167  
-**Severity:** Low
+**File:** pkg/conky/render.go:152-177  
+**Severity:** Low (Previously) → N/A (Resolved)
 
-**Description:** The configuration parser supports all Conky window hints including "below" (keep window below others) and "sticky" (visible on all desktops). These hints are parsed successfully from configuration files and stored, but are silently ignored at runtime without any warning to the user. A comment in the code acknowledges this limitation but does not communicate it to users.
+**Status:** **RESOLVED** - Fixed on 2026-02-23
 
-**Expected Behavior:** Either:
-1. Implement the hints using available platform APIs, OR
-2. Emit a warning when unsupported hints are used, OR
-3. Document limitations prominently in README.md
+**Description:** The configuration parser supports all Conky window hints including "below" (keep window below others) and "sticky" (visible on all desktops). These hints were previously silently ignored at runtime without any warning to the user.
 
-README.md example on line 110 shows: `own_window_hints = 'undecorated,below,sticky,skip_taskbar,skip_pager'`
+**Resolution:** Added warning emissions when unsupported hints are used:
+- `parseWindowHints()` now accepts a Logger parameter
+- When `WindowHintBelow` is detected, emits: "window hint 'below' is not supported by Ebiten and will be ignored"
+- When `WindowHintSticky` is detected, emits: "window hint 'sticky' is not supported by Ebiten and will be ignored"
+- Comprehensive tests added in `render_test.go` for warning verification
 
-**Actual Behavior:** Hints are parsed and stored but have no effect on window behavior. No error, no warning, no documentation of limitation.
-
-**Impact:** Users migrating from original Conky will see windows in wrong Z-order (not below other windows) or appearing on single desktop instead of all desktops. Silent failure violates the principle of least surprise.
-
-**Reproduction:**
-```lua
-conky.config = {
-    own_window = true,
-    own_window_hints = 'below,sticky',
-}
--- Window appears normally (not below/sticky) with no indication of issue
-```
-
-**Code Reference:**
+**Verification:**
 ```go
-// render.go:166-167
-case config.WindowHintAbove:
-    floating = true
-case config.WindowHintSkipTaskbar:
-    skipTaskbar = true
-// WindowHintBelow, WindowHintSticky are not supported by Ebiten
-// but are parsed and documented for completeness
+// render.go:152-177 - Warnings now emitted for unsupported hints
+func parseWindowHints(hints []config.WindowHint, logger Logger) (bool, bool, bool, bool) {
+    for _, hint := range hints {
+        switch hint {
+        // ... supported hints handled ...
+        case config.WindowHintBelow:
+            if logger != nil {
+                logger.Warn("window hint 'below' is not supported by Ebiten and will be ignored")
+            }
+        case config.WindowHintSticky:
+            if logger != nil {
+                logger.Warn("window hint 'sticky' is not supported by Ebiten and will be ignored")
+            }
+        }
+    }
+}
 ```
+
+**Impact:** Users are now explicitly warned when using unsupported window hints, rather than experiencing silent failures. This follows the principle of least surprise and helps users understand why their configurations may not work as expected from original Conky.
 ~~~~
 
 ~~~~
@@ -850,7 +850,7 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 
 4. **Integrate Platform Abstraction:** Refactor monitor package to use platform providers for true cross-platform support
 5. **Connect Graph Infrastructure:** Wire up LineGraph widgets to graph variables for historical data visualization
-6. **Warn on Unsupported Hints:** Emit warnings when "below" or "sticky" window hints are used
+6. ~~**Warn on Unsupported Hints:** Emit warnings when "below" or "sticky" window hints are used~~ ✅ RESOLVED
 7. **Update README Claims:** Change "100% compatible" to "95%+ compatible with documented limitations"
 
 ### Medium Priority (Feature Completeness)
@@ -879,7 +879,7 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 **Discrepancies Found:**
 - ~~Gauge widgets render as bars, not circular gauges~~ ✅ Fixed
 - Graph widgets lack historical data (show instant values only)
-- Window hints "below" and "sticky" silently ignored
+- ~~Window hints "below" and "sticky" silently ignored~~ ✅ Fixed (now emit warnings)
 - MPD integration is stub (always returns false)
 - APCUPSD integration is stub (returns "N/A")
 - Stock quotes unimplemented (returns "N/A")
@@ -894,8 +894,9 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 - ✅ Basic configurations work (text, simple variables, window options)
 - ✅ Both legacy and Lua formats parse correctly
 - ✅ Gauge widgets now render correctly as circular gauges
+- ✅ Unsupported window hints ("below"/"sticky") now emit warnings instead of failing silently
 - ❌ Configurations using graphs, MPD, APCUPSD, or stock quotes will display incorrectly
-- ❌ Configurations relying on "below"/"sticky" hints will not position correctly
+- ❌ Configurations relying on "below"/"sticky" hints will not position correctly (but users are warned)
 
 **Recommendation:** Update to "Run most existing configurations with minimal modification. See compatibility matrix for limitations."
 
