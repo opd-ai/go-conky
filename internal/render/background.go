@@ -352,7 +352,10 @@ func (gb *GradientBackground) Close() {
 // PseudoBackground renders a cached screenshot of the desktop as the background.
 // This provides fake transparency when a compositor is not available.
 // The screenshot is captured from the root window at the window's position.
+// Thread-safe: All methods are protected by mutex for concurrent access.
 type PseudoBackground struct {
+	// mu protects all fields from concurrent access
+	mu sync.RWMutex
 	// cachedImage holds the cached screenshot as an Ebiten image
 	cachedImage *ebiten.Image
 	// fallbackColor is used when screenshot capture fails
@@ -389,20 +392,29 @@ func NewPseudoBackground(x, y, width, height int, fallbackColor color.RGBA) *Pse
 
 // SetScreenshotProvider sets the function used to capture desktop screenshots.
 // This allows for platform-specific implementations and easier testing.
+// Thread-safe: protected by mutex.
 func (pb *PseudoBackground) SetScreenshotProvider(provider ScreenshotProvider) {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
 	pb.imageProvider = provider
 	pb.needsRefresh = true
 }
 
 // Refresh marks the cached screenshot as needing refresh.
 // The actual capture will happen on the next Draw call.
+// Thread-safe: protected by mutex.
 func (pb *PseudoBackground) Refresh() {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
 	pb.needsRefresh = true
 }
 
 // SetPosition updates the window position for screenshot capture.
 // Call Refresh() after changing position to update the cached image.
+// Thread-safe: protected by mutex.
 func (pb *PseudoBackground) SetPosition(x, y int) {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
 	if pb.windowX != x || pb.windowY != y {
 		pb.windowX = x
 		pb.windowY = y
@@ -413,10 +425,14 @@ func (pb *PseudoBackground) SetPosition(x, y int) {
 // Draw renders the pseudo-transparent background to the screen.
 // If the screenshot hasn't been captured yet or needs refresh, it attempts to capture.
 // Falls back to the fallback color if capture fails.
+// Thread-safe: protected by mutex.
 func (pb *PseudoBackground) Draw(screen *ebiten.Image) {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+
 	// Check if we need to refresh the cached image
 	if pb.needsRefresh || pb.cachedImage == nil {
-		pb.refreshCache()
+		pb.refreshCacheLocked()
 	}
 
 	// Draw the cached image if available
@@ -431,8 +447,9 @@ func (pb *PseudoBackground) Draw(screen *ebiten.Image) {
 	screen.Fill(pb.fallbackColor)
 }
 
-// refreshCache attempts to capture a new screenshot of the desktop.
-func (pb *PseudoBackground) refreshCache() {
+// refreshCacheLocked attempts to capture a new screenshot of the desktop.
+// Must be called with mu held.
+func (pb *PseudoBackground) refreshCacheLocked() {
 	pb.needsRefresh = false
 
 	// Skip if no provider is set
@@ -461,18 +478,27 @@ func (pb *PseudoBackground) Mode() BackgroundMode {
 }
 
 // FallbackColor returns the fallback background color.
+// Thread-safe: protected by read lock.
 func (pb *PseudoBackground) FallbackColor() color.RGBA {
+	pb.mu.RLock()
+	defer pb.mu.RUnlock()
 	return pb.fallbackColor
 }
 
 // HasCachedImage returns true if a screenshot has been successfully cached.
+// Thread-safe: protected by read lock.
 func (pb *PseudoBackground) HasCachedImage() bool {
+	pb.mu.RLock()
+	defer pb.mu.RUnlock()
 	return pb.cachedImage != nil
 }
 
 // Close releases resources held by the PseudoBackground.
 // Should be called when the background is no longer needed.
+// Thread-safe: protected by mutex.
 func (pb *PseudoBackground) Close() {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
 	if pb.cachedImage != nil {
 		pb.cachedImage.Deallocate()
 		pb.cachedImage = nil

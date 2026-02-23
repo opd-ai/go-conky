@@ -677,44 +677,60 @@ func TestPseudoBackgroundSetPosition(t *testing.T) {
 	pb := NewPseudoBackground(0, 0, 100, 100, color.RGBA{})
 
 	// Initial position
+	pb.mu.RLock()
 	if pb.windowX != 0 || pb.windowY != 0 {
 		t.Errorf("initial position = (%d, %d), want (0, 0)", pb.windowX, pb.windowY)
 	}
+	pb.mu.RUnlock()
 
 	// Set new position
 	pb.SetPosition(50, 75)
+	pb.mu.RLock()
 	if pb.windowX != 50 || pb.windowY != 75 {
 		t.Errorf("after SetPosition, position = (%d, %d), want (50, 75)", pb.windowX, pb.windowY)
 	}
+	pb.mu.RUnlock()
 
 	// Setting same position shouldn't trigger refresh (check internal state)
+	pb.mu.Lock()
 	pb.needsRefresh = false
+	pb.mu.Unlock()
 	pb.SetPosition(50, 75)
+	pb.mu.RLock()
 	if pb.needsRefresh {
 		t.Error("SetPosition with same coords shouldn't set needsRefresh")
 	}
+	pb.mu.RUnlock()
 
 	// Different position should trigger refresh
 	pb.SetPosition(100, 100)
+	pb.mu.RLock()
 	if !pb.needsRefresh {
 		t.Error("SetPosition with different coords should set needsRefresh")
 	}
+	pb.mu.RUnlock()
 }
 
 func TestPseudoBackgroundRefresh(t *testing.T) {
 	pb := NewPseudoBackground(0, 0, 100, 100, color.RGBA{})
 
 	// After creation, needsRefresh should be true
+	pb.mu.RLock()
 	if !pb.needsRefresh {
 		t.Error("needsRefresh should be true after creation")
 	}
+	pb.mu.RUnlock()
 
 	// Manually clear and test Refresh()
+	pb.mu.Lock()
 	pb.needsRefresh = false
+	pb.mu.Unlock()
 	pb.Refresh()
+	pb.mu.RLock()
 	if !pb.needsRefresh {
 		t.Error("needsRefresh should be true after Refresh()")
 	}
+	pb.mu.RUnlock()
 }
 
 func TestPseudoBackgroundClose(t *testing.T) {
@@ -775,4 +791,83 @@ func TestNewPseudoBackgroundRenderer(t *testing.T) {
 	if pbWithProvider.imageProvider == nil {
 		t.Error("imageProvider should be set when provider is passed")
 	}
+}
+
+func TestPseudoBackgroundConcurrentAccess(t *testing.T) {
+	fallbackColor := color.RGBA{R: 128, G: 128, B: 128, A: 255}
+	pb := NewPseudoBackground(0, 0, 100, 100, fallbackColor)
+
+	// Create a mock provider that returns a test image
+	mockProvider := func(x, y, width, height int) (*ebiten.Image, error) {
+		img := ebiten.NewImage(width, height)
+		img.Fill(color.RGBA{R: 255, G: 0, B: 0, A: 255})
+		return img, nil
+	}
+	pb.SetScreenshotProvider(mockProvider)
+
+	// Create a test screen for Draw calls
+	screen := ebiten.NewImage(100, 100)
+	defer screen.Deallocate()
+
+	var wg sync.WaitGroup
+	iterations := 100
+
+	// Start multiple goroutines that call Draw concurrently
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				pb.Draw(screen)
+			}
+		}()
+	}
+
+	// Start goroutines that call SetPosition concurrently
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				pb.SetPosition(j%200, j%200)
+			}
+		}(i)
+	}
+
+	// Start goroutines that call Refresh concurrently
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				pb.Refresh()
+			}
+		}()
+	}
+
+	// Start goroutines that call HasCachedImage and FallbackColor concurrently
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				_ = pb.HasCachedImage()
+				_ = pb.FallbackColor()
+			}
+		}()
+	}
+
+	// Start a goroutine that calls Close
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for j := 0; j < iterations/10; j++ {
+			pb.Close()
+		}
+	}()
+
+	wg.Wait()
+
+	// The test passes if no race conditions cause panics
+	// Run with -race flag to detect races
 }
