@@ -50,25 +50,46 @@ type SystemDataProvider interface {
 
 // execCacheEntry stores cached output from execi commands.
 type execCacheEntry struct {
-	output    string
-	expiresAt time.Time
+	output       string
+	expiresAt    time.Time
+	lastAccessed time.Time // Tracks when this entry was last accessed
 }
 
 // scrollState tracks the current scroll position for a scroll instance.
 type scrollState struct {
-	position   int       // Current scroll offset
-	lastUpdate time.Time // When the scroll was last advanced
+	position     int       // Current scroll offset
+	lastUpdate   time.Time // When the scroll was last advanced
+	lastAccessed time.Time // Tracks when this state was last accessed
+}
+
+// CacheCleanupConfig holds configuration for cache cleanup behavior.
+type CacheCleanupConfig struct {
+	// MaxAge is the maximum time an unused cache entry can exist before cleanup.
+	MaxAge time.Duration
+	// CleanupInterval is how often the background cleanup runs.
+	CleanupInterval time.Duration
+}
+
+// DefaultCacheCleanupConfig returns sensible defaults for cache cleanup.
+func DefaultCacheCleanupConfig() CacheCleanupConfig {
+	return CacheCleanupConfig{
+		MaxAge:          5 * time.Minute,
+		CleanupInterval: 1 * time.Minute,
+	}
 }
 
 // ConkyAPI provides the Conky Lua API implementation.
 // It registers conky_parse() and other Conky functions in the Lua environment.
 type ConkyAPI struct {
-	runtime      *ConkyRuntime
-	sysProvider  SystemDataProvider
-	execCache    map[string]*execCacheEntry
-	scrollStates map[string]*scrollState
-	templates    [10]string // template0-template9 definitions
-	mu           sync.RWMutex
+	runtime        *ConkyRuntime
+	sysProvider    SystemDataProvider
+	execCache      map[string]*execCacheEntry
+	scrollStates   map[string]*scrollState
+	templates      [10]string // template0-template9 definitions
+	mu             sync.RWMutex
+	cleanupConfig  CacheCleanupConfig
+	cleanupStop    chan struct{}
+	cleanupRunning bool
 }
 
 // NewConkyAPI creates a new ConkyAPI instance and registers all Conky functions
@@ -79,10 +100,12 @@ func NewConkyAPI(runtime *ConkyRuntime, provider SystemDataProvider) (*ConkyAPI,
 	}
 
 	api := &ConkyAPI{
-		runtime:      runtime,
-		sysProvider:  provider,
-		execCache:    make(map[string]*execCacheEntry),
-		scrollStates: make(map[string]*scrollState),
+		runtime:       runtime,
+		sysProvider:   provider,
+		execCache:     make(map[string]*execCacheEntry),
+		scrollStates:  make(map[string]*scrollState),
+		cleanupConfig: DefaultCacheCleanupConfig(),
+		cleanupStop:   make(chan struct{}),
 	}
 
 	api.registerFunctions()
@@ -1294,13 +1317,18 @@ func (api *ConkyAPI) resolveExeci(args []string) string {
 	// Build command string from remaining arguments
 	cmdStr := strings.Join(args[1:], " ")
 
+	now := time.Now()
+
 	// Check cache with read lock
 	api.mu.RLock()
 	entry, exists := api.execCache[cmdStr]
 	api.mu.RUnlock()
 
-	now := time.Now()
 	if exists && now.Before(entry.expiresAt) {
+		// Update lastAccessed time
+		api.mu.Lock()
+		entry.lastAccessed = now
+		api.mu.Unlock()
 		return entry.output
 	}
 
@@ -1310,6 +1338,9 @@ func (api *ConkyAPI) resolveExeci(args []string) string {
 	if err != nil {
 		// On error, return cached value if available, otherwise empty
 		if exists {
+			api.mu.Lock()
+			entry.lastAccessed = now
+			api.mu.Unlock()
 			return entry.output
 		}
 		return ""
@@ -1320,8 +1351,9 @@ func (api *ConkyAPI) resolveExeci(args []string) string {
 	// Update cache with write lock
 	api.mu.Lock()
 	api.execCache[cmdStr] = &execCacheEntry{
-		output:    result,
-		expiresAt: now.Add(time.Duration(interval) * time.Second),
+		output:       result,
+		expiresAt:    now.Add(time.Duration(interval) * time.Second),
+		lastAccessed: now,
 	}
 	api.mu.Unlock()
 
@@ -1898,6 +1930,8 @@ func (api *ConkyAPI) resolveScroll(args []string) string {
 	// Create a unique key for this scroll instance (based on the original args)
 	scrollKey := strings.Join(args, "|")
 
+	now := time.Now()
+
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
@@ -1905,15 +1939,18 @@ func (api *ConkyAPI) resolveScroll(args []string) string {
 	state, exists := api.scrollStates[scrollKey]
 	if !exists {
 		state = &scrollState{
-			position:   0,
-			lastUpdate: time.Now(),
+			position:     0,
+			lastUpdate:   now,
+			lastAccessed: now,
 		}
 		api.scrollStates[scrollKey] = state
 	}
 
+	// Update lastAccessed time
+	state.lastAccessed = now
+
 	// Advance scroll position (on each call, as update cycle advances)
 	// Use circular scrolling: when we reach the end, wrap around
-	now := time.Now()
 	if now.Sub(state.lastUpdate) > 0 {
 		state.position = (state.position + step) % textLen
 		state.lastUpdate = now
@@ -2381,4 +2418,87 @@ func luaValueToString(v rt.Value) string {
 		// For tables and other types, return empty
 		return ""
 	}
+}
+
+// SetCacheCleanupConfig updates the cache cleanup configuration.
+func (api *ConkyAPI) SetCacheCleanupConfig(cfg CacheCleanupConfig) {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	api.cleanupConfig = cfg
+}
+
+// CleanupCaches removes stale entries from both execCache and scrollStates.
+// An entry is considered stale if it hasn't been accessed within MaxAge.
+// Returns the number of entries removed from each cache.
+func (api *ConkyAPI) CleanupCaches() (execRemoved, scrollRemoved int) {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
+	now := time.Now()
+	maxAge := api.cleanupConfig.MaxAge
+
+	// Cleanup execCache - remove entries that are expired AND haven't been accessed recently
+	for key, entry := range api.execCache {
+		if now.Sub(entry.lastAccessed) > maxAge {
+			delete(api.execCache, key)
+			execRemoved++
+		}
+	}
+
+	// Cleanup scrollStates - remove states that haven't been accessed recently
+	for key, state := range api.scrollStates {
+		if now.Sub(state.lastAccessed) > maxAge {
+			delete(api.scrollStates, key)
+			scrollRemoved++
+		}
+	}
+
+	return execRemoved, scrollRemoved
+}
+
+// StartCacheCleanup starts a background goroutine that periodically cleans caches.
+// Call StopCacheCleanup to stop the background cleanup.
+func (api *ConkyAPI) StartCacheCleanup() {
+	api.mu.Lock()
+	if api.cleanupRunning {
+		api.mu.Unlock()
+		return
+	}
+	api.cleanupRunning = true
+	api.cleanupStop = make(chan struct{})
+	interval := api.cleanupConfig.CleanupInterval
+	api.mu.Unlock()
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				api.CleanupCaches()
+			case <-api.cleanupStop:
+				return
+			}
+		}
+	}()
+}
+
+// StopCacheCleanup stops the background cache cleanup goroutine.
+func (api *ConkyAPI) StopCacheCleanup() {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
+	if !api.cleanupRunning {
+		return
+	}
+	close(api.cleanupStop)
+	api.cleanupRunning = false
+}
+
+// CacheStats returns the current number of entries in each cache.
+func (api *ConkyAPI) CacheStats() (execCount, scrollCount int) {
+	api.mu.RLock()
+	defer api.mu.RUnlock()
+	return len(api.execCache), len(api.scrollStates)
 }

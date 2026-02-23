@@ -3639,3 +3639,204 @@ func TestResolveBattery(t *testing.T) {
 		})
 	}
 }
+
+// TestCacheCleanupRemovesStaleEntries verifies that CleanupCaches removes old entries.
+func TestCacheCleanupRemovesStaleEntries(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+	provider := newMockProvider()
+
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Set a very short MaxAge for testing
+	api.SetCacheCleanupConfig(CacheCleanupConfig{
+		MaxAge:          10 * time.Millisecond,
+		CleanupInterval: 5 * time.Millisecond,
+	})
+
+	// Add some entries directly to the caches with old lastAccessed times
+	api.mu.Lock()
+	oldTime := time.Now().Add(-1 * time.Hour)
+	api.execCache["old_cmd"] = &execCacheEntry{
+		output:       "old output",
+		expiresAt:    time.Now().Add(1 * time.Hour),
+		lastAccessed: oldTime,
+	}
+	api.execCache["recent_cmd"] = &execCacheEntry{
+		output:       "recent output",
+		expiresAt:    time.Now().Add(1 * time.Hour),
+		lastAccessed: time.Now(),
+	}
+	api.scrollStates["old_scroll"] = &scrollState{
+		position:     5,
+		lastUpdate:   oldTime,
+		lastAccessed: oldTime,
+	}
+	api.scrollStates["recent_scroll"] = &scrollState{
+		position:     3,
+		lastUpdate:   time.Now(),
+		lastAccessed: time.Now(),
+	}
+	api.mu.Unlock()
+
+	// Verify initial counts
+	execCount, scrollCount := api.CacheStats()
+	if execCount != 2 {
+		t.Errorf("expected 2 exec cache entries, got %d", execCount)
+	}
+	if scrollCount != 2 {
+		t.Errorf("expected 2 scroll state entries, got %d", scrollCount)
+	}
+
+	// Run cleanup
+	execRemoved, scrollRemoved := api.CleanupCaches()
+	if execRemoved != 1 {
+		t.Errorf("expected 1 exec entry removed, got %d", execRemoved)
+	}
+	if scrollRemoved != 1 {
+		t.Errorf("expected 1 scroll entry removed, got %d", scrollRemoved)
+	}
+
+	// Verify final counts
+	execCount, scrollCount = api.CacheStats()
+	if execCount != 1 {
+		t.Errorf("expected 1 exec cache entry remaining, got %d", execCount)
+	}
+	if scrollCount != 1 {
+		t.Errorf("expected 1 scroll state entry remaining, got %d", scrollCount)
+	}
+}
+
+// TestCacheCleanupBackground verifies background cleanup works correctly.
+func TestCacheCleanupBackground(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+	provider := newMockProvider()
+
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Set a very short cleanup interval
+	api.SetCacheCleanupConfig(CacheCleanupConfig{
+		MaxAge:          10 * time.Millisecond,
+		CleanupInterval: 20 * time.Millisecond,
+	})
+
+	// Add an old entry
+	api.mu.Lock()
+	oldTime := time.Now().Add(-1 * time.Hour)
+	api.execCache["stale_entry"] = &execCacheEntry{
+		output:       "stale",
+		expiresAt:    time.Now().Add(1 * time.Hour),
+		lastAccessed: oldTime,
+	}
+	api.mu.Unlock()
+
+	execCount, _ := api.CacheStats()
+	if execCount != 1 {
+		t.Errorf("expected 1 exec cache entry, got %d", execCount)
+	}
+
+	// Start background cleanup
+	api.StartCacheCleanup()
+	defer api.StopCacheCleanup()
+
+	// Wait for at least one cleanup cycle
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify the stale entry was cleaned
+	execCount, _ = api.CacheStats()
+	if execCount != 0 {
+		t.Errorf("expected 0 exec cache entries after background cleanup, got %d", execCount)
+	}
+}
+
+// TestCacheStatsReturnsCorrectCounts verifies CacheStats works correctly.
+func TestCacheStatsReturnsCorrectCounts(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+	provider := newMockProvider()
+
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Initially both should be empty
+	execCount, scrollCount := api.CacheStats()
+	if execCount != 0 || scrollCount != 0 {
+		t.Errorf("expected empty caches, got exec=%d scroll=%d", execCount, scrollCount)
+	}
+
+	// Add entries
+	now := time.Now()
+	api.mu.Lock()
+	api.execCache["cmd1"] = &execCacheEntry{output: "1", expiresAt: now, lastAccessed: now}
+	api.execCache["cmd2"] = &execCacheEntry{output: "2", expiresAt: now, lastAccessed: now}
+	api.scrollStates["s1"] = &scrollState{position: 0, lastUpdate: now, lastAccessed: now}
+	api.mu.Unlock()
+
+	execCount, scrollCount = api.CacheStats()
+	if execCount != 2 {
+		t.Errorf("expected 2 exec entries, got %d", execCount)
+	}
+	if scrollCount != 1 {
+		t.Errorf("expected 1 scroll entry, got %d", scrollCount)
+	}
+}
+
+// TestDefaultCacheCleanupConfig verifies default config values.
+func TestDefaultCacheCleanupConfig(t *testing.T) {
+	cfg := DefaultCacheCleanupConfig()
+
+	if cfg.MaxAge != 5*time.Minute {
+		t.Errorf("expected MaxAge=5m, got %v", cfg.MaxAge)
+	}
+	if cfg.CleanupInterval != 1*time.Minute {
+		t.Errorf("expected CleanupInterval=1m, got %v", cfg.CleanupInterval)
+	}
+}
+
+// TestStartStopCacheCleanup verifies start/stop behavior.
+func TestStartStopCacheCleanup(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+	provider := newMockProvider()
+
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+
+	// Should be safe to call stop before start
+	api.StopCacheCleanup()
+
+	// Start cleanup
+	api.StartCacheCleanup()
+
+	// Double start should be safe (no-op)
+	api.StartCacheCleanup()
+
+	// Stop cleanup
+	api.StopCacheCleanup()
+
+	// Double stop should be safe (no-op)
+	api.StopCacheCleanup()
+}
