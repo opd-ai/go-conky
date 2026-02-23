@@ -487,8 +487,10 @@ type CategoryCount struct {
 }
 
 // defaultErrorTracker is a global error tracker for convenience.
-var defaultErrorTracker *ErrorTracker
-var defaultErrorTrackerOnce sync.Once
+var (
+	defaultErrorTracker     *ErrorTracker
+	defaultErrorTrackerOnce sync.Once
+)
 
 // DefaultErrorTracker returns the global default ErrorTracker instance.
 // The tracker is lazily initialized with default configuration.
