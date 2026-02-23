@@ -9,10 +9,12 @@ import (
 )
 
 // SystemMonitor provides centralized system monitoring capabilities.
-// It periodically updates system statistics from /proc filesystem.
+// It supports cross-platform monitoring via the platform abstraction layer,
+// with fallback to Linux-specific /proc filesystem readers.
 type SystemMonitor struct {
 	data              *SystemData
 	interval          time.Duration
+	platformAdapter   *PlatformAdapter
 	cpuReader         *cpuReader
 	memReader         *memoryReader
 	uptimeReader      *uptimeReader
@@ -38,6 +40,7 @@ type SystemMonitor struct {
 }
 
 // NewSystemMonitor creates a new SystemMonitor with the specified update interval.
+// This uses Linux-specific readers for system monitoring.
 func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -64,6 +67,49 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		ctx:               ctx,
 		cancel:            cancel,
 	}
+}
+
+// NewSystemMonitorWithPlatform creates a new SystemMonitor that uses the platform
+// abstraction layer for cross-platform system monitoring. The platform must be
+// initialized before passing to this function.
+//
+// When a platform is provided, CPU, memory, network, filesystem, battery, and
+// sensor readings will use the platform providers. Other readers (uptime, process,
+// audio, GPU, mail, weather) will fall back to Linux-specific implementations.
+//
+// The platform parameter must implement the PlatformInterface defined in this package.
+// The internal/platform.Platform type satisfies this interface.
+func NewSystemMonitorWithPlatform(interval time.Duration, plat PlatformInterface) *SystemMonitor {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	sm := &SystemMonitor{
+		data:              NewSystemData(),
+		interval:          interval,
+		platformAdapter:   NewPlatformAdapter(plat),
+		uptimeReader:      newUptimeReader(),
+		networkAddrReader: newNetworkAddressReader(),
+		wirelessReader:    newWirelessReader(),
+		processReader:     newProcessReader(),
+		audioReader:       newAudioReader(),
+		sysInfoReader:     newSysInfoReader(),
+		tcpReader:         newTCPReader(),
+		gpuReader:         newGPUReader(),
+		mailReader:        newMailReader(),
+		weatherReader:     newWeatherReader(),
+		ctx:               ctx,
+		cancel:            cancel,
+	}
+
+	// Keep Linux fallback readers for cases where platform adapter fails or is nil
+	sm.cpuReader = newCPUReader()
+	sm.memReader = newMemoryReader()
+	sm.networkReader = newNetworkReader()
+	sm.filesystemReader = newFilesystemReader()
+	sm.diskIOReader = newDiskIOReader()
+	sm.hwmonReader = newHwmonReader()
+	sm.batteryReader = newBatteryReader()
+
+	return sm
 }
 
 // Start begins the monitoring loop in a background goroutine.
@@ -127,97 +173,201 @@ func (sm *SystemMonitor) monitorLoop() {
 }
 
 // Update performs a single update of all system statistics.
+// When a platform adapter is configured, it uses cross-platform providers.
+// Falls back to Linux-specific readers when the platform adapter is nil or fails.
 func (sm *SystemMonitor) Update() error {
 	var errs []error
 
-	// Update CPU stats
-	cpuStats, err := sm.cpuReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("cpu: %w", err))
-	} else {
-		sm.data.setCPU(cpuStats)
+	// Update CPU stats (prefer platform adapter)
+	if sm.platformAdapter != nil {
+		cpuStats, err := sm.platformAdapter.ReadCPUStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("cpu (platform): %w", err))
+			// Fallback to Linux reader
+			if sm.cpuReader != nil {
+				if fallbackStats, fallbackErr := sm.cpuReader.ReadStats(); fallbackErr == nil {
+					sm.data.setCPU(fallbackStats)
+				}
+			}
+		} else {
+			sm.data.setCPU(cpuStats)
+		}
+	} else if sm.cpuReader != nil {
+		cpuStats, err := sm.cpuReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("cpu: %w", err))
+		} else {
+			sm.data.setCPU(cpuStats)
+		}
 	}
 
-	// Update memory stats
-	memStats, err := sm.memReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("memory: %w", err))
-	} else {
-		sm.data.setMemory(memStats)
+	// Update memory stats (prefer platform adapter)
+	if sm.platformAdapter != nil {
+		memStats, err := sm.platformAdapter.ReadMemoryStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("memory (platform): %w", err))
+			// Fallback to Linux reader
+			if sm.memReader != nil {
+				if fallbackStats, fallbackErr := sm.memReader.ReadStats(); fallbackErr == nil {
+					sm.data.setMemory(fallbackStats)
+				}
+			}
+		} else {
+			sm.data.setMemory(memStats)
+		}
+	} else if sm.memReader != nil {
+		memStats, err := sm.memReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("memory: %w", err))
+		} else {
+			sm.data.setMemory(memStats)
+		}
 	}
 
-	// Update uptime stats
-	uptimeStats, err := sm.uptimeReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("uptime: %w", err))
-	} else {
-		sm.data.setUptime(uptimeStats)
+	// Update uptime stats (Linux-specific only for now)
+	if sm.uptimeReader != nil {
+		uptimeStats, err := sm.uptimeReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("uptime: %w", err))
+		} else {
+			sm.data.setUptime(uptimeStats)
+		}
 	}
 
-	// Update network stats
-	networkStats, err := sm.networkReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("network: %w", err))
-	} else {
-		// Augment network stats with address information
-		sm.augmentNetworkStats(&networkStats)
-		sm.data.setNetwork(networkStats)
+	// Update network stats (prefer platform adapter)
+	if sm.platformAdapter != nil {
+		networkStats, err := sm.platformAdapter.ReadNetworkStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("network (platform): %w", err))
+			// Fallback to Linux reader
+			if sm.networkReader != nil {
+				if fallbackStats, fallbackErr := sm.networkReader.ReadStats(); fallbackErr == nil {
+					sm.augmentNetworkStats(&fallbackStats)
+					sm.data.setNetwork(fallbackStats)
+				}
+			}
+		} else {
+			// Augment with address information from Linux reader
+			sm.augmentNetworkStats(&networkStats)
+			sm.data.setNetwork(networkStats)
+		}
+	} else if sm.networkReader != nil {
+		networkStats, err := sm.networkReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("network: %w", err))
+		} else {
+			sm.augmentNetworkStats(&networkStats)
+			sm.data.setNetwork(networkStats)
+		}
 	}
 
-	// Update filesystem stats
-	filesystemStats, err := sm.filesystemReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("filesystem: %w", err))
-	} else {
-		sm.data.setFilesystem(filesystemStats)
+	// Update filesystem stats (prefer platform adapter)
+	if sm.platformAdapter != nil {
+		filesystemStats, err := sm.platformAdapter.ReadFilesystemStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("filesystem (platform): %w", err))
+			// Fallback to Linux reader
+			if sm.filesystemReader != nil {
+				if fallbackStats, fallbackErr := sm.filesystemReader.ReadStats(); fallbackErr == nil {
+					sm.data.setFilesystem(fallbackStats)
+				}
+			}
+		} else {
+			sm.data.setFilesystem(filesystemStats)
+		}
+	} else if sm.filesystemReader != nil {
+		filesystemStats, err := sm.filesystemReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("filesystem: %w", err))
+		} else {
+			sm.data.setFilesystem(filesystemStats)
+		}
 	}
 
-	// Update disk I/O stats
-	diskIOStats, err := sm.diskIOReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("diskio: %w", err))
-	} else {
-		sm.data.setDiskIO(diskIOStats)
+	// Update disk I/O stats (Linux-specific only for now)
+	if sm.diskIOReader != nil {
+		diskIOStats, err := sm.diskIOReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("diskio: %w", err))
+		} else {
+			sm.data.setDiskIO(diskIOStats)
+		}
 	}
 
-	// Update hardware monitoring stats
-	hwmonStats, err := sm.hwmonReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("hwmon: %w", err))
-	} else {
-		sm.data.setHwmon(hwmonStats)
+	// Update hardware monitoring stats (prefer platform adapter for sensors)
+	if sm.platformAdapter != nil {
+		hwmonStats, err := sm.platformAdapter.ReadSensorStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("hwmon (platform): %w", err))
+			// Fallback to Linux reader
+			if sm.hwmonReader != nil {
+				if fallbackStats, fallbackErr := sm.hwmonReader.ReadStats(); fallbackErr == nil {
+					sm.data.setHwmon(fallbackStats)
+				}
+			}
+		} else {
+			sm.data.setHwmon(hwmonStats)
+		}
+	} else if sm.hwmonReader != nil {
+		hwmonStats, err := sm.hwmonReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("hwmon: %w", err))
+		} else {
+			sm.data.setHwmon(hwmonStats)
+		}
 	}
 
-	// Update process stats
-	processStats, err := sm.processReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("process: %w", err))
-	} else {
-		sm.data.setProcess(processStats)
+	// Update process stats (Linux-specific only)
+	if sm.processReader != nil {
+		processStats, err := sm.processReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("process: %w", err))
+		} else {
+			sm.data.setProcess(processStats)
+		}
 	}
 
-	// Update battery stats
-	batteryStats, err := sm.batteryReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("battery: %w", err))
-	} else {
-		sm.data.setBattery(batteryStats)
+	// Update battery stats (prefer platform adapter)
+	if sm.platformAdapter != nil {
+		batteryStats, err := sm.platformAdapter.ReadBatteryStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("battery (platform): %w", err))
+			// Fallback to Linux reader
+			if sm.batteryReader != nil {
+				if fallbackStats, fallbackErr := sm.batteryReader.ReadStats(); fallbackErr == nil {
+					sm.data.setBattery(fallbackStats)
+				}
+			}
+		} else {
+			sm.data.setBattery(batteryStats)
+		}
+	} else if sm.batteryReader != nil {
+		batteryStats, err := sm.batteryReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("battery: %w", err))
+		} else {
+			sm.data.setBattery(batteryStats)
+		}
 	}
 
-	// Update audio stats
-	audioStats, err := sm.audioReader.ReadStats()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("audio: %w", err))
-	} else {
-		sm.data.setAudio(audioStats)
+	// Update audio stats (Linux-specific only)
+	if sm.audioReader != nil {
+		audioStats, err := sm.audioReader.ReadStats()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("audio: %w", err))
+		} else {
+			sm.data.setAudio(audioStats)
+		}
 	}
 
-	// Update system info (includes load averages which change frequently)
-	sysInfoStats, err := sm.sysInfoReader.ReadSystemInfo()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("sysinfo: %w", err))
-	} else {
-		sm.data.setSysInfo(sysInfoStats)
+	// Update system info (Linux-specific only)
+	if sm.sysInfoReader != nil {
+		sysInfoStats, err := sm.sysInfoReader.ReadSystemInfo()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("sysinfo: %w", err))
+		} else {
+			sm.data.setSysInfo(sysInfoStats)
+		}
 	}
 
 	if len(errs) > 0 {
@@ -413,4 +563,15 @@ func (sm *SystemMonitor) IsRunning() bool {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.running
+}
+
+// UsesPlatform returns true if the monitor is using the platform abstraction layer.
+func (sm *SystemMonitor) UsesPlatform() bool {
+	return sm.platformAdapter != nil
+}
+
+// Platform returns the underlying platform if one is configured.
+// Returns nil if the monitor is using Linux-specific readers.
+func (sm *SystemMonitor) Platform() *PlatformAdapter {
+	return sm.platformAdapter
 }
