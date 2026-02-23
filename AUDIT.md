@@ -17,20 +17,21 @@ This audit compares the documented functionality in README.md against the actual
 
 | Category | Count | Priority |
 |----------|-------|----------|
-| **CRITICAL BUG** | 3 | 🔴 Immediate |
+| **CRITICAL BUG** | 5 | 🔴 Immediate |
 | **FUNCTIONAL MISMATCH** | 6 | 🟠 High |
-| **MISSING FEATURE** | 7 | 🟡 Medium |
-| **EDGE CASE BUG** | 5 | 🟢 Low |
+| **MISSING FEATURE** | 8 | 🟡 Medium |
+| **EDGE CASE BUG** | 8 | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
 
-**Overall Assessment:** The codebase is well-architected with solid engineering practices (thread-safety, error handling, interface design). However, the README.md claims "100% compatible" with original Conky, but the audit identified 22 discrepancies between documented and actual behavior. Most critical issues involve division-by-zero risks and memory leaks in long-running processes.
+**Overall Assessment:** The codebase is well-architected with solid engineering practices (thread-safety, error handling, interface design). However, the README.md claims "100% compatible" with original Conky, but the audit identified 28 discrepancies between documented and actual behavior. Most critical issues involve division-by-zero risks in rendering paths and memory leaks in long-running processes.
 
 **Key Concerns:**
-- 3 crash-risk bugs (division by zero in rendering paths)
-- Memory leak in Lua API (unbounded cache growth)
+- 5 crash-risk bugs (division by zero in rendering paths, gradient backgrounds)
+- Memory leaks in Lua API (unbounded cache growth) and GradientBackground
 - Platform abstraction exists but not integrated (Linux-only monitoring)
 - New graph infrastructure present but disconnected from rendering pipeline
 - Several Conky features documented as "supported" but return stub values
+- Test suite requires X11 display, preventing CI automation
 ~~~~
 
 ---
@@ -41,8 +42,8 @@ The codebase follows a clean layered architecture with 218 .go files analyzed:
 
 **Level 0 (No internal imports):** 150+ files
 - `internal/config/` - types.go, defaults.go, validation.go, legacy.go
-- `internal/render/` - color.go, font.go, types.go, background.go, graph.go, widget_marker.go, cairo.go
-- `internal/monitor/` - All readers (cpu.go, memory.go, filesystem.go, network.go, battery.go, etc.)
+- `internal/render/` - [x] Complete — 7 issues (2 high, 2 med, 3 low) — Ebiten rendering engine with Cairo compatibility (31 files, 20,737 lines)
+- `internal/monitor/` - [x] Complete — 7 issues (0 high, 1 med, 6 low) — System monitoring (cpu.go, memory.go, filesystem.go, network.go, battery.go, etc.)
 - `internal/platform/` - [x] Needs Work — 6 issues (2 high, 2 med, 2 low) — Cross-platform system monitoring abstractions (100+ files for linux/darwin/windows/android)
 - `internal/profiling/` - [x] Complete — 2 issues (0 high, 0 med, 2 low) — Profiling and leak detection
 - `pkg/conky/` - options.go, status.go, errors.go, metrics.go
