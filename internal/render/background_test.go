@@ -391,6 +391,22 @@ func TestGradientBackgroundInterpolationFactor(t *testing.T) {
 		// Radial gradient: interpolation t equals distance from center divided by max distance
 		{"radial center", GradientDirectionRadial, 50, 50, 100, 100, 0.0, 0.01},
 		{"radial corner", GradientDirectionRadial, 0, 0, 100, 100, 1.0, 0.01},
+
+		// Edge cases: width=1 (should not divide by zero)
+		{"horizontal w=1", GradientDirectionHorizontal, 0, 0, 1, 100, 0.0, 0.01},
+		{"vertical w=1", GradientDirectionVertical, 0, 50, 1, 100, 50.0 / 99.0, 0.01},
+		{"diagonal w=1", GradientDirectionDiagonal, 0, 50, 1, 101, 0.25, 0.01}, // (0 + 0.5) / 2
+
+		// Edge cases: height=1 (should not divide by zero)
+		{"horizontal h=1", GradientDirectionHorizontal, 50, 0, 100, 1, 50.0 / 99.0, 0.01},
+		{"vertical h=1", GradientDirectionVertical, 0, 0, 100, 1, 0.0, 0.01},
+		{"diagonal h=1", GradientDirectionDiagonal, 50, 0, 101, 1, 0.25, 0.01}, // (0.5 + 0) / 2
+
+		// Edge cases: both width=1 and height=1 (single pixel)
+		{"horizontal 1x1", GradientDirectionHorizontal, 0, 0, 1, 1, 0.0, 0.01},
+		{"vertical 1x1", GradientDirectionVertical, 0, 0, 1, 1, 0.0, 0.01},
+		{"diagonal 1x1", GradientDirectionDiagonal, 0, 0, 1, 1, 0.0, 0.01},
+		{"radial 1x1", GradientDirectionRadial, 0, 0, 1, 1, 0.0, 0.01},
 	}
 
 	for _, tt := range tests {

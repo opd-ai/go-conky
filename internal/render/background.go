@@ -235,14 +235,29 @@ func (gb *GradientBackground) invalidateCacheLocked() {
 
 // interpolationFactor calculates the gradient interpolation factor (0.0 to 1.0)
 // based on position and direction.
+// Handles edge cases where w=1 or h=1 to prevent division by zero.
 func (gb *GradientBackground) interpolationFactor(x, y, w, h int) float64 {
 	switch gb.direction {
 	case GradientDirectionHorizontal:
+		if w <= 1 {
+			return 0.0
+		}
 		return float64(x) / float64(w-1)
 	case GradientDirectionDiagonal:
 		// Diagonal from top-left to bottom-right
-		return (float64(x)/float64(w-1) + float64(y)/float64(h-1)) / 2.0
+		var xRatio, yRatio float64
+		if w > 1 {
+			xRatio = float64(x) / float64(w-1)
+		}
+		if h > 1 {
+			yRatio = float64(y) / float64(h-1)
+		}
+		return (xRatio + yRatio) / 2.0
 	case GradientDirectionRadial:
+		// For single pixel (1x1), use start color for consistency with other directions
+		if w <= 1 && h <= 1 {
+			return 0.0
+		}
 		// Radial from center outward
 		cx := float64(w) / 2.0
 		cy := float64(h) / 2.0
@@ -250,9 +265,15 @@ func (gb *GradientBackground) interpolationFactor(x, y, w, h int) float64 {
 		dy := float64(y) - cy
 		// Max distance is to corner
 		maxDist := math.Sqrt(cx*cx + cy*cy)
+		if maxDist == 0 {
+			return 0.0
+		}
 		dist := math.Sqrt(dx*dx + dy*dy)
 		return math.Min(dist/maxDist, 1.0)
 	default: // GradientDirectionVertical
+		if h <= 1 {
+			return 0.0
+		}
 		return float64(y) / float64(h-1)
 	}
 }

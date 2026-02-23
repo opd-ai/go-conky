@@ -17,16 +17,17 @@ This audit compares the documented functionality in README.md against the actual
 
 | Category | Count | Priority |
 |----------|-------|----------|
-| **CRITICAL BUG** | 5 | 🔴 Immediate |
+| **CRITICAL BUG** | 5 (2 Resolved) | 🔴 Immediate |
 | **FUNCTIONAL MISMATCH** | 6 | 🟠 High |
 | **MISSING FEATURE** | 8 | 🟡 Medium |
 | **EDGE CASE BUG** | 8 | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
 
-**Overall Assessment:** The codebase is well-architected with solid engineering practices (thread-safety, error handling, interface design). However, the README.md claims "100% compatible" with original Conky, but the audit identified 28 discrepancies between documented and actual behavior. Most critical issues involve division-by-zero risks in rendering paths and memory leaks in long-running processes.
+**Overall Assessment:** The codebase is well-architected with solid engineering practices (thread-safety, error handling, interface design). However, the README.md claims "100% compatible" with original Conky, but the audit identified 28 discrepancies between documented and actual behavior. Most critical issues involve memory leaks in long-running processes.
 
 **Key Concerns:**
-- 5 crash-risk bugs (division by zero in rendering paths, gradient backgrounds)
+- 3 remaining crash-risk bugs (memory leaks in Lua API caches)
+- Division by zero bugs in rendering paths have been resolved ✅
 - Memory leaks in Lua API (unbounded cache growth) and GradientBackground
 - Platform abstraction exists but not integrated (Linux-only monitoring)
 - New graph infrastructure present but disconnected from rendering pipeline
@@ -68,69 +69,59 @@ The codebase follows a clean layered architecture with 218 .go files analyzed:
 ### CRITICAL BUGS
 
 ~~~~
-### CRITICAL BUG: Division by Zero in LineGraph with Single Data Point
+### CRITICAL BUG: Division by Zero in LineGraph with Single Data Point (RESOLVED ✅)
 
-**File:** internal/render/graph.go:213-214  
-**Severity:** High
+**File:** internal/render/graph.go:182-184, 213-214  
+**Severity:** High (Previously) → N/A (Already Protected)
 
-**Description:** The LineGraph.Draw() method calculates point spacing using `pointSpacing := lg.width / float64(len(lg.data)-1)`. When exactly one data point exists in the graph, this becomes division by zero (1-1 = 0), producing NaN or Inf coordinates that will crash rendering.
+**Status:** **NOT A BUG** - Code already has protection
 
-**Expected Behavior:** LineGraph should gracefully handle edge cases with 0 or 1 data points, either by not drawing, drawing a single point, or drawing a horizontal line.
+**Description:** The audit identified a potential division by zero in `pointSpacing := lg.width / float64(len(lg.data)-1)` when exactly one data point exists.
 
-**Actual Behavior:** Division by zero occurs when `len(lg.data) == 1`, producing invalid floating-point values (NaN/Inf) that propagate into Ebiten drawing commands, potentially causing crashes or rendering artifacts.
-
-**Impact:** Any graph widget that starts with a single data point will crash on first render. This is especially problematic during application startup when monitoring data is being collected for the first time.
-
-**Reproduction:**
+**Resolution:** Upon code review, the `Draw()` method already has a guard at lines 182-184:
 ```go
-graph := NewLineGraph(0, 0, 100, 50)
-graph.AddPoint(42.0)  // Add exactly one point
-graph.Draw(screen)     // Crash: division by zero
-```
-
-**Code Reference:**
-```go
-// graph.go:213
-pointSpacing := lg.width / float64(len(lg.data)-1)
-// When len(lg.data) == 1, this becomes:
-// pointSpacing = 100 / float64(0) = +Inf
-```
-~~~~
-
-~~~~
-### CRITICAL BUG: Division by Zero in Gradient Background with 1-Pixel Dimensions
-
-**File:** internal/render/background.go:240-256  
-**Severity:** High
-
-**Description:** The GradientBackground.generateCachedImageLocked() method has three division-by-zero vulnerabilities when window dimensions are 1 pixel wide or 1 pixel tall. Lines 241, 244, and 256 perform `float64(w-1)` and `float64(h-1)` calculations for interpolation factors.
-
-**Expected Behavior:** Gradient backgrounds should handle edge cases of minimal window sizes (1x1, 1xN, Nx1 pixels) without crashing, potentially by treating the entire area as a single color.
-
-**Actual Behavior:** When width=1 or height=1, division by zero produces NaN interpolation factors, resulting in invalid color calculations and potential crashes or rendering corruption.
-
-**Impact:** Unusual window configurations or window resize operations that briefly pass through 1-pixel dimensions will crash the rendering pipeline.
-
-**Reproduction:**
-```lua
-conky.config = {
-    background_mode = 'gradient',
-    minimum_width = 1,  -- Trigger edge case
-    minimum_height = 100,
+if len(lg.data) < 2 {
+    return
 }
 ```
 
-**Code Reference:**
+This guard ensures the division at line 213 is never reached with fewer than 2 data points. The code is safe as implemented.
+
+**Verification:** The early return prevents the division operation when data points < 2.
+~~~~
+
+~~~~
+### CRITICAL BUG: Division by Zero in Gradient Background with 1-Pixel Dimensions (RESOLVED ✅)
+
+**File:** internal/render/background.go:236-275  
+**Severity:** High (Previously) → N/A (Resolved)
+
+**Status:** **RESOLVED** - Fixed on 2026-02-23
+
+**Description:** The GradientBackground.interpolationFactor() method had division-by-zero vulnerabilities when window dimensions were 1 pixel wide or 1 pixel tall.
+
+**Resolution:** Added guard checks in `interpolationFactor()` to handle edge cases:
+- Horizontal gradient: returns 0.0 when w <= 1
+- Vertical gradient: returns 0.0 when h <= 1
+- Diagonal gradient: uses 0.0 for the dimension that is <= 1
+- Radial gradient: returns 0.0 when both w <= 1 and h <= 1
+
+**Verification:**
 ```go
-// background.go:241 (horizontal gradient)
-fx := float64(x) / float64(w-1)  // Division by 0 when w=1
-
-// background.go:244 (vertical gradient)
-fy := float64(y) / float64(h-1)  // Division by 0 when h=1
-
-// background.go:256 (diagonal gradient)
-fx := float64(x) / float64(w-1)  // Same issue
+// background.go:239-275 - Guards added for all directions
+func (gb *GradientBackground) interpolationFactor(x, y, w, h int) float64 {
+    switch gb.direction {
+    case GradientDirectionHorizontal:
+        if w <= 1 {
+            return 0.0  // Prevent division by zero
+        }
+        return float64(x) / float64(w-1)
+    // ... similar guards for other directions
+    }
+}
 ```
+
+**Impact:** Gradient backgrounds now safely handle minimal window sizes (1x1, 1xN, Nx1 pixels) without crashing, treating the entire area as the start color.
 ~~~~
 
 ~~~~
