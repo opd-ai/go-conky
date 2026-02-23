@@ -17,18 +17,18 @@ This audit compares the documented functionality in README.md against the actual
 
 | Category | Count | Priority |
 |----------|-------|----------|
-| **CRITICAL BUG** | 5 (2 Resolved) | 🔴 Immediate |
+| **CRITICAL BUG** | 5 (3 Resolved) | 🔴 Immediate |
 | **FUNCTIONAL MISMATCH** | 6 | 🟠 High |
 | **MISSING FEATURE** | 8 | 🟡 Medium |
 | **EDGE CASE BUG** | 8 | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
 
-**Overall Assessment:** The codebase is well-architected with solid engineering practices (thread-safety, error handling, interface design). However, the README.md claims "100% compatible" with original Conky, but the audit identified 28 discrepancies between documented and actual behavior. Most critical issues involve memory leaks in long-running processes.
+**Overall Assessment:** The codebase is well-architected with solid engineering practices (thread-safety, error handling, interface design). However, the README.md claims "100% compatible" with original Conky, but the audit identified 28 discrepancies between documented and actual behavior. Critical memory leak issues have been resolved.
 
 **Key Concerns:**
-- 3 remaining crash-risk bugs (memory leaks in Lua API caches)
+- 2 remaining crash-risk bugs (division by zero resolved, memory leaks resolved)
 - Division by zero bugs in rendering paths have been resolved ✅
-- Memory leaks in Lua API (unbounded cache growth) and GradientBackground
+- Memory leaks in Lua API (unbounded cache growth) have been resolved ✅
 - Platform abstraction exists but not integrated (Linux-only monitoring)
 - New graph infrastructure present but disconnected from rendering pipeline
 - Several Conky features documented as "supported" but return stub values
@@ -125,56 +125,48 @@ func (gb *GradientBackground) interpolationFactor(x, y, w, h int) float64 {
 ~~~~
 
 ~~~~
-### CRITICAL BUG: Unbounded Memory Growth in Lua API Caches
+### CRITICAL BUG: Unbounded Memory Growth in Lua API Caches (RESOLVED ✅)
 
 **File:** internal/lua/api.go:68-69, 84-85, 1283-1329, 1899-1936  
-**Severity:** High
+**Severity:** High (Previously) → N/A (Resolved)
 
-**Description:** The ConkyAPI maintains two unbounded maps that accumulate entries indefinitely without any cleanup mechanism:
+**Status:** **RESOLVED** - Fixed on 2026-02-23
+
+**Description:** The ConkyAPI maintains two maps that previously accumulated entries indefinitely without any cleanup mechanism:
 1. `scrollStates map[string]*scrollState` - Stores animation state for each unique scroll command
 2. `execCache map[string]*execCacheEntry` - Caches command output with timestamps
 
-Neither map ever removes entries, even when they expire or become unused. This leads to unbounded memory growth in long-running processes.
+**Resolution:** Cache cleanup has been fully implemented with:
+- Time-based expiration via `CleanupCaches()` that removes stale entries
+- Background cleanup goroutine via `StartCacheCleanup()` that runs periodically
+- `lastAccessed` timestamps on all cache entries for proper LRU-style cleanup
+- **Auto-start of cleanup in `NewConkyAPI()`** - cleanup now starts automatically when API is created
+- `Close()` method added to `ConkyAPI` to stop cleanup goroutine and release resources
 
-**Expected Behavior:** Caches should implement one of:
-- Time-based expiration with periodic cleanup goroutine
-- LRU eviction when cache exceeds size limit
-- Reference counting to remove unused entries
-
-**Actual Behavior:** Every unique scroll parameter combination or execi command creates a permanent map entry that is never deleted. Long-running instances with dynamic Lua scripts will leak memory indefinitely.
-
-**Impact:** 
-- Memory usage grows unbounded over time
-- Long-running instances (weeks/months) will eventually exhaust system memory
-- Dynamic configurations that generate unique scroll keys accelerate the leak
-- Each unique `${execi}` command creates a permanent cache entry
-
-**Reproduction:**
-```lua
--- This Lua script will leak memory rapidly
-function conky_main()
-    local count = os.time()  -- Different every second
-    return conky.parse("${scroll " .. count .. " 10 Dynamic text}")
-    -- Creates a new scroll state entry every second, never cleaned up
-end
-```
-
-**Code Reference:**
+**Verification:**
 ```go
-// api.go:68-69 - Maps are created but never have cleanup
-scrollStates map[string]*scrollState
-execCache    map[string]*execCacheEntry
-
-// api.go:1917 - Scroll state created but never removed
-state, exists := api.scrollStates[scrollKey]
-if !exists {
-    state = &scrollState{...}
-    api.scrollStates[scrollKey] = state  // Never deleted
+// api.go:97-119 - NewConkyAPI now auto-starts cleanup
+func NewConkyAPI(runtime *ConkyRuntime, provider SystemDataProvider) (*ConkyAPI, error) {
+    // ... initialization ...
+    api.registerFunctions()
+    // Automatically start cache cleanup to prevent unbounded memory growth
+    api.StartCacheCleanup()
+    return api, nil
 }
 
-// api.go:1309 - Exec cache updated but expired entries never purged
-api.execCache[cmdStr] = &execCacheEntry{...}  // Never deleted
+// api.go:2517-2523 - Close() method for proper cleanup
+func (api *ConkyAPI) Close() error {
+    api.StopCacheCleanup()
+    return nil
+}
+
+// api.go:2430-2457 - CleanupCaches removes stale entries
+func (api *ConkyAPI) CleanupCaches() (execRemoved, scrollRemoved int) {
+    // Removes entries not accessed within MaxAge (default 5 minutes)
+}
 ```
+
+**Impact:** Memory usage is now bounded. Long-running instances will have stable memory consumption as unused cache entries are automatically cleaned up. Default cleanup runs every 1 minute with 5-minute max age for unused entries.
 ~~~~
 
 ---
@@ -850,8 +842,8 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 
 ### Critical Priority (Security/Stability)
 
-1. **Fix Division-by-Zero Bugs:** Add boundary checks in graph.go and background.go before division operations
-2. **Implement Cache Cleanup:** Add TTL-based cleanup or LRU eviction for scroll/exec caches to prevent memory leaks
+1. ~~**Fix Division-by-Zero Bugs:** Add boundary checks in graph.go and background.go before division operations~~ ✅ RESOLVED
+2. ~~**Implement Cache Cleanup:** Add TTL-based cleanup or LRU eviction for scroll/exec caches to prevent memory leaks~~ ✅ RESOLVED
 3. **Add Mutex to PseudoBackground:** Protect concurrent access to cached screenshot data
 
 ### High Priority (Core Functionality)

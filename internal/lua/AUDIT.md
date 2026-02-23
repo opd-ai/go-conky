@@ -3,10 +3,10 @@
 **Status**: Complete
 
 ## Summary
-The `internal/lua` package provides Golua integration for conky-go, implementing Lua runtime management, Conky API functions, Cairo drawing bindings, hook system, and conditional parsing. The package is well-architected with strong test coverage (1.43:1 test:source ratio, 9366 test lines vs 6549 source lines). Mutex usage is consistent across shared state (45 lock operations). However, several issues were identified including a potential race condition in cache cleanup, missing package-level documentation file, and unimplemented MPD/music player features marked as stubs.
+The `internal/lua` package provides Golua integration for conky-go, implementing Lua runtime management, Conky API functions, Cairo drawing bindings, hook system, and conditional parsing. The package is well-architected with strong test coverage (1.43:1 test:source ratio, 9366 test lines vs 6549 source lines). Mutex usage is consistent across shared state (45 lock operations). Cache cleanup is now automatically started when ConkyAPI is created, preventing memory leaks.
 
 ## Issues Found
-- [ ] **medium** Concurrency Safety — Potential race condition in `api.go:2459-2484` - `StartCacheCleanup()` reads `cleanupConfig.CleanupInterval` after unlocking mutex, but `SetCacheCleanupConfig()` can modify it concurrently
+- [x] **medium** Concurrency Safety — ~~Potential race condition in `api.go:2459-2484`~~ **RESOLVED** - Upon review, the interval is correctly captured in a local variable while holding the lock before the goroutine starts. Additionally, `NewConkyAPI()` now auto-starts cache cleanup, and a `Close()` method was added for proper resource cleanup.
 - [ ] **low** Documentation — Missing `doc.go` file for package-level documentation (package godoc exists but scattered across multiple files)
 - [ ] **low** Stub Implementation — `conditionals.go:387-390` - `evalIfMPDPlaying()` always returns false, stub comment acknowledges MPD integration not implemented
 - [ ] **low** Stub Implementation — `api.go:2191-2203` - `resolveNvidiaGraph()` returns GPU utilization as text instead of rendering graph, comment indicates graph rendering not yet implemented
@@ -39,7 +39,7 @@ The `internal/lua` package provides Golua integration for conky-go, implementing
 **Assessment**: Clean dependency tree, no circular dependencies detected, appropriate use of interfaces for testability (SystemDataProvider)
 
 ## Recommendations
-1. **Fix race condition in StartCacheCleanup** - Store `interval` in local variable before unlocking mutex at `api.go:2469`, or use atomic operations for config access
+1. ~~**Fix race condition in StartCacheCleanup**~~ ✅ RESOLVED - No race condition exists; interval is captured in local variable before unlock
 2. **Add doc.go file** - Consolidate package-level documentation into canonical `doc.go` file with usage examples
 3. **Document stub implementations** - Add explicit godoc comments to stub functions indicating they are placeholders with tracking issue/roadmap references
 4. **Add build tags for tests** - Use `//go:build !headless` or mock Ebiten dependencies to enable CI testing without X11/GLFW

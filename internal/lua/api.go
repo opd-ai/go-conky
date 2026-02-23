@@ -93,7 +93,8 @@ type ConkyAPI struct {
 }
 
 // NewConkyAPI creates a new ConkyAPI instance and registers all Conky functions
-// in the provided Lua runtime.
+// in the provided Lua runtime. The cache cleanup goroutine is automatically started.
+// Call Close() when done to stop the cleanup goroutine and release resources.
 func NewConkyAPI(runtime *ConkyRuntime, provider SystemDataProvider) (*ConkyAPI, error) {
 	if runtime == nil {
 		return nil, fmt.Errorf("runtime cannot be nil")
@@ -109,6 +110,11 @@ func NewConkyAPI(runtime *ConkyRuntime, provider SystemDataProvider) (*ConkyAPI,
 	}
 
 	api.registerFunctions()
+
+	// Automatically start cache cleanup to prevent unbounded memory growth
+	// in long-running processes. Call Close() to stop the cleanup goroutine.
+	api.StartCacheCleanup()
+
 	return api, nil
 }
 
@@ -2501,4 +2507,12 @@ func (api *ConkyAPI) CacheStats() (execCount, scrollCount int) {
 	api.mu.RLock()
 	defer api.mu.RUnlock()
 	return len(api.execCache), len(api.scrollStates)
+}
+
+// Close stops the cache cleanup goroutine and releases resources.
+// This method should be called when the ConkyAPI is no longer needed
+// to prevent goroutine leaks. It is safe to call Close multiple times.
+func (api *ConkyAPI) Close() error {
+	api.StopCacheCleanup()
+	return nil
 }

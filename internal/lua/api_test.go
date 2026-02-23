@@ -345,6 +345,7 @@ func TestNewConkyAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create API: %v", err)
 	}
+	defer api.Close()
 
 	if api == nil {
 		t.Error("expected API to be non-nil")
@@ -3653,6 +3654,7 @@ func TestCacheCleanupRemovesStaleEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create API: %v", err)
 	}
+	defer api.Close()
 
 	// Set a very short MaxAge for testing
 	api.SetCacheCleanupConfig(CacheCleanupConfig{
@@ -3726,6 +3728,10 @@ func TestCacheCleanupBackground(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create API: %v", err)
 	}
+	defer api.Close()
+
+	// Stop the auto-started cleanup first so we can configure a shorter interval
+	api.StopCacheCleanup()
 
 	// Set a very short cleanup interval
 	api.SetCacheCleanupConfig(CacheCleanupConfig{
@@ -3748,9 +3754,8 @@ func TestCacheCleanupBackground(t *testing.T) {
 		t.Errorf("expected 1 exec cache entry, got %d", execCount)
 	}
 
-	// Start background cleanup
+	// Start background cleanup with new config
 	api.StartCacheCleanup()
-	defer api.StopCacheCleanup()
 
 	// Wait for at least one cleanup cycle
 	time.Sleep(50 * time.Millisecond)
@@ -3775,6 +3780,7 @@ func TestCacheStatsReturnsCorrectCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create API: %v", err)
 	}
+	defer api.Close()
 
 	// Initially both should be empty
 	execCount, scrollCount := api.CacheStats()
@@ -3824,11 +3830,12 @@ func TestStartStopCacheCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create API: %v", err)
 	}
+	defer api.Close() // Cleanup is now auto-started, so we should close
 
-	// Should be safe to call stop before start
+	// Cleanup is auto-started by NewConkyAPI, so stop it first
 	api.StopCacheCleanup()
 
-	// Start cleanup
+	// Start cleanup again
 	api.StartCacheCleanup()
 
 	// Double start should be safe (no-op)
