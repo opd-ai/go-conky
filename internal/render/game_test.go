@@ -504,7 +504,7 @@ func TestDrawInlineWidgetTypes(t *testing.T) {
 		game.drawInlineWidget(screen, marker, 10, 50, color.RGBA{R: 200, G: 100, B: 100, A: 255})
 	})
 
-	// Test gauge widget (falls back to bar)
+	// Test gauge widget (now renders actual gauge)
 	t.Run("gauge widget", func(t *testing.T) {
 		marker := &WidgetMarker{Type: WidgetTypeGauge, Value: 90, Width: 30, Height: 30}
 		// Should not panic
@@ -564,6 +564,38 @@ func TestDrawGraphWidget(t *testing.T) {
 			// Should not panic
 			game.drawGraphWidget(screen, 10, 10, tt.width, tt.height, tt.value,
 				color.RGBA{R: 100, G: 100, B: 200, A: 255})
+		})
+	}
+}
+
+func TestDrawGaugeWidget(t *testing.T) {
+	config := DefaultConfig()
+	mockRenderer := newMockTextRenderer()
+	game := NewGameWithRenderer(config, mockRenderer)
+	screen := ebiten.NewImage(400, 300)
+
+	tests := []struct {
+		name   string
+		value  float64
+		width  float64
+		height float64
+	}{
+		{"empty gauge", 0, 30, 30},
+		{"half gauge", 50, 30, 30},
+		{"full gauge", 100, 30, 30},
+		{"over 100%", 150, 30, 30},
+		{"rectangular bounds", 75, 40, 30},
+		{"tall bounds", 75, 30, 40},
+		{"large gauge", 60, 100, 100},
+		{"small gauge", 80, 15, 15},
+		{"tiny gauge", 50, 4, 4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Should not panic
+			game.drawGaugeWidget(screen, 10, 10, tt.width, tt.height, tt.value,
+				color.RGBA{R: 100, G: 200, B: 100, A: 255})
 		})
 	}
 }

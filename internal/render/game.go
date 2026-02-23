@@ -357,8 +357,7 @@ func (g *Game) drawInlineWidget(screen *ebiten.Image, marker *WidgetMarker, x, y
 	case WidgetTypeGraph:
 		g.drawGraphWidget(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
 	case WidgetTypeGauge:
-		// Gauge is not yet implemented, fall back to bar
-		g.drawProgressBar(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
+		g.drawGaugeWidget(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
 	}
 }
 
@@ -403,6 +402,39 @@ func (g *Game) drawGraphWidget(screen *ebiten.Image, x, y, width, height, value 
 	// Draw border
 	borderColor := color.RGBA{R: clr.R / 2, G: clr.G / 2, B: clr.B / 2, A: clr.A}
 	vector.StrokeRect(screen, float32(x), float32(y), float32(width), float32(height), 1, borderColor, false)
+}
+
+// drawGaugeWidget renders a circular gauge widget.
+// The gauge is drawn as a 270-degree arc centered within the bounding box.
+func (g *Game) drawGaugeWidget(screen *ebiten.Image, x, y, width, height, value float64, clr color.RGBA) {
+	// Use the smaller dimension as the gauge diameter
+	size := width
+	if height < width {
+		size = height
+	}
+
+	// Calculate center position and radius
+	centerX := x + width/2
+	centerY := y + height/2
+	radius := size / 2
+	thickness := size / 5 // Arc thickness is 20% of diameter
+	if thickness < 2 {
+		thickness = 2
+	}
+
+	// Create gauge widget with styling matching other widgets
+	gauge := NewGauge(centerX, centerY, radius)
+	gauge.SetThickness(thickness)
+	gauge.SetValue(value)
+	gauge.SetStyle(WidgetStyle{
+		FillColor:       clr,
+		BackgroundColor: color.RGBA{R: clr.R / 3, G: clr.G / 3, B: clr.B / 3, A: clr.A},
+		BorderColor:     color.RGBA{R: clr.R / 2, G: clr.G / 2, B: clr.B / 2, A: clr.A},
+		ShowBackground:  true,
+		ShowBorder:      false, // Gauge doesn't use rectangular border
+	})
+
+	gauge.Draw(screen)
 }
 
 // drawImageMarker renders an image at the specified position.

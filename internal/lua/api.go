@@ -545,8 +545,10 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		return api.resolveFSInodesPerc(args)
 
 	// Additional memory variables
-	case "memgauge", "membar":
+	case "membar":
 		return api.resolveMemBar(args)
+	case "memgauge":
+		return api.resolveMemGauge(args)
 	case "swapbar":
 		return api.resolveSwapBar(args)
 	case "shmem":
@@ -555,6 +557,8 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	// Additional CPU variables
 	case "cpubar":
 		return api.resolveCPUBar(args)
+	case "cpugauge":
+		return api.resolveCPUGauge(args)
 	case "loadgraph":
 		return api.resolveLoadGraph(args)
 	case "freq_dyn":
@@ -2066,6 +2070,23 @@ func (api *ConkyAPI) resolveMemBar(args []string) string {
 	return render.EncodeBarMarker(mem.UsagePercent, width, height)
 }
 
+// resolveMemGauge returns a graphical circular gauge widget for memory usage.
+// Syntax: ${memgauge size} or ${memgauge height,width}
+// For gauges, size typically means diameter (width=height).
+func (api *ConkyAPI) resolveMemGauge(args []string) string {
+	size := float64(30) // Default gauge diameter
+
+	if len(args) > 0 {
+		if s, err := strconv.ParseFloat(args[0], 64); err == nil {
+			size = s
+		}
+	}
+
+	// Gauges are circular, so use size for both width and height
+	mem := api.sysProvider.Memory()
+	return render.EncodeGaugeMarker(mem.UsagePercent, size, size)
+}
+
 // resolveSwapBar returns a graphical bar widget for swap usage.
 func (api *ConkyAPI) resolveSwapBar(args []string) string {
 	width := float64(100) // Default width in pixels
@@ -2131,6 +2152,50 @@ func (api *ConkyAPI) resolveCPUBar(args []string) string {
 	}
 
 	return render.EncodeBarMarker(percent, width, height)
+}
+
+// resolveCPUGauge returns a graphical circular gauge widget for CPU usage.
+// Syntax: ${cpugauge cpu# size} or ${cpugauge size}
+// For gauges, size typically means diameter.
+func (api *ConkyAPI) resolveCPUGauge(args []string) string {
+	size := float64(30) // Default gauge diameter
+	cpuIdx := -1        // -1 means overall
+
+	// Parse arguments: ${cpugauge cpu#} or ${cpugauge cpu# size} or ${cpugauge size}
+	if len(args) > 0 {
+		// First arg could be CPU specifier or size
+		if strings.HasPrefix(strings.ToLower(args[0]), "cpu") {
+			// It's a CPU specifier like "cpu0"
+			if idx, err := strconv.Atoi(strings.TrimPrefix(strings.ToLower(args[0]), "cpu")); err == nil {
+				cpuIdx = idx
+			}
+		} else if idx, err := strconv.Atoi(args[0]); err == nil {
+			// Check if it's a small number (likely a CPU core) or larger (likely size)
+			if idx <= 16 {
+				cpuIdx = idx - 1 // Convert to 0-based
+			} else {
+				size = float64(idx)
+			}
+		} else if s, err := strconv.ParseFloat(args[0], 64); err == nil {
+			size = s
+		}
+	}
+	if len(args) > 1 {
+		if s, err := strconv.ParseFloat(args[1], 64); err == nil {
+			size = s
+		}
+	}
+
+	cpuStats := api.sysProvider.CPU()
+	var percent float64
+	if cpuIdx >= 0 && cpuIdx < len(cpuStats.Cores) {
+		percent = cpuStats.Cores[cpuIdx]
+	} else {
+		percent = cpuStats.UsagePercent
+	}
+
+	// Gauges are circular, use size for both dimensions
+	return render.EncodeGaugeMarker(percent, size, size)
 }
 
 // resolveLoadGraph returns a graphical representation of load.

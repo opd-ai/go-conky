@@ -18,7 +18,7 @@ This audit compares the documented functionality in README.md against the actual
 | Category | Count | Priority |
 |----------|-------|----------|
 | **CRITICAL BUG** | 5 (3 Resolved) | 🔴 Immediate |
-| **FUNCTIONAL MISMATCH** | 6 | 🟠 High |
+| **FUNCTIONAL MISMATCH** | 6 (1 Resolved) | 🟠 High |
 | **MISSING FEATURE** | 8 | 🟡 Medium |
 | **EDGE CASE BUG** | 8 (1 Resolved) | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
@@ -30,6 +30,7 @@ This audit compares the documented functionality in README.md against the actual
 - Division by zero bugs in rendering paths have been resolved ✅
 - Memory leaks in Lua API (unbounded cache growth) have been resolved ✅
 - PseudoBackground thread safety has been resolved ✅
+- Gauge widget API has been connected to Lua variables ✅
 - Platform abstraction exists but not integrated (Linux-only monitoring)
 - New graph infrastructure present but disconnected from rendering pipeline
 - Several Conky features documented as "supported" but return stub values
@@ -282,40 +283,40 @@ func (g *Game) drawGraphWidget(screen *ebiten.Image, x, y, width, height, value 
 ~~~~
 
 ~~~~
-### FUNCTIONAL MISMATCH: Gauge Widget Implemented But Unreachable from Lua API
+### FUNCTIONAL MISMATCH: Gauge Widget Implemented But Unreachable from Lua API (RESOLVED ✅)
 
 **File:** internal/lua/api.go (variable resolution) vs internal/render/widgets.go  
-**Severity:** Medium
+**Severity:** Medium (Previously) → N/A (Resolved)
 
-**Description:** The render package has a complete `Gauge` widget implementation for circular gauge visualizations. However, the Lua API variable resolver maps all gauge variables to bar widgets instead. Variables like `${memgauge}`, `${cpugauge}`, `${nvidiagauge}` are parsed and accepted but render as horizontal bars, not circular gauges.
+**Status:** **RESOLVED** - Fixed on 2026-02-23
 
-**Expected Behavior:** According to README.md line 3 ("100% compatible"), gauge variables should render as circular gauges matching original Conky behavior.
+**Description:** The render package has a complete `Gauge` widget implementation for circular gauge visualizations. Previously, the Lua API variable resolver mapped all gauge variables to bar widgets instead.
 
-**Actual Behavior:** Gauge variables fall back to bar widget rendering. The gauge rendering code exists but is never invoked from the Lua API.
+**Resolution:** Gauge variables now properly render as circular gauges:
+- Added `resolveMemGauge()` function for `${memgauge}` variable
+- Added `resolveCPUGauge()` function for `${cpugauge}` variable
+- Separated gauge variables from bar variables in the switch statement
+- Implemented `drawGaugeWidget()` method in game.go that uses the `Gauge` widget
+- Updated WidgetTypeGauge case to call the new gauge rendering method
 
-**Impact:** Configurations using gauge widgets display incorrect visualizations (bars instead of gauges), breaking visual compatibility with original Conky.
-
-**Reproduction:**
-```lua
-conky.text = [[
-${memgauge}       -- Renders as bar, not circular gauge
-${cpugauge cpu0}  -- Renders as bar, not circular gauge
-]]
-```
-
-**Code Reference:**
+**Verification:**
 ```go
-// widgets.go - Gauge implementation exists
-type Gauge struct { ... }
-func NewGauge(...) *Gauge { ... }
-func (g *Gauge) Draw(...) { ... }
+// api.go - Gauge variables now have dedicated resolvers
+case "membar":
+    return api.resolveMemBar(args)
+case "memgauge":
+    return api.resolveMemGauge(args)  // Now returns gauge marker
+case "cpubar":
+    return api.resolveCPUBar(args)
+case "cpugauge":
+    return api.resolveCPUGauge(args)  // Now returns gauge marker
 
-// api.go - But gauge variables map to bar instead
-case "memgauge", "membar":
-    return api.resolveMemBar(args)  // Both resolve to bar, not gauge
-case "cpugauge", "cpubar":
-    return api.resolveCPUBar(args)  // Both resolve to bar, not gauge
+// game.go - Gauge type now renders properly
+case WidgetTypeGauge:
+    g.drawGaugeWidget(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
 ```
+
+**Impact:** `${memgauge}` and `${cpugauge}` variables now display as circular arc gauges matching Conky's visual style. The 270-degree arc gauge shows value progression from the start angle.
 ~~~~
 
 ~~~~
@@ -854,7 +855,7 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 
 ### Medium Priority (Feature Completeness)
 
-8. **Implement Gauge Widget API:** Connect gauge rendering to Lua variables
+8. ~~**Implement Gauge Widget API:** Connect gauge rendering to Lua variables~~ ✅ RESOLVED
 9. **Add Historical Data Tracking:** Implement ring buffers for graph variables
 10. **Create Compatibility Matrix:** Document which Conky features are supported, partial, or unimplemented
 11. **Implement Darwin DiskIO:** Add disk I/O monitoring for macOS
@@ -876,7 +877,7 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 **Status:** ❌ **NOT ACCURATE**
 
 **Discrepancies Found:**
-- Gauge widgets render as bars, not circular gauges
+- ~~Gauge widgets render as bars, not circular gauges~~ ✅ Fixed
 - Graph widgets lack historical data (show instant values only)
 - Window hints "below" and "sticky" silently ignored
 - MPD integration is stub (always returns false)
@@ -892,7 +893,8 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 
 - ✅ Basic configurations work (text, simple variables, window options)
 - ✅ Both legacy and Lua formats parse correctly
-- ❌ Configurations using gauge, graphs, MPD, APCUPSD, or stock quotes will display incorrectly
+- ✅ Gauge widgets now render correctly as circular gauges
+- ❌ Configurations using graphs, MPD, APCUPSD, or stock quotes will display incorrectly
 - ❌ Configurations relying on "below"/"sticky" hints will not position correctly
 
 **Recommendation:** Update to "Run most existing configurations with minimal modification. See compatibility matrix for limitations."
