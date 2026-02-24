@@ -3,7 +3,6 @@ package monitor
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 )
@@ -175,14 +174,17 @@ func (sm *SystemMonitor) monitorLoop() {
 // Update performs a single update of all system statistics.
 // When a platform adapter is configured, it uses cross-platform providers.
 // Falls back to Linux-specific readers when the platform adapter is nil or fails.
+//
+// Returns an *UpdateError if any component fails, preserving all individual errors.
+// Use AsUpdateError() or errors.As() to inspect component-specific errors.
 func (sm *SystemMonitor) Update() error {
-	var errs []error
+	var errs []*ComponentError
 
 	// Update CPU stats (prefer platform adapter)
 	if sm.platformAdapter != nil {
 		cpuStats, err := sm.platformAdapter.ReadCPUStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("cpu (platform): %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceCPU, true, err))
 			// Fallback to Linux reader
 			if sm.cpuReader != nil {
 				if fallbackStats, fallbackErr := sm.cpuReader.ReadStats(); fallbackErr == nil {
@@ -195,7 +197,7 @@ func (sm *SystemMonitor) Update() error {
 	} else if sm.cpuReader != nil {
 		cpuStats, err := sm.cpuReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("cpu: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceCPU, false, err))
 		} else {
 			sm.data.setCPU(cpuStats)
 		}
@@ -205,7 +207,7 @@ func (sm *SystemMonitor) Update() error {
 	if sm.platformAdapter != nil {
 		memStats, err := sm.platformAdapter.ReadMemoryStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("memory (platform): %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceMemory, true, err))
 			// Fallback to Linux reader
 			if sm.memReader != nil {
 				if fallbackStats, fallbackErr := sm.memReader.ReadStats(); fallbackErr == nil {
@@ -218,7 +220,7 @@ func (sm *SystemMonitor) Update() error {
 	} else if sm.memReader != nil {
 		memStats, err := sm.memReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("memory: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceMemory, false, err))
 		} else {
 			sm.data.setMemory(memStats)
 		}
@@ -228,7 +230,7 @@ func (sm *SystemMonitor) Update() error {
 	if sm.uptimeReader != nil {
 		uptimeStats, err := sm.uptimeReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("uptime: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceUptime, false, err))
 		} else {
 			sm.data.setUptime(uptimeStats)
 		}
@@ -238,7 +240,7 @@ func (sm *SystemMonitor) Update() error {
 	if sm.platformAdapter != nil {
 		networkStats, err := sm.platformAdapter.ReadNetworkStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("network (platform): %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceNetwork, true, err))
 			// Fallback to Linux reader
 			if sm.networkReader != nil {
 				if fallbackStats, fallbackErr := sm.networkReader.ReadStats(); fallbackErr == nil {
@@ -254,7 +256,7 @@ func (sm *SystemMonitor) Update() error {
 	} else if sm.networkReader != nil {
 		networkStats, err := sm.networkReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("network: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceNetwork, false, err))
 		} else {
 			sm.augmentNetworkStats(&networkStats)
 			sm.data.setNetwork(networkStats)
@@ -265,7 +267,7 @@ func (sm *SystemMonitor) Update() error {
 	if sm.platformAdapter != nil {
 		filesystemStats, err := sm.platformAdapter.ReadFilesystemStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("filesystem (platform): %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceFilesystem, true, err))
 			// Fallback to Linux reader
 			if sm.filesystemReader != nil {
 				if fallbackStats, fallbackErr := sm.filesystemReader.ReadStats(); fallbackErr == nil {
@@ -278,7 +280,7 @@ func (sm *SystemMonitor) Update() error {
 	} else if sm.filesystemReader != nil {
 		filesystemStats, err := sm.filesystemReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("filesystem: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceFilesystem, false, err))
 		} else {
 			sm.data.setFilesystem(filesystemStats)
 		}
@@ -288,7 +290,7 @@ func (sm *SystemMonitor) Update() error {
 	if sm.diskIOReader != nil {
 		diskIOStats, err := sm.diskIOReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("diskio: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceDiskIO, false, err))
 		} else {
 			sm.data.setDiskIO(diskIOStats)
 		}
@@ -298,7 +300,7 @@ func (sm *SystemMonitor) Update() error {
 	if sm.platformAdapter != nil {
 		hwmonStats, err := sm.platformAdapter.ReadSensorStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("hwmon (platform): %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceHwmon, true, err))
 			// Fallback to Linux reader
 			if sm.hwmonReader != nil {
 				if fallbackStats, fallbackErr := sm.hwmonReader.ReadStats(); fallbackErr == nil {
@@ -311,7 +313,7 @@ func (sm *SystemMonitor) Update() error {
 	} else if sm.hwmonReader != nil {
 		hwmonStats, err := sm.hwmonReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("hwmon: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceHwmon, false, err))
 		} else {
 			sm.data.setHwmon(hwmonStats)
 		}
@@ -321,7 +323,7 @@ func (sm *SystemMonitor) Update() error {
 	if sm.processReader != nil {
 		processStats, err := sm.processReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("process: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceProcess, false, err))
 		} else {
 			sm.data.setProcess(processStats)
 		}
@@ -331,7 +333,7 @@ func (sm *SystemMonitor) Update() error {
 	if sm.platformAdapter != nil {
 		batteryStats, err := sm.platformAdapter.ReadBatteryStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("battery (platform): %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceBattery, true, err))
 			// Fallback to Linux reader
 			if sm.batteryReader != nil {
 				if fallbackStats, fallbackErr := sm.batteryReader.ReadStats(); fallbackErr == nil {
@@ -344,7 +346,7 @@ func (sm *SystemMonitor) Update() error {
 	} else if sm.batteryReader != nil {
 		batteryStats, err := sm.batteryReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("battery: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceBattery, false, err))
 		} else {
 			sm.data.setBattery(batteryStats)
 		}
@@ -354,7 +356,7 @@ func (sm *SystemMonitor) Update() error {
 	if sm.audioReader != nil {
 		audioStats, err := sm.audioReader.ReadStats()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("audio: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceAudio, false, err))
 		} else {
 			sm.data.setAudio(audioStats)
 		}
@@ -364,18 +366,14 @@ func (sm *SystemMonitor) Update() error {
 	if sm.sysInfoReader != nil {
 		sysInfoStats, err := sm.sysInfoReader.ReadSystemInfo()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("sysinfo: %w", err))
+			errs = append(errs, NewComponentError(ErrorSourceSysInfo, false, err))
 		} else {
 			sm.data.setSysInfo(sysInfoStats)
 		}
 	}
 
 	if len(errs) > 0 {
-		errMsgs := make([]string, len(errs))
-		for i, e := range errs {
-			errMsgs[i] = e.Error()
-		}
-		return fmt.Errorf("update errors: %s", strings.Join(errMsgs, "; "))
+		return &UpdateError{Errors: errs}
 	}
 	return nil
 }

@@ -20,7 +20,7 @@ This audit compares the documented functionality in README.md against the actual
 | **CRITICAL BUG** | 5 (5 Resolved) | 🔴 Immediate |
 | **FUNCTIONAL MISMATCH** | 6 (5 Resolved) | 🟠 High |
 | **MISSING FEATURE** | 8 (3 Resolved) | 🟡 Medium |
-| **EDGE CASE BUG** | 8 (2 Resolved) | 🟢 Low |
+| **EDGE CASE BUG** | 8 (3 Resolved) | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
 
 **Overall Assessment:** The codebase is well-architected with solid engineering practices (thread-safety, error handling, interface design). README.md compatibility claims have been updated to accurately reflect ~95% compatibility with documented limitations.
@@ -714,40 +714,51 @@ func (cr *ConkyRuntime) Close() error {
 ~~~~
 
 ~~~~
-### EDGE CASE BUG: Monitor Error Context Loss
+### EDGE CASE BUG: Monitor Error Context Loss (RESOLVED ✅)
 
-**File:** internal/monitor/monitor.go:180-230  
-**Severity:** Low
+**File:** internal/monitor/monitor.go, internal/monitor/errors.go  
+**Severity:** Low (Previously) → N/A (Resolved)
 
-**Description:** The SystemMonitor.Update() method collects errors from multiple readers (CPU, memory, network, etc.) and aggregates them by converting to strings. This loses the original error types, making it impossible for callers to distinguish between different failure modes.
+**Status:** **RESOLVED** - Fixed on 2026-02-24
 
-**Expected Behavior:** Use error wrapping with multierror or structured error types that preserve error context.
+**Description:** The SystemMonitor.Update() method previously collected errors from multiple readers (CPU, memory, network, etc.) and aggregated them by converting to strings. This lost the original error types, making it impossible for callers to distinguish between different failure modes.
 
-**Actual Behavior:** Errors are converted to strings and concatenated.
+**Resolution:** Implemented structured error types that preserve error context:
+- Added `ComponentError` type that wraps errors with source information (CPU, memory, etc.)
+- Added `UpdateError` type that aggregates multiple component errors
+- Errors now implement `Unwrap()` for full `errors.Is()`/`errors.As()` support
+- Added helper methods: `HasSource()`, `BySource()`, `PlatformErrors()`, `FallbackErrors()`
+- Added `AsUpdateError()` and `IsComponentError()` utility functions
 
-**Impact:** Debugging and error handling in client code is more difficult.
-
-**Reproduction:**
+**Verification:**
 ```go
-// Calling code cannot distinguish these:
+// errors.go - New structured error types
+type ComponentError struct {
+    Source     ErrorSource  // cpu, memory, network, etc.
+    IsPlatform bool         // true if from platform adapter
+    Err        error        // original error preserved
+}
+
+type UpdateError struct {
+    Errors []*ComponentError
+}
+
+// Calling code can now inspect errors:
 err := monitor.Update()
-// Is it a CPU read failure? Memory read failure? Network failure?
-// Original error types are lost
-```
-
-**Code Reference:**
-```go
-// monitor.go:210-220
-var errs []error
-// ... collect errors ...
-if len(errs) > 0 {
-    errMsgs := make([]string, len(errs))
-    for i, e := range errs {
-        errMsgs[i] = e.Error()  // Type information lost
+if ue := monitor.AsUpdateError(err); ue != nil {
+    // Check if specific component failed
+    if ue.HasSource(monitor.ErrorSourceCPU) {
+        cpuErrs := ue.BySource(monitor.ErrorSourceCPU)
+        // Handle CPU errors specifically
     }
-    return fmt.Errorf("update errors: %s", strings.Join(errMsgs, "; "))
+    // Or check original error types
+    if errors.Is(err, fs.ErrNotExist) {
+        // Handle file not found
+    }
 }
 ```
+
+**Impact:** Client code can now properly inspect and handle specific error conditions. The `errors.Is()` and `errors.As()` functions work correctly through the error chain, enabling robust error handling and debugging.
 ~~~~
 
 ~~~~
@@ -897,7 +908,7 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 
 12. **Add Config Hot-Reload:** Implement SIGHUP handler or file watcher for configuration reload
 13. **Expose Lua Sandbox Limits:** Make CPU/memory limits configurable in config file
-14. **Improve Error Aggregation:** Use structured error types instead of string concatenation
+14. ~~**Improve Error Aggregation:** Use structured error types instead of string concatenation~~ ✅ RESOLVED - Added on 2026-02-24
 15. ~~**Add Gradient Color Validation:** Validate colors in validator for defense in depth~~ ✅ RESOLVED - Added on 2026-02-24
 16. **Document Android Status:** Clarify Android support level as "experimental"
 
