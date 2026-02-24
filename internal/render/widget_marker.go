@@ -50,6 +50,9 @@ type WidgetMarker struct {
 	Width float64
 	// Height is the widget height in pixels.
 	Height float64
+	// ID identifies the data source for historical tracking (e.g., "cpu", "mem", "net_eth0_down").
+	// Used by graph widgets to maintain separate time-series histories.
+	ID string
 }
 
 // markerPrefix and markerSuffix delimit widget markers in text.
@@ -60,14 +63,25 @@ const (
 )
 
 // Encode returns the string representation of the widget marker.
-// Format: \x00WGT:type:value:width:height\x00
+// Format: \x00WGT:type:value:width:height\x00 or \x00WGT:type:value:width:height:id\x00
 func (wm WidgetMarker) Encode() string {
-	return fmt.Sprintf("%s%s:%.2f:%.0f:%.0f%s",
+	if wm.ID == "" {
+		return fmt.Sprintf("%s%s:%.2f:%.0f:%.0f%s",
+			markerPrefix,
+			wm.Type.String(),
+			wm.Value,
+			wm.Width,
+			wm.Height,
+			markerSuffix,
+		)
+	}
+	return fmt.Sprintf("%s%s:%.2f:%.0f:%.0f:%s%s",
 		markerPrefix,
 		wm.Type.String(),
 		wm.Value,
 		wm.Width,
 		wm.Height,
+		wm.ID,
 		markerSuffix,
 	)
 }
@@ -82,7 +96,8 @@ func DecodeWidgetMarker(s string) *WidgetMarker {
 	// Extract content between prefix and suffix
 	content := s[len(markerPrefix) : len(s)-len(markerSuffix)]
 	parts := strings.Split(content, ":")
-	if len(parts) != 4 {
+	// Support both 4-part (legacy) and 5-part (with ID) formats
+	if len(parts) < 4 || len(parts) > 5 {
 		return nil
 	}
 
@@ -117,11 +132,18 @@ func DecodeWidgetMarker(s string) *WidgetMarker {
 		return nil
 	}
 
+	// Parse optional ID
+	var id string
+	if len(parts) == 5 {
+		id = parts[4]
+	}
+
 	return &WidgetMarker{
 		Type:   wType,
 		Value:  value,
 		Width:  width,
 		Height: height,
+		ID:     id,
 	}
 }
 
@@ -243,6 +265,18 @@ func EncodeGraphMarker(value, width, height float64) string {
 		Value:  value,
 		Width:  width,
 		Height: height,
+	}.Encode()
+}
+
+// EncodeGraphMarkerWithID creates a widget marker for a graph with historical tracking.
+// The id parameter identifies the data source for time-series accumulation.
+func EncodeGraphMarkerWithID(value, width, height float64, id string) string {
+	return WidgetMarker{
+		Type:   WidgetTypeGraph,
+		Value:  value,
+		Width:  width,
+		Height: height,
+		ID:     id,
 	}.Encode()
 }
 

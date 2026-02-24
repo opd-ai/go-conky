@@ -1965,6 +1965,12 @@ func TestBarWidgets(t *testing.T) {
 		{"swapbar default", "${swapbar}", "bar", 100, 8},
 		{"cpubar default", "${cpubar}", "bar", 100, 8},
 		{"loadgraph default", "${loadgraph}", "graph", 100, 20},
+		{"cpugraph default", "${cpugraph}", "graph", 100, 20},
+		{"cpugraph custom size", "${cpugraph 30 200}", "graph", 200, 30},
+		{"memgraph default", "${memgraph}", "graph", 100, 20},
+		{"memgraph custom size", "${memgraph 40 150}", "graph", 150, 40},
+		{"downspeedgraph default", "${downspeedgraph}", "graph", 100, 20},
+		{"upspeedgraph default", "${upspeedgraph}", "graph", 100, 20},
 	}
 
 	for _, tt := range tests {
@@ -1989,6 +1995,49 @@ func TestBarWidgets(t *testing.T) {
 			}
 			if marker.Height != tt.wantHeight {
 				t.Errorf("widget height = %v, want %v", marker.Height, tt.wantHeight)
+			}
+		})
+	}
+}
+
+func TestGraphWidgetHistoricalID(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+	defer runtime.Close()
+
+	provider := newMockProvider()
+	api, err := NewConkyAPI(runtime, provider)
+	if err != nil {
+		t.Fatalf("failed to create API: %v", err)
+	}
+	defer api.Close()
+
+	tests := []struct {
+		name     string
+		variable string
+		wantID   string
+	}{
+		{"cpugraph has cpu ID", "${cpugraph}", "cpu"},
+		{"memgraph has mem ID", "${memgraph}", "mem"},
+		{"loadgraph has load ID", "${loadgraph}", "load"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := api.Parse(tt.variable)
+			if !render.ContainsWidgetMarker(result) {
+				t.Errorf("expected widget marker, got: %q", result)
+				return
+			}
+			marker := render.DecodeWidgetMarker(result)
+			if marker == nil {
+				t.Errorf("failed to decode widget marker: %q", result)
+				return
+			}
+			if marker.ID != tt.wantID {
+				t.Errorf("widget ID = %q, want %q", marker.ID, tt.wantID)
 			}
 		})
 	}

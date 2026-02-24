@@ -293,8 +293,12 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 	// Network variables
 	case "downspeed":
 		return api.resolveNetworkSpeed(args, true)
+	case "downspeedgraph":
+		return api.resolveNetworkSpeedGraph(args, true)
 	case "upspeed":
 		return api.resolveNetworkSpeed(args, false)
+	case "upspeedgraph":
+		return api.resolveNetworkSpeedGraph(args, false)
 	case "totaldown":
 		return api.resolveNetworkTotal(args, true)
 	case "totalup":
@@ -549,6 +553,8 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		return api.resolveMemBar(args)
 	case "memgauge":
 		return api.resolveMemGauge(args)
+	case "memgraph":
+		return api.resolveMemGraph(args)
 	case "swapbar":
 		return api.resolveSwapBar(args)
 	case "shmem":
@@ -559,6 +565,8 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		return api.resolveCPUBar(args)
 	case "cpugauge":
 		return api.resolveCPUGauge(args)
+	case "cpugraph":
+		return api.resolveCPUGraph(args)
 	case "loadgraph":
 		return api.resolveLoadGraph(args)
 	case "freq_dyn":
@@ -2225,7 +2233,108 @@ func (api *ConkyAPI) resolveLoadGraph(args []string) string {
 		loadPerc = 100
 	}
 
-	return render.EncodeGraphMarker(loadPerc, width, height)
+	return render.EncodeGraphMarkerWithID(loadPerc, width, height, "load")
+}
+
+// resolveCPUGraph returns a graphical representation of CPU usage with historical tracking.
+// Usage: ${cpugraph [height] [width]}
+func (api *ConkyAPI) resolveCPUGraph(args []string) string {
+	width := float64(100)  // Default width in pixels
+	height := float64(20) // Default height in pixels
+
+	if len(args) > 0 {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
+			width = w
+		}
+	}
+
+	cpuInfo := api.sysProvider.CPU()
+	return render.EncodeGraphMarkerWithID(cpuInfo.UsagePercent, width, height, "cpu")
+}
+
+// resolveMemGraph returns a graphical representation of memory usage with historical tracking.
+// Usage: ${memgraph [height] [width]}
+func (api *ConkyAPI) resolveMemGraph(args []string) string {
+	width := float64(100)  // Default width in pixels
+	height := float64(20) // Default height in pixels
+
+	if len(args) > 0 {
+		if h, err := strconv.ParseFloat(args[0], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 1 {
+		if w, err := strconv.ParseFloat(args[1], 64); err == nil {
+			width = w
+		}
+	}
+
+	memInfo := api.sysProvider.Memory()
+	memPerc := 0.0
+	if memInfo.Total > 0 {
+		memPerc = float64(memInfo.Used) / float64(memInfo.Total) * 100
+	}
+	return render.EncodeGraphMarkerWithID(memPerc, width, height, "mem")
+}
+
+// resolveNetworkSpeedGraph returns a graphical representation of network speed with historical tracking.
+// Usage: ${downspeedgraph [interface] [height] [width]} or ${upspeedgraph [interface] [height] [width]}
+func (api *ConkyAPI) resolveNetworkSpeedGraph(args []string, isDown bool) string {
+	iface := ""
+	width := float64(100)  // Default width in pixels
+	height := float64(20) // Default height in pixels
+
+	// Parse arguments: first is interface, then height, then width
+	if len(args) > 0 {
+		iface = args[0]
+	}
+	if len(args) > 1 {
+		if h, err := strconv.ParseFloat(args[1], 64); err == nil {
+			height = h
+		}
+	}
+	if len(args) > 2 {
+		if w, err := strconv.ParseFloat(args[2], 64); err == nil {
+			width = w
+		}
+	}
+
+	netInfo := api.sysProvider.Network()
+	
+	// Find the requested interface or use default
+	for _, netIface := range netInfo.Interfaces {
+		if iface == "" || netIface.Name == iface {
+			var speed float64
+			var graphID string
+			if isDown {
+				speed = netIface.RxBytesPerSec
+				graphID = "net_" + netIface.Name + "_down"
+			} else {
+				speed = netIface.TxBytesPerSec
+				graphID = "net_" + netIface.Name + "_up"
+			}
+			// Normalize to percentage (0-100) based on max observed speed
+			// For now, normalize to 100 Mbps (12.5 MB/s) as baseline
+			maxSpeed := float64(12500000) // 100 Mbps in bytes
+			speedPerc := speed / maxSpeed * 100
+			if speedPerc > 100 {
+				speedPerc = 100
+			}
+			return render.EncodeGraphMarkerWithID(speedPerc, width, height, graphID)
+		}
+	}
+	
+	// No matching interface found
+	graphID := "net_unknown_down"
+	if !isDown {
+		graphID = "net_unknown_up"
+	}
+	return render.EncodeGraphMarkerWithID(0, width, height, graphID)
 }
 
 // resolveACPIFan returns ACPI fan status.

@@ -359,6 +359,106 @@ func TestEncodeGaugeMarker(t *testing.T) {
 	}
 }
 
+func TestEncodeGraphMarkerWithID(t *testing.T) {
+	marker := EncodeGraphMarkerWithID(75, 200, 50, "cpu")
+	decoded := DecodeWidgetMarker(marker)
+	if decoded == nil {
+		t.Fatal("EncodeGraphMarkerWithID produced invalid marker")
+	}
+	if decoded.Type != WidgetTypeGraph {
+		t.Errorf("Type = %v, want graph", decoded.Type)
+	}
+	if decoded.ID != "cpu" {
+		t.Errorf("ID = %q, want %q", decoded.ID, "cpu")
+	}
+	if decoded.Value != 75 {
+		t.Errorf("Value = %v, want 75", decoded.Value)
+	}
+	if decoded.Width != 200 {
+		t.Errorf("Width = %v, want 200", decoded.Width)
+	}
+	if decoded.Height != 50 {
+		t.Errorf("Height = %v, want 50", decoded.Height)
+	}
+}
+
+func TestDecodeWidgetMarkerWithID(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		wantID string
+		wantOK bool
+	}{
+		{
+			name:   "graph with ID",
+			input:  "\x00WGT:graph:50.00:100:20:cpu\x00",
+			wantID: "cpu",
+			wantOK: true,
+		},
+		{
+			name:   "graph with network ID",
+			input:  "\x00WGT:graph:25.00:150:30:net_eth0_down\x00",
+			wantID: "net_eth0_down",
+			wantOK: true,
+		},
+		{
+			name:   "bar without ID (legacy)",
+			input:  "\x00WGT:bar:50.00:100:8\x00",
+			wantID: "",
+			wantOK: true,
+		},
+		{
+			name:   "graph without ID (legacy)",
+			input:  "\x00WGT:graph:75.50:200:50\x00",
+			wantID: "",
+			wantOK: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DecodeWidgetMarker(tt.input)
+			if tt.wantOK {
+				if got == nil {
+					t.Fatal("DecodeWidgetMarker returned nil, want valid marker")
+				}
+				if got.ID != tt.wantID {
+					t.Errorf("ID = %q, want %q", got.ID, tt.wantID)
+				}
+			} else {
+				if got != nil {
+					t.Errorf("DecodeWidgetMarker returned non-nil, want nil")
+				}
+			}
+		})
+	}
+}
+
+func TestWidgetMarkerEncodeWithID(t *testing.T) {
+	marker := WidgetMarker{
+		Type:   WidgetTypeGraph,
+		Value:  65.5,
+		Width:  100,
+		Height: 20,
+		ID:     "mem",
+	}
+	encoded := marker.Encode()
+	
+	// Should contain all parts including ID
+	if !containsString(encoded, "mem") {
+		t.Errorf("Encode() = %q, missing ID 'mem'", encoded)
+	}
+	
+	// Decode and verify round-trip
+	decoded := DecodeWidgetMarker(encoded)
+	if decoded == nil {
+		t.Fatal("Failed to decode marker with ID")
+	}
+	if decoded.ID != "mem" {
+		t.Errorf("Round-trip ID = %q, want %q", decoded.ID, "mem")
+	}
+}
+
 // Image marker tests
 
 func TestImageMarkerEncode(t *testing.T) {

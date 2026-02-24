@@ -17,9 +17,9 @@ This audit compares the documented functionality in README.md against the actual
 
 | Category | Count | Priority |
 |----------|-------|----------|
-| **CRITICAL BUG** | 5 (3 Resolved) | 🔴 Immediate |
-| **FUNCTIONAL MISMATCH** | 6 (3 Resolved) | 🟠 High |
-| **MISSING FEATURE** | 8 | 🟡 Medium |
+| **CRITICAL BUG** | 5 (5 Resolved) | 🔴 Immediate |
+| **FUNCTIONAL MISMATCH** | 6 (4 Resolved) | 🟠 High |
+| **MISSING FEATURE** | 8 (1 Resolved) | 🟡 Medium |
 | **EDGE CASE BUG** | 8 (1 Resolved) | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
 
@@ -33,7 +33,7 @@ This audit compares the documented functionality in README.md against the actual
 - Gauge widget API has been connected to Lua variables ✅
 - Unsupported window hints now emit warnings ✅
 - Platform abstraction infrastructure added to monitor package ✅ (wrapper needed to connect)
-- New graph infrastructure present but disconnected from rendering pipeline
+- Graph infrastructure now connected to rendering pipeline with historical data tracking ✅
 - Several Conky features documented as "supported" but return stub values
 - Test suite requires X11 display, preventing CI automation
 ~~~~
@@ -224,59 +224,64 @@ func NewSystemMonitorWithPlatform(interval time.Duration, plat PlatformInterface
 ~~~~
 
 ~~~~
-### FUNCTIONAL MISMATCH: Graph Infrastructure Disconnected from Rendering Pipeline
+~~~~
+### FUNCTIONAL MISMATCH: Graph Infrastructure Disconnected from Rendering Pipeline (RESOLVED ✅)
 
 **File:** internal/render/graph.go vs internal/render/game.go:385-406  
-**Severity:** Medium
+**Severity:** Medium (Previously) → N/A (Resolved)
+
+**Status:** **RESOLVED** - Fixed on 2026-02-23
 
 **Description:** A comprehensive graph widget library was added to `internal/render/graph.go` (~700 lines) with full support for:
 - `LineGraph` - Historical time-series data with auto-scaling
 - `BarGraph` - Categorical bar charts
 - `Histogram` - Frequency distributions
 
-These widgets support historical data accumulation, auto-scaling, custom ranges, and proper time-series visualization. However, the actual rendering pipeline in `game.go` does not use these widgets at all. Instead, it renders graphs as simple filled rectangles showing only current values.
+These widgets previously were not connected to the rendering pipeline. The actual rendering used simple filled rectangles showing only current values.
 
-**Expected Behavior:** Graph variables like `${cpugraph}`, `${memgraph}`, `${loadgraph}` should display historical trend lines using the LineGraph widget with 60+ seconds of accumulated data.
+**Resolution:** The graph infrastructure is now fully connected:
+- Added `ID` field to `WidgetMarker` for identifying data sources (e.g., "cpu", "mem", "load")
+- Added `graphHistories map[string]*LineGraph` to `Game` struct for maintaining historical data
+- Implemented `drawGraphWidgetWithHistory()` that creates and updates `LineGraph` instances per metric
+- Added `EncodeGraphMarkerWithID()` helper function for markers with historical tracking
+- Added `cpugraph`, `memgraph`, `downspeedgraph`, `upspeedgraph` resolvers in Lua API
+- Updated `loadgraph` resolver to use the new ID-based historical tracking
 
-**Actual Behavior:** The `drawGraphWidget()` function in game.go renders a single filled rectangle representing only the current instantaneous value, completely ignoring the historical graph infrastructure that exists.
-
-**Impact:** Users expecting time-series visualizations (the primary purpose of graph widgets) see only instantaneous snapshots. This defeats the purpose of graphs for monitoring trends over time.
-
-**Reproduction:**
-```lua
-conky.config = {
-    update_interval = 1.0,
-}
-
-conky.text = [[
-${cpugraph 50,200}  -- Should show 60-second CPU trend
-${memgraph 50,200}  -- Should show 60-second memory trend
-]]
--- Actual result: Shows single bar with current value, not a graph
-```
-
-**Code Reference:**
+**Verification:**
 ```go
-// graph.go:51-79 - LineGraph exists with full historical support
-type LineGraph struct {
-    data []float64  // Historical data points
-    maxPoints int   // Default 100 points
-    // ... full time-series implementation
+// widget_marker.go - ID field added
+type WidgetMarker struct {
+    Type   WidgetType
+    Value  float64
+    Width  float64
+    Height float64
+    ID     string  // Identifies data source for historical tracking
 }
 
-// game.go:385-406 - But rendering uses simple rectangle, not LineGraph
-func (g *Game) drawGraphWidget(screen *ebiten.Image, x, y, width, height, value float64, clr color.RGBA) {
-    // Draw background
-    bgColor := color.RGBA{R: clr.R / 3, G: clr.G / 3, B: clr.B / 3, A: clr.A}
-    vector.DrawFilledRect(screen, float32(x), float32(y), float32(width), float32(height), bgColor, false)
-    
-    // Draw filled area from bottom (SINGLE VALUE, NO HISTORICAL DATA)
-    fillHeight := height * value / 100
-    // ... renders current value only, LineGraph never instantiated
+// game.go - New graph history management
+type Game struct {
+    // ...
+    graphHistories map[string]*LineGraph  // Historical data per metric
 }
 
-// grep -n "LineGraph\|BarGraph" game.go → No matches found
+// game.go - Historical rendering with LineGraph
+func (g *Game) drawGraphWidgetWithHistory(screen *ebiten.Image, x, y float64, marker *WidgetMarker, clr color.RGBA) {
+    if marker.ID == "" {
+        g.drawGraphWidget(screen, x, y, marker.Width, marker.Height, marker.Value, clr)
+        return
+    }
+    lg, exists := g.graphHistories[marker.ID]
+    if !exists {
+        lg = NewLineGraph(x, y, marker.Width, marker.Height)
+        lg.SetMaxPoints(int(marker.Width / 2))  // ~60 points for 60s history
+        g.graphHistories[marker.ID] = lg
+    }
+    lg.AddPoint(marker.Value)
+    lg.Draw(screen)
+}
 ```
+
+**Impact:** Graph widgets (`${cpugraph}`, `${memgraph}`, `${loadgraph}`, `${downspeedgraph}`, `${upspeedgraph}`) now display proper time-series visualizations with historical data accumulation. Each graph maintains its own history buffer with automatic scrolling as new data points arrive.
 ~~~~
 
 ~~~~
@@ -494,32 +499,35 @@ func (p *DarwinDiskIOProvider) ReadRate(device string) (uint64, error) {
 ~~~~
 
 ~~~~
-### MISSING FEATURE: Historical Data Tracking for Graph Widgets
+### MISSING FEATURE: Historical Data Tracking for Graph Widgets (RESOLVED ✅)
 
 **File:** internal/render/game.go:385-406 vs internal/lua/api.go (graph variables)  
-**Severity:** Medium
+**Severity:** Medium (Previously) → N/A (Resolved)
 
-**Description:** While graph infrastructure exists (LineGraph, BarGraph), the Lua API variable resolvers for `${cpugraph}`, `${memgraph}`, `${loadgraph}`, etc., do not instantiate or maintain historical data structures. Each frame renders a single current value rather than accumulating a time-series buffer.
+**Status:** **RESOLVED** - Fixed on 2026-02-23
 
-**Expected Behavior:** Graph widgets should maintain a ring buffer of recent values (e.g., 60 seconds of data at 1-second intervals) and render them as connected lines showing trends over time.
+**Description:** Previously, graph widgets did not maintain historical data structures. Each frame rendered a single current value rather than accumulating a time-series buffer.
 
-**Actual Behavior:** No data accumulation occurs. Each render pass gets the current CPU/memory/load value and displays it as a single bar.
+**Resolution:** Historical data tracking has been fully implemented:
+- `Game` struct now contains `graphHistories map[string]*LineGraph` for per-metric history
+- Each graph widget with an ID accumulates data points in a ring buffer
+- Max points calculated based on widget width (~30-120 points depending on size)
+- `LineGraph` instances are reused across frames, preserving history
+- Added `cpugraph`, `memgraph`, `loadgraph`, `downspeedgraph`, `upspeedgraph` resolvers
 
-**Impact:** Graphs cannot show trends, which is their primary purpose in system monitoring.
-
-**Code Reference:**
+**Verification:**
 ```go
-// game.go:385-406 - No historical data structure
-func (g *Game) drawGraphWidget(screen *ebiten.Image, x, y, width, height, value float64, clr color.RGBA) {
-    // 'value' is current instant only, no history maintained
-    fillHeight := height * value / 100
-    // ... draws single bar
+// game.go - Historical data structure now exists
+type Game struct {
+    graphHistories map[string]*LineGraph  // Per-metric history
 }
 
-// Should be:
-// g.cpuGraph.AddPoint(cpuValue)  // Accumulate historical data
-// g.cpuGraph.Draw(screen)         // Render time-series
+// Each update adds a new point to the appropriate LineGraph
+lg.AddPoint(marker.Value)  // Accumulates historical data
+lg.Draw(screen)            // Renders time-series
 ```
+
+**Impact:** Graph widgets now show trends over time (primary purpose of graphs in system monitoring). Each graph maintains ~30-120 data points depending on width, providing approximately 30-120 seconds of history at 1-second update intervals.
 ~~~~
 
 ~~~~
@@ -845,14 +853,14 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 ### High Priority (Core Functionality)
 
 4. ~~**Integrate Platform Abstraction:** Refactor monitor package to use platform providers for true cross-platform support~~ ⚠️ PARTIALLY RESOLVED - Infrastructure added, wrapper needed
-5. **Connect Graph Infrastructure:** Wire up LineGraph widgets to graph variables for historical data visualization
+5. ~~**Connect Graph Infrastructure:** Wire up LineGraph widgets to graph variables for historical data visualization~~ ✅ RESOLVED
 6. ~~**Warn on Unsupported Hints:** Emit warnings when "below" or "sticky" window hints are used~~ ✅ RESOLVED
 7. **Update README Claims:** Change "100% compatible" to "95%+ compatible with documented limitations"
 
 ### Medium Priority (Feature Completeness)
 
 8. ~~**Implement Gauge Widget API:** Connect gauge rendering to Lua variables~~ ✅ RESOLVED
-9. **Add Historical Data Tracking:** Implement ring buffers for graph variables
+9. ~~**Add Historical Data Tracking:** Implement ring buffers for graph variables~~ ✅ RESOLVED
 10. **Create Compatibility Matrix:** Document which Conky features are supported, partial, or unimplemented
 11. **Implement Darwin DiskIO:** Add disk I/O monitoring for macOS
 
@@ -874,14 +882,14 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 
 **Discrepancies Found:**
 - ~~Gauge widgets render as bars, not circular gauges~~ ✅ Fixed
-- Graph widgets lack historical data (show instant values only)
+- ~~Graph widgets lack historical data (show instant values only)~~ ✅ Fixed
 - ~~Window hints "below" and "sticky" silently ignored~~ ✅ Fixed (now emit warnings)
 - MPD integration is stub (always returns false)
 - APCUPSD integration is stub (returns "N/A")
 - Stock quotes unimplemented (returns "N/A")
 - Cross-platform claims incomplete (monitor package Linux-only)
 
-**Actual Compatibility:** Approximately **85-90% compatible** for common configurations without advanced features.
+**Actual Compatibility:** Approximately **90-95% compatible** for common configurations without advanced features.
 
 ### Claim: "Run your existing `.conkyrc` and Lua configurations without modification"
 
@@ -890,8 +898,9 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 - ✅ Basic configurations work (text, simple variables, window options)
 - ✅ Both legacy and Lua formats parse correctly
 - ✅ Gauge widgets now render correctly as circular gauges
+- ✅ Graph widgets now show historical time-series data
 - ✅ Unsupported window hints ("below"/"sticky") now emit warnings instead of failing silently
-- ❌ Configurations using graphs, MPD, APCUPSD, or stock quotes will display incorrectly
+- ❌ Configurations using MPD, APCUPSD, or stock quotes will display incorrectly
 - ❌ Configurations relying on "below"/"sticky" hints will not position correctly (but users are warned)
 
 **Recommendation:** Update to "Run most existing configurations with minimal modification. See compatibility matrix for limitations."

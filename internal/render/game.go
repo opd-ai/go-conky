@@ -56,6 +56,7 @@ type Game struct {
 	ctx                context.Context
 	imageCache         *ImageCache        // Cache for loaded images
 	backgroundRenderer BackgroundRenderer // Handles background drawing
+	graphHistories     map[string]*LineGraph // Historical data for graph widgets
 }
 
 // NewGame creates a new Game instance with the provided configuration.
@@ -69,6 +70,7 @@ func NewGame(config Config) *Game {
 		lines:              make([]TextLine, 0),
 		imageCache:         NewImageCache(),
 		backgroundRenderer: bgRenderer,
+		graphHistories:     make(map[string]*LineGraph),
 	}
 }
 
@@ -84,6 +86,7 @@ func NewGameWithRenderer(config Config, renderer TextRendererInterface) *Game {
 		lines:              make([]TextLine, 0),
 		imageCache:         NewImageCache(),
 		backgroundRenderer: bgRenderer,
+		graphHistories:     make(map[string]*LineGraph),
 	}
 }
 
@@ -355,7 +358,7 @@ func (g *Game) drawInlineWidget(screen *ebiten.Image, marker *WidgetMarker, x, y
 	case WidgetTypeBar:
 		g.drawProgressBar(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
 	case WidgetTypeGraph:
-		g.drawGraphWidget(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
+		g.drawGraphWidgetWithHistory(screen, x, widgetY, marker, clr)
 	case WidgetTypeGauge:
 		g.drawGaugeWidget(screen, x, widgetY, marker.Width, marker.Height, marker.Value, clr)
 	}
@@ -382,6 +385,7 @@ func (g *Game) drawProgressBar(screen *ebiten.Image, x, y, width, height, value 
 }
 
 // drawGraphWidget renders a simple filled area representing a graph.
+// This is the fallback for graphs without historical tracking (no ID).
 func (g *Game) drawGraphWidget(screen *ebiten.Image, x, y, width, height, value float64, clr color.RGBA) {
 	// Draw background
 	bgColor := color.RGBA{R: clr.R / 3, G: clr.G / 3, B: clr.B / 3, A: clr.A}
@@ -402,6 +406,60 @@ func (g *Game) drawGraphWidget(screen *ebiten.Image, x, y, width, height, value 
 	// Draw border
 	borderColor := color.RGBA{R: clr.R / 2, G: clr.G / 2, B: clr.B / 2, A: clr.A}
 	vector.StrokeRect(screen, float32(x), float32(y), float32(width), float32(height), 1, borderColor, false)
+}
+
+// drawGraphWidgetWithHistory renders a graph widget using LineGraph for historical data.
+// If the marker has an ID, it maintains a historical time-series. Otherwise falls back
+// to simple single-value rendering.
+func (g *Game) drawGraphWidgetWithHistory(screen *ebiten.Image, x, y float64, marker *WidgetMarker, clr color.RGBA) {
+	// If no ID, fall back to simple graph rendering
+	if marker.ID == "" {
+		g.drawGraphWidget(screen, x, y, marker.Width, marker.Height, marker.Value, clr)
+		return
+	}
+
+	// Get or create LineGraph for this ID
+	lg, exists := g.graphHistories[marker.ID]
+	if !exists {
+		// Create new LineGraph for this metric
+		lg = NewLineGraph(x, y, marker.Width, marker.Height)
+		lg.SetRange(0, 100) // Percentage values
+		lg.SetAutoScale(false)
+		// Set max points based on width (one point per 2 pixels gives good resolution)
+		maxPoints := int(marker.Width / 2)
+		if maxPoints < 30 {
+			maxPoints = 30 // Minimum 30 points for 30 seconds of data
+		}
+		if maxPoints > 120 {
+			maxPoints = 120 // Cap at 120 points (2 minutes at 1s intervals)
+		}
+		lg.SetMaxPoints(maxPoints)
+		g.graphHistories[marker.ID] = lg
+	}
+
+	// Update position and size in case they changed
+	lg.SetPosition(x, y)
+	lg.SetSize(marker.Width, marker.Height)
+
+	// Add the new data point
+	lg.AddPoint(marker.Value)
+
+	// Apply style from the color
+	style := GraphStyle{
+		FillColor:       color.RGBA{R: clr.R, G: clr.G, B: clr.B, A: uint8(float64(clr.A) * 0.5)},
+		StrokeColor:     clr,
+		StrokeWidth:     1.5,
+		BackgroundColor: color.RGBA{R: clr.R / 3, G: clr.G / 3, B: clr.B / 3, A: clr.A},
+		ShowBackground:  true,
+	}
+	lg.SetStyle(style)
+
+	// Draw the LineGraph with historical data
+	lg.Draw(screen)
+
+	// Draw border
+	borderColor := color.RGBA{R: clr.R / 2, G: clr.G / 2, B: clr.B / 2, A: clr.A}
+	vector.StrokeRect(screen, float32(x), float32(y), float32(marker.Width), float32(marker.Height), 1, borderColor, false)
 }
 
 // drawGaugeWidget renders a circular gauge widget.
