@@ -2,6 +2,7 @@ package lua
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -403,14 +404,30 @@ func TestClose(t *testing.T) {
 		t.Fatalf("failed to create runtime: %v", err)
 	}
 
-	// Close should not error
+	// First close should not error
 	if err := runtime.Close(); err != nil {
 		t.Errorf("Close() error = %v", err)
 	}
 
-	// Multiple closes should be safe
-	if err := runtime.Close(); err != nil {
-		t.Errorf("second Close() error = %v", err)
+	// Second close should return ErrAlreadyClosed per io.Closer contract
+	if err := runtime.Close(); err != ErrAlreadyClosed {
+		t.Errorf("second Close() should return ErrAlreadyClosed, got %v", err)
+	}
+}
+
+func TestCloseErrorsIs(t *testing.T) {
+	runtime, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatalf("failed to create runtime: %v", err)
+	}
+
+	// Close once
+	_ = runtime.Close()
+
+	// Verify errors.Is works correctly
+	err = runtime.Close()
+	if !errors.Is(err, ErrAlreadyClosed) {
+		t.Errorf("errors.Is should identify ErrAlreadyClosed, got %v", err)
 	}
 }
 

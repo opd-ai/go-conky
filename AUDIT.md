@@ -657,66 +657,96 @@ type PseudoBackground struct {
 ~~~~
 
 ~~~~
-### EDGE CASE BUG: Config Parser No Default Fallback
+~~~~
+### EDGE CASE BUG: Config Parser No Default Fallback (RESOLVED ✅)
 
-**File:** internal/config/parser.go:48-55  
-**Severity:** Low
+**File:** internal/config/parser.go:97-130  
+**Severity:** Low (Previously) → N/A (Resolved)
+
+**Status:** **RESOLVED** - Fixed on 2026-02-24
 
 **Description:** The unified configuration parser delegates to Lua or legacy parsers based on format detection. If both parsers fail or return errors, no default configuration is provided, potentially causing nil pointer dereferences in calling code.
 
-**Expected Behavior:** Return a valid default configuration when parsing fails, allowing the application to start with safe defaults.
+**Resolution:** Added new methods that provide fallback to default configuration:
+- `ParseOrDefault(content []byte) (*Config, error)` - Parses content, returns default config on failure
+- `ParseFileOrDefault(path string) (*Config, error)` - Parses file, returns default config on failure
+- Both methods return errors for logging while ensuring a usable config is always returned
+- Original `Parse()` and `ParseFile()` methods remain unchanged for cases requiring strict error handling
 
-**Actual Behavior:** Parse errors propagate directly; no fallback mechanism.
-
-**Impact:** Malformed configuration files may cause startup failures rather than graceful degradation.
-
-**Reproduction:**
-```bash
-echo "invalid syntax {{{" > bad.conkyrc
-./conky-go -c bad.conkyrc
-# Crash or nil pointer dereference possible
-```
-
-**Code Reference:**
+**Verification:**
 ```go
-// parser.go:48-55
-func (p *Parser) Parse(content []byte) (*Config, error) {
-    if isLuaConfig(content) {
-        return p.luaParser.Parse(content)
+// parser.go:108-119 - ParseOrDefault method
+func (p *Parser) ParseOrDefault(content []byte) (*Config, error) {
+    cfg, err := p.Parse(content)
+    if err != nil {
+        defaultCfg := DefaultConfig()
+        return &defaultCfg, err  // Error for logging, but always returns valid config
     }
-    return p.legacyParser.Parse(content)
+    return cfg, nil
 }
-// No fallback if both parsers fail
+
+// parser.go:121-130 - ParseFileOrDefault method
+func (p *Parser) ParseFileOrDefault(path string) (*Config, error) {
+    cfg, err := p.ParseFile(path)
+    if err != nil {
+        defaultCfg := DefaultConfig()
+        return &defaultCfg, err  // Error for logging, but always returns valid config
+    }
+    return cfg, nil
+}
 ```
+
+**Impact:** Applications using `ParseOrDefault` or `ParseFileOrDefault` can now gracefully handle malformed configuration files. The error is returned for logging/diagnostics while the application continues with sensible defaults.
 ~~~~
 
 ~~~~
-### EDGE CASE BUG: Lua Runtime Double-Close Allowed
+### EDGE CASE BUG: Lua Runtime Double-Close Allowed (RESOLVED ✅)
 
-**File:** internal/lua/runtime.go:296-306  
-**Severity:** Low
+**File:** internal/lua/runtime.go:301-319  
+**Severity:** Low (Previously) → N/A (Resolved)
 
-**Description:** The `ConkyRuntime.Close()` method sets the cleanup function to nil after calling it but does not return an error if Close() is called multiple times. This violates the io.Closer contract that Close() should be idempotent but may return errors on subsequent calls.
+**Status:** **RESOLVED** - Fixed on 2026-02-24
 
-**Expected Behavior:** Return error on second Close() call, or document that multiple Close() calls are explicitly allowed.
+**Description:** The `ConkyRuntime.Close()` method sets the cleanup function to nil after calling it but did not return an error if Close() is called multiple times. This violated the io.Closer contract that Close() may return errors on subsequent calls.
 
-**Actual Behavior:** Silently succeeds on multiple Close() calls.
+**Resolution:** Implemented proper io.Closer contract compliance:
+- Added `ErrAlreadyClosed` sentinel error for consistent error checking
+- Added `closed bool` field to track if Close() has been called
+- Close() now returns `ErrAlreadyClosed` on subsequent calls
+- Documented behavior in GoDoc comments
 
-**Impact:** Minor - may hide resource cleanup bugs in calling code.
-
-**Code Reference:**
+**Verification:**
 ```go
-// runtime.go:296-306
+// runtime.go:22-25 - Sentinel error
+var ErrAlreadyClosed = errors.New("lua runtime already closed")
+
+// runtime.go:56 - Added to struct
+type ConkyRuntime struct {
+    // ...
+    closed  bool  // Tracks if Close() has been called
+    // ...
+}
+
+// runtime.go:301-319 - Updated Close method
 func (cr *ConkyRuntime) Close() error {
     cr.mu.Lock()
     defer cr.mu.Unlock()
+
+    if cr.closed {
+        return ErrAlreadyClosed
+    }
+
     if cr.cleanup != nil {
         cr.cleanup()
         cr.cleanup = nil
     }
-    return nil  // Should return error if already closed
+
+    cr.closed = true
+    return nil
 }
 ```
+
+**Impact:** Resource cleanup bugs in calling code are now properly surfaced. The error can be checked with `errors.Is(err, lua.ErrAlreadyClosed)` for programmatic handling.
 ~~~~
 
 ~~~~

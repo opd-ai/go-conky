@@ -440,3 +440,139 @@ Test
 		})
 	}
 }
+
+func TestParserParseOrDefault(t *testing.T) {
+	p, err := NewParser()
+	if err != nil {
+		t.Fatalf("NewParser failed: %v", err)
+	}
+	defer p.Close()
+
+	tests := []struct {
+		name           string
+		content        string
+		wantParseError bool
+		wantNilConfig  bool
+	}{
+		{
+			name:           "valid legacy config",
+			content:        "background yes\n\nTEXT\nTest",
+			wantParseError: false,
+			wantNilConfig:  false,
+		},
+		{
+			name:           "valid lua config",
+			content:        "conky.config = {}\nconky.text = [[Test]]",
+			wantParseError: false,
+			wantNilConfig:  false,
+		},
+		{
+			name:           "invalid lua syntax",
+			content:        "conky.config = {{{invalid",
+			wantParseError: true,
+			wantNilConfig:  false, // Should still return default config
+		},
+		{
+			name:           "empty content returns default",
+			content:        "",
+			wantParseError: false,
+			wantNilConfig:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := p.ParseOrDefault([]byte(tt.content))
+
+			if tt.wantParseError && err == nil {
+				t.Error("expected parse error but got none")
+			}
+			if !tt.wantParseError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			// Config should NEVER be nil when using ParseOrDefault
+			if cfg == nil {
+				t.Fatal("ParseOrDefault returned nil config - this should never happen")
+			}
+
+			// Verify default values are present when parse fails
+			if tt.wantParseError {
+				if cfg.Window.Width != DefaultWidth {
+					t.Errorf("expected default width %d, got %d", DefaultWidth, cfg.Window.Width)
+				}
+				if cfg.Window.Height != DefaultHeight {
+					t.Errorf("expected default height %d, got %d", DefaultHeight, cfg.Window.Height)
+				}
+			}
+		})
+	}
+}
+
+func TestParserParseFileOrDefault(t *testing.T) {
+	p, err := NewParser()
+	if err != nil {
+		t.Fatalf("NewParser failed: %v", err)
+	}
+	defer p.Close()
+
+	tmpDir := t.TempDir()
+
+	// Test with valid file
+	t.Run("valid file", func(t *testing.T) {
+		validFile := tmpDir + "/valid.conkyrc"
+		err := os.WriteFile(validFile, []byte("background yes\n\nTEXT\nTest"), 0o644)
+		if err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+
+		cfg, err := p.ParseFileOrDefault(validFile)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if cfg == nil {
+			t.Fatal("ParseFileOrDefault returned nil config")
+		}
+	})
+
+	// Test with nonexistent file
+	t.Run("nonexistent file", func(t *testing.T) {
+		cfg, err := p.ParseFileOrDefault("/nonexistent/path/to/config")
+
+		// Should return error (for logging)
+		if err == nil {
+			t.Error("expected error for nonexistent file")
+		}
+
+		// But config should NEVER be nil
+		if cfg == nil {
+			t.Fatal("ParseFileOrDefault returned nil config for missing file - should return default")
+		}
+
+		// Verify default values
+		if cfg.Window.Width != DefaultWidth {
+			t.Errorf("expected default width %d, got %d", DefaultWidth, cfg.Window.Width)
+		}
+	})
+
+	// Test with invalid file content
+	t.Run("invalid file content", func(t *testing.T) {
+		invalidFile := tmpDir + "/invalid.lua"
+		err := os.WriteFile(invalidFile, []byte("conky.config = {{{invalid syntax"), 0o644)
+		if err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+
+		cfg, err := p.ParseFileOrDefault(invalidFile)
+
+		// Should return error (for logging)
+		if err == nil {
+			t.Error("expected error for invalid content")
+		}
+
+		// But config should NEVER be nil
+		if cfg == nil {
+			t.Fatal("ParseFileOrDefault returned nil config for invalid file - should return default")
+		}
+	})
+}

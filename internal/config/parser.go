@@ -101,3 +101,31 @@ func (p *Parser) Close() error {
 	}
 	return nil
 }
+
+// ParseOrDefault parses configuration content and returns a default configuration
+// if parsing fails. The returned Config is always valid (never nil).
+// If parsing succeeds, nil error is returned.
+// If parsing fails, the error is returned for logging but a usable default config is provided.
+// This enables graceful degradation when configuration files are malformed.
+func (p *Parser) ParseOrDefault(content []byte) (*Config, error) {
+	cfg, err := p.Parse(content)
+	if err != nil {
+		defaultCfg := DefaultConfig()
+		return &defaultCfg, err
+	}
+	return cfg, nil
+}
+
+// ParseFileOrDefault reads and parses a configuration file, returning a default
+// configuration if reading or parsing fails. The returned Config is always valid (never nil).
+// If the file is read and parsed successfully, nil error is returned.
+// If any error occurs, the error is returned for logging but a usable default config is provided.
+// This enables graceful degradation when configuration files are missing or malformed.
+func (p *Parser) ParseFileOrDefault(path string) (*Config, error) {
+	cfg, err := p.ParseFile(path)
+	if err != nil {
+		defaultCfg := DefaultConfig()
+		return &defaultCfg, err
+	}
+	return cfg, nil
+}

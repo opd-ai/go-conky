@@ -5,6 +5,7 @@ package lua
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,6 +15,11 @@ import (
 	"github.com/arnodel/golua/lib"
 	rt "github.com/arnodel/golua/runtime"
 )
+
+// ErrAlreadyClosed is returned when Close() is called on an already-closed runtime.
+// This follows the io.Closer contract where implementations may return errors
+// on subsequent Close() calls to help detect resource cleanup bugs in calling code.
+var ErrAlreadyClosed = errors.New("lua runtime already closed")
 
 // RuntimeConfig contains configuration options for the Lua runtime.
 type RuntimeConfig struct {
@@ -47,6 +53,7 @@ type ConkyRuntime struct {
 	output  *bytes.Buffer
 	cleanup func()
 	fsys    fs.FS // Optional embedded filesystem for require() support
+	closed  bool  // Tracks if Close() has been called
 	mu      sync.RWMutex
 }
 
@@ -293,14 +300,21 @@ func (cr *ConkyRuntime) Config() RuntimeConfig {
 
 // Close releases resources associated with the runtime.
 // The runtime should not be used after calling Close.
+// Following the io.Closer contract, Close returns ErrAlreadyClosed if called
+// more than once. This helps detect resource cleanup bugs in calling code.
 func (cr *ConkyRuntime) Close() error {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
+
+	if cr.closed {
+		return ErrAlreadyClosed
+	}
 
 	if cr.cleanup != nil {
 		cr.cleanup()
 		cr.cleanup = nil
 	}
 
+	cr.closed = true
 	return nil
 }
