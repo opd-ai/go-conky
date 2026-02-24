@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -119,8 +120,19 @@ func runWithArgs(args []string, stdout, stderr io.Writer) int {
 
 	fmt.Fprintf(stdout, "conky-go %s starting with config: %s\n", Version, flags.configPath)
 
+	// Initialize cross-platform monitoring
+	ctx := context.Background()
+	platformWrapper := initializePlatform(ctx)
+
+	// Create options with platform support
+	opts := &conky.Options{}
+	if platformWrapper != nil {
+		opts.Platform = platformWrapper
+		fmt.Fprintln(stdout, "Cross-platform monitoring enabled")
+	}
+
 	// Create and start using public API
-	c, err := conky.New(flags.configPath, nil)
+	c, err := conky.New(flags.configPath, opts)
 	if err != nil {
 		fmt.Fprintf(stderr, "Error creating conky instance: %v\n", err)
 		return 1

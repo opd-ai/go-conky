@@ -1,6 +1,10 @@
 package conky
 
-import "time"
+import (
+	"time"
+
+	"github.com/opd-ai/go-conky/internal/monitor"
+)
 
 // DefaultShutdownTimeout is the default timeout for graceful shutdown.
 // This can be overridden via Options.ShutdownTimeout.
@@ -46,6 +50,11 @@ type Options struct {
 	// Use ErrorTracker.AddCondition() to set up alerts.
 	// Use ErrorTracker.SetAlertHandler() to receive alert notifications.
 	ErrorTracker *ErrorTracker
+
+	// Platform sets a cross-platform monitoring provider.
+	// If nil, Linux-specific monitoring is used.
+	// Use cmd/conky-go platform wrapper to initialize this from internal/platform.
+	Platform monitor.PlatformInterface
 }
 
 // DefaultOptions returns Options with sensible defaults.

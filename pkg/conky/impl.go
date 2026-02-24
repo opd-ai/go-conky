@@ -345,8 +345,14 @@ func (c *conkyImpl) initComponents() error {
 		interval = time.Second // Default to 1 second
 	}
 
-	// Initialize system monitor
-	c.monitor = monitor.NewSystemMonitor(interval)
+	// Initialize system monitor with optional cross-platform support
+	// If a platform interface is provided via options, use platform-aware monitoring
+	if c.opts.Platform != nil {
+		c.monitor = monitor.NewSystemMonitorWithPlatform(interval, c.opts.Platform)
+	} else {
+		// Fall back to Linux-specific monitor
+		c.monitor = monitor.NewSystemMonitor(interval)
+	}
 
 	// Ensure the monitor is stopped when the conkyImpl context is cancelled.
 	// This avoids a situation where c.ctx is cancelled but the monitor's own
