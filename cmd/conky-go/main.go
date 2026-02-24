@@ -25,11 +25,11 @@ var Version = "0.1.0-dev"
 
 // parsedFlags holds parsed command-line flags.
 type parsedFlags struct {
-	configPath string
-	version    bool
-	cpuProfile string
-	memProfile string
-	convert    string
+	configPath  string
+	version     bool
+	cpuProfile  string
+	memProfile  string
+	convert     string
 	watchConfig bool
 }
 

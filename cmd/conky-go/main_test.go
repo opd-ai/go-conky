@@ -16,15 +16,15 @@ func TestVersion(t *testing.T) {
 
 func TestParseFlags(t *testing.T) {
 	tests := []struct {
-		name        string
-		args        []string
-		wantConfig  string
-		wantVer     bool
-		wantCPU     string
-		wantMem     string
-		wantConv    string
-		wantWatch   bool
-		wantErr     bool
+		name       string
+		args       []string
+		wantConfig string
+		wantVer    bool
+		wantCPU    string
+		wantMem    string
+		wantConv   string
+		wantWatch  bool
+		wantErr    bool
 	}{
 		{
 			name:    "no flags",
