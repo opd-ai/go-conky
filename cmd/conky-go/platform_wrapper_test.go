@@ -20,15 +20,15 @@ type mockPlatform struct {
 	sensors    platform.SensorProvider
 }
 
-func (m *mockPlatform) Name() string                              { return m.name }
-func (m *mockPlatform) Initialize(_ context.Context) error        { return nil }
-func (m *mockPlatform) Close() error                              { return nil }
-func (m *mockPlatform) CPU() platform.CPUProvider                 { return m.cpu }
-func (m *mockPlatform) Memory() platform.MemoryProvider           { return m.memory }
-func (m *mockPlatform) Network() platform.NetworkProvider         { return m.network }
-func (m *mockPlatform) Filesystem() platform.FilesystemProvider   { return m.filesystem }
-func (m *mockPlatform) Battery() platform.BatteryProvider         { return m.battery }
-func (m *mockPlatform) Sensors() platform.SensorProvider          { return m.sensors }
+func (m *mockPlatform) Name() string                            { return m.name }
+func (m *mockPlatform) Initialize(_ context.Context) error      { return nil }
+func (m *mockPlatform) Close() error                            { return nil }
+func (m *mockPlatform) CPU() platform.CPUProvider               { return m.cpu }
+func (m *mockPlatform) Memory() platform.MemoryProvider         { return m.memory }
+func (m *mockPlatform) Network() platform.NetworkProvider       { return m.network }
+func (m *mockPlatform) Filesystem() platform.FilesystemProvider { return m.filesystem }
+func (m *mockPlatform) Battery() platform.BatteryProvider       { return m.battery }
+func (m *mockPlatform) Sensors() platform.SensorProvider        { return m.sensors }
 
 // mockCPUProvider implements platform.CPUProvider for testing.
 type mockCPUProvider struct {
@@ -41,11 +41,13 @@ type mockCPUProvider struct {
 	load15    float64
 }
 
-func (m *mockCPUProvider) Usage() ([]float64, error)                       { return m.usage, nil }
-func (m *mockCPUProvider) TotalUsage() (float64, error)                    { return m.total, nil }
-func (m *mockCPUProvider) Frequency() ([]float64, error)                   { return m.frequency, nil }
-func (m *mockCPUProvider) Info() (*platform.CPUInfo, error)                { return m.info, nil }
-func (m *mockCPUProvider) LoadAverage() (float64, float64, float64, error) { return m.load1, m.load5, m.load15, nil }
+func (m *mockCPUProvider) Usage() ([]float64, error)        { return m.usage, nil }
+func (m *mockCPUProvider) TotalUsage() (float64, error)     { return m.total, nil }
+func (m *mockCPUProvider) Frequency() ([]float64, error)    { return m.frequency, nil }
+func (m *mockCPUProvider) Info() (*platform.CPUInfo, error) { return m.info, nil }
+func (m *mockCPUProvider) LoadAverage() (float64, float64, float64, error) {
+	return m.load1, m.load5, m.load15, nil
+}
 
 // mockMemoryProvider implements platform.MemoryProvider for testing.
 type mockMemoryProvider struct {
@@ -66,6 +68,7 @@ func (m *mockNetworkProvider) Interfaces() ([]string, error) { return m.interfac
 func (m *mockNetworkProvider) Stats(name string) (*platform.NetworkStats, error) {
 	return m.stats[name], nil
 }
+
 func (m *mockNetworkProvider) AllStats() (map[string]*platform.NetworkStats, error) {
 	return m.stats, nil
 }
@@ -81,6 +84,7 @@ func (m *mockFilesystemProvider) Mounts() ([]platform.MountInfo, error) { return
 func (m *mockFilesystemProvider) Stats(mp string) (*platform.FilesystemStats, error) {
 	return m.stats[mp], nil
 }
+
 func (m *mockFilesystemProvider) DiskIO(dev string) (*platform.DiskIOStats, error) {
 	return m.diskIO[dev], nil
 }
