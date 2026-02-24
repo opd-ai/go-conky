@@ -19,8 +19,8 @@ This audit compares the documented functionality in README.md against the actual
 |----------|-------|----------|
 | **CRITICAL BUG** | 5 (5 Resolved) | 🔴 Immediate |
 | **FUNCTIONAL MISMATCH** | 6 (6 Resolved) | 🟠 High |
-| **MISSING FEATURE** | 8 (4 Resolved) | 🟡 Medium |
-| **EDGE CASE BUG** | 8 (3 Resolved) | 🟢 Low |
+| **MISSING FEATURE** | 8 (5 Resolved) | 🟡 Medium |
+| **EDGE CASE BUG** | 5 (5 Resolved) | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
 
 **Overall Assessment:** The codebase is well-architected with solid engineering practices (thread-safety, error handling, interface design). README.md compatibility claims have been updated to accurately reflect ~95% compatibility with documented limitations.
@@ -39,6 +39,7 @@ This audit compares the documented functionality in README.md against the actual
 - Gradient color validation added for defense in depth ✅
 - MPD (Music Player Daemon) integration fully implemented ✅
 - Skip taskbar/pager hints now functional via X11 EWMH atoms ✅
+- Lua sandbox limits now configurable via `lua_cpu_limit` and `lua_memory_limit` ✅
 - APCUPSD and stock quotes remain as stubs (workarounds documented)
 - Test suite requires X11 display, preventing CI automation
 ~~~~
@@ -597,18 +598,39 @@ case syscall.SIGHUP:
 ~~~~
 
 ~~~~
-### MISSING FEATURE: Lua Sandbox Resource Limits Not Exposed in Config
+### MISSING FEATURE: Lua Sandbox Resource Limits Not Exposed in Config (RESOLVED ✅)
 
 **File:** internal/lua/runtime.go vs internal/config/types.go  
-**Severity:** Low
+**Severity:** Low (Previously) → N/A (Resolved)
 
-**Description:** The Golua runtime supports CPU and memory limits for sandboxing (lines 85-90 of runtime.go), but these are not configurable through the Conky configuration file. Users cannot set custom limits.
+**Status:** **RESOLVED** - Fixed on 2026-02-24
 
-**Expected Behavior:** Configuration options like `lua_max_cpu_time` and `lua_max_memory` to customize sandbox limits.
+**Description:** The Golua runtime supports CPU and memory limits for sandboxing, but these were previously not configurable through the Conky configuration file.
 
-**Actual Behavior:** Limits are hardcoded in code.
+**Resolution:** Lua sandbox limits are now fully configurable:
+- Added `LuaConfig` struct in `config/types.go` with `CPULimit` and `MemoryLimit` fields
+- Added parsing for `lua_cpu_limit` and `lua_memory_limit` in Lua configs
+- Added parsing for `lua_max_cpu_time` and `lua_max_memory` in legacy configs
+- Added `DefaultLuaCPULimit` (10M instructions) and `DefaultLuaMemoryLimit` (50MB) constants
+- Zero or negative values fall back to defaults
+- Comprehensive tests in `lua_test.go:TestLuaConfigParserLuaSandboxLimits`
 
-**Impact:** Power users cannot adjust sandbox constraints for their use cases.
+**Verification:**
+```go
+// types.go - LuaConfig struct
+type LuaConfig struct {
+    CPULimit    uint64 // 0 means use default (10M instructions)
+    MemoryLimit uint64 // 0 means use default (50 MB)
+}
+
+// Usage in config file:
+conky.config = {
+    lua_cpu_limit = 20000000,    -- 20M instructions
+    lua_memory_limit = 104857600, -- 100 MB
+}
+```
+
+**Impact:** Power users can now adjust sandbox constraints through their configuration files.
 ~~~~
 
 ~~~~
@@ -970,10 +992,10 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 ### Low Priority (Enhancements)
 
 12. ~~**Add Config Hot-Reload:** Implement SIGHUP handler or file watcher for configuration reload~~ ✅ RESOLVED - Added on 2026-02-24
-13. **Expose Lua Sandbox Limits:** Make CPU/memory limits configurable in config file
+13. ~~**Expose Lua Sandbox Limits:** Make CPU/memory limits configurable in config file~~ ✅ RESOLVED - Config parsing implemented with `lua_cpu_limit` and `lua_memory_limit`
 14. ~~**Improve Error Aggregation:** Use structured error types instead of string concatenation~~ ✅ RESOLVED - Added on 2026-02-24
 15. ~~**Add Gradient Color Validation:** Validate colors in validator for defense in depth~~ ✅ RESOLVED - Added on 2026-02-24
-16. **Document Android Status:** Clarify Android support level as "experimental"
+16. ~~**Document Android Status:** Clarify Android support level as "experimental"~~ ✅ RESOLVED - README.md "Platform Support" section documents Android as "Experimental, many features return stub values"
 
 ---
 
