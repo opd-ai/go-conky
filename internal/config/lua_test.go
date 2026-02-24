@@ -979,3 +979,87 @@ func TestLuaParserARGBSettings(t *testing.T) {
 		})
 	}
 }
+
+// TestLuaConfigParserLuaSandboxLimits tests parsing of Lua sandbox resource limits.
+func TestLuaConfigParserLuaSandboxLimits(t *testing.T) {
+	tests := []struct {
+		name           string
+		luaCode        string
+		expectedCPU    uint64
+		expectedMemory uint64
+	}{
+		{
+			name: "default limits",
+			luaCode: `conky.config = {
+    update_interval = 1.0,
+}`,
+			expectedCPU:    DefaultLuaCPULimit,
+			expectedMemory: DefaultLuaMemoryLimit,
+		},
+		{
+			name: "custom CPU limit",
+			luaCode: `conky.config = {
+    lua_cpu_limit = 20000000,
+}`,
+			expectedCPU:    20000000,
+			expectedMemory: DefaultLuaMemoryLimit,
+		},
+		{
+			name: "custom memory limit",
+			luaCode: `conky.config = {
+    lua_memory_limit = 104857600,
+}`,
+			expectedCPU:    DefaultLuaCPULimit,
+			expectedMemory: 104857600,
+		},
+		{
+			name: "both limits",
+			luaCode: `conky.config = {
+    lua_cpu_limit = 5000000,
+    lua_memory_limit = 25000000,
+}`,
+			expectedCPU:    5000000,
+			expectedMemory: 25000000,
+		},
+		{
+			name: "zero values use defaults",
+			luaCode: `conky.config = {
+    lua_cpu_limit = 0,
+    lua_memory_limit = 0,
+}`,
+			expectedCPU:    DefaultLuaCPULimit,
+			expectedMemory: DefaultLuaMemoryLimit,
+		},
+		{
+			name: "negative values ignored",
+			luaCode: `conky.config = {
+    lua_cpu_limit = -100,
+    lua_memory_limit = -200,
+}`,
+			expectedCPU:    DefaultLuaCPULimit,
+			expectedMemory: DefaultLuaMemoryLimit,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := NewLuaConfigParser()
+			if err != nil {
+				t.Fatalf("NewLuaConfigParser failed: %v", err)
+			}
+			defer p.Close()
+
+			cfg, err := p.Parse([]byte(tt.luaCode))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+
+			if cfg.Lua.CPULimit != tt.expectedCPU {
+				t.Errorf("expected CPULimit=%d, got %d", tt.expectedCPU, cfg.Lua.CPULimit)
+			}
+			if cfg.Lua.MemoryLimit != tt.expectedMemory {
+				t.Errorf("expected MemoryLimit=%d, got %d", tt.expectedMemory, cfg.Lua.MemoryLimit)
+			}
+		})
+	}
+}

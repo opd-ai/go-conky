@@ -88,6 +88,22 @@ func defaultColorConfig() ColorConfig {
 	}
 }
 
+// Default Lua sandbox limits.
+const (
+	// DefaultLuaCPULimit is the default CPU instruction limit (10 million).
+	DefaultLuaCPULimit = 10_000_000
+	// DefaultLuaMemoryLimit is the default memory limit (50 MB).
+	DefaultLuaMemoryLimit = 50 * 1024 * 1024
+)
+
+// defaultLuaConfig returns a LuaConfig with sensible default values.
+func defaultLuaConfig() LuaConfig {
+	return LuaConfig{
+		CPULimit:    DefaultLuaCPULimit,
+		MemoryLimit: DefaultLuaMemoryLimit,
+	}
+}
+
 // DefaultConfig returns a Config with sensible default values.
 // These defaults mirror typical Conky configuration defaults.
 func DefaultConfig() Config {
@@ -98,6 +114,7 @@ func DefaultConfig() Config {
 			Template: nil,
 		},
 		Colors: defaultColorConfig(),
+		Lua:    defaultLuaConfig(),
 	}
 }
 
@@ -114,4 +131,9 @@ func DefaultDisplayConfig() DisplayConfig {
 // DefaultColorConfig returns a ColorConfig with default values.
 func DefaultColorConfig() ColorConfig {
 	return defaultColorConfig()
+}
+
+// DefaultLuaConfig returns a LuaConfig with default values.
+func DefaultLuaConfig() LuaConfig {
+	return defaultLuaConfig()
 }

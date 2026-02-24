@@ -16,14 +16,6 @@ import (
 	rt "github.com/arnodel/golua/runtime"
 )
 
-// Resource limits for Lua execution to prevent runaway scripts.
-const (
-	// luaCPULimit is the CPU instruction limit for Lua execution.
-	luaCPULimit = 10_000_000
-	// luaMemoryLimit is the maximum memory in bytes that Lua can allocate (50 MB).
-	luaMemoryLimit = 50 * 1024 * 1024
-)
-
 // LuaConfigParser parses modern Lua configuration files (Conky 1.10+ format).
 // It uses the Golua runtime to execute Lua code and extract configuration values
 // from the conky.config table and conky.text variable.
@@ -72,11 +64,11 @@ func (p *LuaConfigParser) Parse(content []byte) (*Config, error) {
 		return nil, fmt.Errorf("failed to compile Lua configuration: %w", err)
 	}
 
-	// Execute with resource limits
+	// Execute with resource limits (using defaults for config parsing)
 	ctx := rt.RuntimeContextDef{
 		HardLimits: rt.RuntimeResources{
-			Cpu:    luaCPULimit,
-			Memory: luaMemoryLimit,
+			Cpu:    DefaultLuaCPULimit,
+			Memory: DefaultLuaMemoryLimit,
 		},
 	}
 	p.runtime.PushContext(ctx)
@@ -262,6 +254,14 @@ func (p *LuaConfigParser) extractConfigTable(cfg *Config, table *rt.Table) error
 
 	// Template definitions (template0-template9)
 	p.extractTemplates(cfg, table)
+
+	// Lua sandbox limits
+	if val := getTableInt(table, "lua_cpu_limit"); val != nil && *val > 0 {
+		cfg.Lua.CPULimit = uint64(*val)
+	}
+	if val := getTableInt(table, "lua_memory_limit"); val != nil && *val > 0 {
+		cfg.Lua.MemoryLimit = uint64(*val)
+	}
 
 	return nil
 }

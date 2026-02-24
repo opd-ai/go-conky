@@ -21,6 +21,18 @@ type Config struct {
 	Text TextConfig
 	// Colors contains color definitions.
 	Colors ColorConfig
+	// Lua contains Lua runtime sandbox settings.
+	Lua LuaConfig
+}
+
+// LuaConfig holds Lua sandbox resource limit settings.
+type LuaConfig struct {
+	// CPULimit is the CPU instruction limit for Lua execution.
+	// 0 means use the default (10 million instructions).
+	CPULimit uint64
+	// MemoryLimit is the maximum memory in bytes that Lua can allocate.
+	// 0 means use the default (50 MB).
+	MemoryLimit uint64
 }
 
 // WindowConfig holds window-related configuration options.

@@ -310,6 +310,24 @@ func (p *LegacyParser) parseDirective(cfg *Config, line string, lineNum int) err
 		}
 		cfg.Display.BorderOuterMargin = margin
 
+	// Lua sandbox limits
+	case "lua_cpu_limit":
+		limit, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid lua_cpu_limit: %w", lineNum, err)
+		}
+		if limit > 0 {
+			cfg.Lua.CPULimit = uint64(limit)
+		}
+	case "lua_memory_limit":
+		limit, err := parseInt(value)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid lua_memory_limit: %w", lineNum, err)
+		}
+		if limit > 0 {
+			cfg.Lua.MemoryLimit = uint64(limit)
+		}
+
 	default:
 		// Unknown directives are silently ignored for forward compatibility
 	}
