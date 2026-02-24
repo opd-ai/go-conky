@@ -57,6 +57,7 @@ type Game struct {
 	imageCache         *ImageCache           // Cache for loaded images
 	backgroundRenderer BackgroundRenderer    // Handles background drawing
 	graphHistories     map[string]*LineGraph // Historical data for graph widgets
+	hintsApplied       bool                  // Track if X11 window hints have been applied
 }
 
 // NewGame creates a new Game instance with the provided configuration.
@@ -140,6 +141,14 @@ func (g *Game) ClearLines() {
 func (g *Game) Update() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+
+	// Apply X11 window hints once on first frame after window creation.
+	// This must happen after Ebiten creates the window, not before.
+	if !g.hintsApplied {
+		g.hintsApplied = true
+		// Apply skip_taskbar and skip_pager hints via X11 EWMH
+		_ = ApplyWindowHints(g.config.SkipTaskbar, g.config.SkipPager)
+	}
 
 	// Check for context cancellation (used for programmatic shutdown)
 	if g.ctx != nil {

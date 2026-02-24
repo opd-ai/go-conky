@@ -48,10 +48,10 @@ type Config struct {
 	// Negative values are ignored (uses system default position).
 	WindowY int
 	// SkipTaskbar hides the window from the taskbar when true.
-	// Note: This is not directly supported by Ebiten but documented for completeness.
+	// On Linux X11, this sets the _NET_WM_STATE_SKIP_TASKBAR EWMH hint.
 	SkipTaskbar bool
 	// SkipPager hides the window from the pager when true.
-	// Note: This is not directly supported by Ebiten but documented for completeness.
+	// On Linux X11, this sets the _NET_WM_STATE_SKIP_PAGER EWMH hint.
 	SkipPager bool
 	// DrawBorders enables drawing a border around the content area.
 	DrawBorders bool

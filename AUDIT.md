@@ -18,7 +18,7 @@ This audit compares the documented functionality in README.md against the actual
 | Category | Count | Priority |
 |----------|-------|----------|
 | **CRITICAL BUG** | 5 (5 Resolved) | 🔴 Immediate |
-| **FUNCTIONAL MISMATCH** | 6 (5.5 Resolved) | 🟠 High |
+| **FUNCTIONAL MISMATCH** | 6 (6 Resolved) | 🟠 High |
 | **MISSING FEATURE** | 8 (3 Resolved) | 🟡 Medium |
 | **EDGE CASE BUG** | 8 (3 Resolved) | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
@@ -37,6 +37,7 @@ This audit compares the documented functionality in README.md against the actual
 - README.md updated with accurate compatibility claims and "Known Limitations" section ✅
 - Gradient color validation added for defense in depth ✅
 - MPD (Music Player Daemon) integration fully implemented ✅
+- Skip taskbar/pager hints now functional via X11 EWMH atoms ✅
 - APCUPSD and stock quotes remain as stubs (workarounds documented)
 - Test suite requires X11 display, preventing CI automation
 ~~~~
@@ -430,38 +431,42 @@ func (api *ConkyAPI) evalIfMPDPlaying() bool {
 ~~~~
 
 ~~~~
-### FUNCTIONAL MISMATCH: Skip Taskbar/Pager Hints Documented But Ineffective
+### FUNCTIONAL MISMATCH: Skip Taskbar/Pager Hints Documented But Ineffective (RESOLVED ✅)
 
 **File:** internal/render/types.go:50-55  
-**Severity:** Low
+**Severity:** Low (Previously) → N/A (Resolved)
 
-**Description:** The configuration type definitions include `SkipTaskbar` and `SkipPager` boolean fields with documentation stating they control taskbar/pager visibility. However, the comments explicitly note these are "not directly supported by Ebiten but documented for completeness." The values are parsed and stored but have no actual effect.
+**Status:** **RESOLVED** - Fixed on 2026-02-24
 
-**Expected Behavior:** Windows with `skip_taskbar` should not appear in taskbar; windows with `skip_pager` should not appear in workspace pagers.
+**Description:** The configuration type definitions include `SkipTaskbar` and `SkipPager` boolean fields with documentation stating they control taskbar/pager visibility. Previously, these values were parsed and stored but had no actual effect.
 
-**Actual Behavior:** Values are stored but ignored. Windows always appear in taskbar/pager regardless of configuration.
+**Resolution:** Implemented X11 EWMH hint support via the xgb library:
+- Added `internal/render/window_hints_linux.go` with EWMH hint implementation
+- Added `internal/render/window_hints_stub.go` for non-Linux platforms
+- Uses `_NET_WM_STATE_SKIP_TASKBAR` and `_NET_WM_STATE_SKIP_PAGER` atoms
+- Hints are applied on the first frame after window creation via `Game.Update()`
+- Includes caching of X11 connection and atoms for efficiency
+- Gracefully handles X11 unavailability (silently ignores errors)
 
-**Impact:** Low - minor cosmetic issue, but users expect these standard window hints to work.
-
-**Reproduction:**
-```lua
-conky.config = {
-    own_window_hints = 'skip_taskbar,skip_pager',
-}
--- Window still appears in taskbar and pager
-```
-
-**Code Reference:**
+**Verification:**
 ```go
-// types.go:50-55
-// SkipTaskbar hides the window from the taskbar when true.
-// Note: This is not directly supported by Ebiten but documented for completeness.
-SkipTaskbar bool
+// window_hints_linux.go - X11 EWMH hint implementation
+func ApplyWindowHints(skipTaskbar, skipPager bool) error {
+    // Sets _NET_WM_STATE_SKIP_TASKBAR and _NET_WM_STATE_SKIP_PAGER
+    // atoms on the active window via X11 protocol
+}
 
-// SkipPager hides the window from the pager when true.
-// Note: This is not directly supported by Ebiten but documented for completeness.
-SkipPager bool
+// game.go - Applied on first frame
+func (g *Game) Update() error {
+    if !g.hintsApplied {
+        g.hintsApplied = true
+        _ = ApplyWindowHints(g.config.SkipTaskbar, g.config.SkipPager)
+    }
+    // ...
+}
 ```
+
+**Impact:** Windows with `skip_taskbar` and `skip_pager` hints now correctly hide from the taskbar and workspace pager on Linux X11 systems. Non-Linux platforms continue to work without effect (no-op stub).
 ~~~~
 
 ---
