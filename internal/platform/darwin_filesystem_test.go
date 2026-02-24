@@ -95,14 +95,94 @@ func TestDarwinFilesystemProvider_Stats_InvalidPath(t *testing.T) {
 func TestDarwinFilesystemProvider_DiskIO(t *testing.T) {
 	provider := newDarwinFilesystemProvider()
 
-	// DiskIO returns zero values on macOS (requires IOKit)
+	// DiskIO now parses iostat output on macOS
 	stats, err := provider.DiskIO("disk0")
 	if err != nil {
 		t.Fatalf("DiskIO() failed: %v", err)
 	}
 
-	// On macOS without IOKit, all values should be 0
-	if stats.ReadBytes != 0 || stats.WriteBytes != 0 {
-		t.Logf("Note: DiskIO returned non-zero values (IOKit may be available)")
+	// Stats should be non-nil
+	if stats == nil {
+		t.Fatal("DiskIO() returned nil stats")
+	}
+
+	// Log the values for inspection
+	t.Logf("DiskIO stats for disk0: ReadBytes=%d, WriteBytes=%d, ReadCount=%d, WriteCount=%d",
+		stats.ReadBytes, stats.WriteBytes, stats.ReadCount, stats.WriteCount)
+}
+
+func TestDarwinFilesystemProvider_DiskIO_UnknownDevice(t *testing.T) {
+	provider := newDarwinFilesystemProvider()
+
+	// Unknown device should return zero stats without error
+	stats, err := provider.DiskIO("disk999")
+	if err != nil {
+		t.Fatalf("DiskIO() for unknown device should not error: %v", err)
+	}
+
+	// Should return empty stats
+	if stats == nil {
+		t.Fatal("DiskIO() returned nil stats")
+	}
+}
+
+func TestDarwinFilesystemProvider_parseIOStat(t *testing.T) {
+	provider := newDarwinFilesystemProvider()
+
+	// Sample iostat -d -I output
+	sampleOutput := `          disk0               disk1 
+    KB/t  xfrs   MB      KB/t  xfrs   MB 
+   24.00 12345  289.12   16.00  5678   88.76
+`
+
+	stats, err := provider.parseIOStat([]byte(sampleOutput), "disk0")
+	if err != nil {
+		t.Fatalf("parseIOStat() failed: %v", err)
+	}
+
+	// Total MB is 289.12, so total bytes ~= 303,173,222
+	expectedTotalBytes := uint64(289.12 * 1024 * 1024)
+	actualTotalBytes := stats.ReadBytes + stats.WriteBytes
+
+	// Allow some tolerance for floating point
+	tolerance := uint64(1024) // 1KB tolerance
+	if actualTotalBytes < expectedTotalBytes-tolerance || actualTotalBytes > expectedTotalBytes+tolerance {
+		t.Errorf("Total bytes mismatch: expected ~%d, got %d", expectedTotalBytes, actualTotalBytes)
+	}
+
+	// Transfers should sum to original
+	expectedTransfers := uint64(12345)
+	actualTransfers := stats.ReadCount + stats.WriteCount
+	if actualTransfers != expectedTransfers {
+		t.Errorf("Transfer count mismatch: expected %d, got %d", expectedTransfers, actualTransfers)
+	}
+
+	// Test disk1
+	stats2, err := provider.parseIOStat([]byte(sampleOutput), "disk1")
+	if err != nil {
+		t.Fatalf("parseIOStat() for disk1 failed: %v", err)
+	}
+
+	expectedTotalBytes2 := uint64(88.76 * 1024 * 1024)
+	actualTotalBytes2 := stats2.ReadBytes + stats2.WriteBytes
+
+	if actualTotalBytes2 < expectedTotalBytes2-tolerance || actualTotalBytes2 > expectedTotalBytes2+tolerance {
+		t.Errorf("disk1 total bytes mismatch: expected ~%d, got %d", expectedTotalBytes2, actualTotalBytes2)
+	}
+}
+
+func TestDarwinFilesystemProvider_parseIOStat_InvalidFormat(t *testing.T) {
+	provider := newDarwinFilesystemProvider()
+
+	// Empty output
+	_, err := provider.parseIOStat([]byte(""), "disk0")
+	if err == nil {
+		t.Error("Expected error for empty output")
+	}
+
+	// Malformed output
+	_, err = provider.parseIOStat([]byte("invalid data"), "disk0")
+	if err == nil {
+		t.Error("Expected error for malformed output")
 	}
 }
