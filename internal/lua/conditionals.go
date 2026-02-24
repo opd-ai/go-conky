@@ -383,10 +383,17 @@ func (api *ConkyAPI) evalIfMounted(args []string) bool {
 }
 
 // evalIfMPDPlaying checks if MPD is playing.
-// This is a stub - MPD integration would need a separate implementation.
 func (api *ConkyAPI) evalIfMPDPlaying() bool {
-	// MPD integration not implemented
-	return false
+	api.mu.RLock()
+	provider := api.sysProvider
+	api.mu.RUnlock()
+
+	if provider == nil {
+		return false
+	}
+
+	mpdStats := provider.MPD()
+	return mpdStats.IsPlaying()
 }
 
 // evalIfMixerMute checks if the audio mixer is muted.

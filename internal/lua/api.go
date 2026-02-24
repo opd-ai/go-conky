@@ -46,6 +46,7 @@ type SystemDataProvider interface {
 	TCP() monitor.TCPStats
 	TCPCountInRange(minPort, maxPort int) int
 	TCPConnectionByIndex(minPort, maxPort, index int) *monitor.TCPConnection
+	MPD() monitor.MPDStats
 }
 
 // execCacheEntry stores cached output from execi commands.
@@ -612,6 +613,50 @@ func (api *ConkyAPI) resolveVariable(name string, args []string) string {
 		return api.resolveNvidia([]string{"power"})
 	case "nvidia_name":
 		return api.resolveNvidia([]string{"name"})
+
+	// MPD (Music Player Daemon) variables
+	case "mpd_artist":
+		return api.sysProvider.MPD().Artist
+	case "mpd_album":
+		return api.sysProvider.MPD().Album
+	case "mpd_title":
+		return api.sysProvider.MPD().Title
+	case "mpd_track":
+		return api.sysProvider.MPD().Track
+	case "mpd_name":
+		return api.sysProvider.MPD().Name
+	case "mpd_file":
+		return api.sysProvider.MPD().File
+	case "mpd_genre":
+		return api.sysProvider.MPD().Genre
+	case "mpd_date":
+		return api.sysProvider.MPD().Date
+	case "mpd_status":
+		return string(api.sysProvider.MPD().State)
+	case "mpd_elapsed":
+		return api.sysProvider.MPD().ElapsedTime()
+	case "mpd_length":
+		return api.sysProvider.MPD().LengthTime()
+	case "mpd_percent":
+		return fmt.Sprintf("%.0f", api.sysProvider.MPD().Percent())
+	case "mpd_bitrate":
+		return strconv.Itoa(api.sysProvider.MPD().Bitrate)
+	case "mpd_vol":
+		return strconv.Itoa(api.sysProvider.MPD().Volume)
+	case "mpd_random":
+		if api.sysProvider.MPD().Random {
+			return "On"
+		}
+		return "Off"
+	case "mpd_repeat":
+		if api.sysProvider.MPD().Repeat {
+			return "On"
+		}
+		return "Off"
+	case "mpd_smart":
+		return api.sysProvider.MPD().Smart()
+	case "mpd_bar":
+		return api.resolveMPDBar(args)
 
 	// Apcupsd (UPS) stubs - not implemented; requires APCUPSD daemon and NIS protocol.
 	// Users should use ${execi} with apcaccess command. See docs/migration.md.
@@ -2689,4 +2734,25 @@ func (api *ConkyAPI) CacheStats() (execCount, scrollCount int) {
 func (api *ConkyAPI) Close() error {
 	api.StopCacheCleanup()
 	return nil
+}
+
+// resolveMPDBar resolves the ${mpd_bar} variable.
+// Args: [width, height] - optional dimensions for the bar
+func (api *ConkyAPI) resolveMPDBar(args []string) string {
+	width := 100.0
+	height := 10.0
+
+	if len(args) >= 1 {
+		if w, err := strconv.ParseFloat(args[0], 64); err == nil && w > 0 {
+			width = w
+		}
+	}
+	if len(args) >= 2 {
+		if h, err := strconv.ParseFloat(args[1], 64); err == nil && h > 0 {
+			height = h
+		}
+	}
+
+	pct := api.sysProvider.MPD().Percent()
+	return render.EncodeBarMarker(pct, width, height)
 }

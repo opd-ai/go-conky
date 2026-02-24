@@ -30,6 +30,7 @@ type mockSystemDataProvider struct {
 	gpu        monitor.GPUStats
 	mail       monitor.MailStats
 	weather    monitor.WeatherStats
+	mpd        monitor.MPDStats
 }
 
 func (m *mockSystemDataProvider) CPU() monitor.CPUStats               { return m.cpu }
@@ -112,6 +113,10 @@ func (m *mockSystemDataProvider) MailTotalMessages() int {
 
 func (m *mockSystemDataProvider) Weather(stationID string) monitor.WeatherStats {
 	return m.weather
+}
+
+func (m *mockSystemDataProvider) MPD() monitor.MPDStats {
+	return m.mpd
 }
 
 func newMockProvider() *mockSystemDataProvider {

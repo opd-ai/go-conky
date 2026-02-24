@@ -31,6 +31,7 @@ type SystemMonitor struct {
 	gpuReader         *gpuReader
 	mailReader        *mailReader
 	weatherReader     *weatherReader
+	mpdReader         *mpdReader
 	ctx               context.Context
 	cancel            context.CancelFunc
 	wg                sync.WaitGroup
@@ -63,6 +64,7 @@ func NewSystemMonitor(interval time.Duration) *SystemMonitor {
 		gpuReader:         newGPUReader(),
 		mailReader:        newMailReader(),
 		weatherReader:     newWeatherReader(),
+		mpdReader:         newMPDReader(),
 		ctx:               ctx,
 		cancel:            cancel,
 	}
@@ -95,6 +97,7 @@ func NewSystemMonitorWithPlatform(interval time.Duration, plat PlatformInterface
 		gpuReader:         newGPUReader(),
 		mailReader:        newMailReader(),
 		weatherReader:     newWeatherReader(),
+		mpdReader:         newMPDReader(),
 		ctx:               ctx,
 		cancel:            cancel,
 	}
@@ -514,6 +517,27 @@ func (sm *SystemMonitor) MailTotalMessages() int {
 func (sm *SystemMonitor) Weather(stationID string) WeatherStats {
 	stats, _ := sm.weatherReader.ReadWeather(stationID)
 	return stats
+}
+
+// MPD returns the current MPD playback status.
+func (sm *SystemMonitor) MPD() MPDStats {
+	stats, _ := sm.mpdReader.ReadStats()
+	return stats
+}
+
+// SetMPDHost sets the MPD server host.
+func (sm *SystemMonitor) SetMPDHost(host string) {
+	sm.mpdReader.SetHost(host)
+}
+
+// SetMPDPort sets the MPD server port.
+func (sm *SystemMonitor) SetMPDPort(port int) {
+	sm.mpdReader.SetPort(port)
+}
+
+// SetMPDPassword sets the MPD server password.
+func (sm *SystemMonitor) SetMPDPassword(password string) {
+	sm.mpdReader.SetPassword(password)
 }
 
 // augmentNetworkStats adds IP address, gateway, nameserver, and wireless information to network stats.

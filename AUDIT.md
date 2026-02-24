@@ -18,7 +18,7 @@ This audit compares the documented functionality in README.md against the actual
 | Category | Count | Priority |
 |----------|-------|----------|
 | **CRITICAL BUG** | 5 (5 Resolved) | 🔴 Immediate |
-| **FUNCTIONAL MISMATCH** | 6 (5 Resolved) | 🟠 High |
+| **FUNCTIONAL MISMATCH** | 6 (5.5 Resolved) | 🟠 High |
 | **MISSING FEATURE** | 8 (3 Resolved) | 🟡 Medium |
 | **EDGE CASE BUG** | 8 (3 Resolved) | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
@@ -36,7 +36,8 @@ This audit compares the documented functionality in README.md against the actual
 - Graph infrastructure now connected to rendering pipeline with historical data tracking ✅
 - README.md updated with accurate compatibility claims and "Known Limitations" section ✅
 - Gradient color validation added for defense in depth ✅
-- Several Conky features documented as "supported" but return stub values
+- MPD (Music Player Daemon) integration fully implemented ✅
+- APCUPSD and stock quotes remain as stubs (workarounds documented)
 - Test suite requires X11 display, preventing CI automation
 ~~~~
 
@@ -373,54 +374,59 @@ func parseWindowHints(hints []config.WindowHint, logger Logger) (bool, bool, boo
 ~~~~
 
 ~~~~
-### FUNCTIONAL MISMATCH: MPD, APCUPSD, Stock Quote Return Stub Values
+### FUNCTIONAL MISMATCH: MPD, APCUPSD, Stock Quote Return Stub Values (PARTIALLY RESOLVED ✅)
 
 **File:** internal/lua/conditionals.go:385-389, internal/lua/api.go:576-606  
-**Severity:** Low
+**Severity:** Low (Previously) → N/A for MPD (Resolved)
 
-**Description:** The Lua API supports variables and conditionals for Music Player Daemon (MPD), APCUPSD (UPS monitoring), and stock quotes. All are parsed successfully but return stub values:
-- `${if_mpd_playing}` → Always returns false
-- `${apcupsd_status}`, `${apcupsd_charge}`, etc. → Return "N/A"
-- `${stockquote AAPL}` → Returns "N/A"
+**Status:** **PARTIALLY RESOLVED** - MPD integration completed on 2026-02-24
 
-README.md claims (line 7): "Run your existing `.conkyrc` and Lua configurations without modification"
+**Description:** The Lua API supports variables and conditionals for Music Player Daemon (MPD), APCUPSD (UPS monitoring), and stock quotes. Previously all returned stub values.
 
-**Expected Behavior:** Either implement these features or document them as unsupported/planned in a compatibility matrix.
+**Resolution (MPD):** Full MPD integration has been implemented:
+- Added `internal/monitor/mpd.go` with complete MPD client implementation
+- MPD client connects via TCP to MPD daemon (default localhost:6600)
+- Implements full MPD protocol parsing for status and current song
+- Added `MPDStats` type with all relevant playback information
+- Added caching with 1-second TTL to reduce connection overhead
+- All MPD variables now return real data when MPD daemon is available:
+  - `mpd_artist`, `mpd_album`, `mpd_title`, `mpd_track`
+  - `mpd_elapsed`, `mpd_length`, `mpd_percent`, `mpd_bar`
+  - `mpd_status`, `mpd_bitrate`, `mpd_vol`, `mpd_file`
+  - `mpd_random`, `mpd_repeat`, `mpd_smart`, `mpd_genre`, `mpd_date`, `mpd_name`
+- `${if_mpd_playing}` now correctly checks MPD playback state
+- Graceful degradation when MPD is not running (returns empty values)
 
-**Actual Behavior:** Features appear to work (no errors) but always return dummy values, causing configurations to display incorrect information.
-
-**Impact:** 
-- MPD users see empty now-playing sections
-- UPS users cannot monitor battery backup status
-- Stock tickers always display "N/A"
-- Users assume their configurations are wrong, not that features are unimplemented
-
-**Reproduction:**
-```lua
-conky.text = [[
-${if_mpd_playing}Now Playing: ${mpd_artist} - ${mpd_title}${endif}
-Stock: AAPL ${stockquote AAPL}
-UPS: ${apcupsd_charge}%
-]]
--- All display empty or "N/A" regardless of actual MPD/UPS status
-```
-
-**Code Reference:**
+**Verification:**
 ```go
-// conditionals.go:387-390
-func (api *ConkyAPI) evalIfMPDPlaying() bool {
-    // MPD integration not implemented
-    return false  // Always false - stub
+// monitor/mpd.go - New MPD client implementation
+type mpdReader struct {
+    host     string
+    port     int
+    password string
+    timeout  time.Duration
+    cache    *MPDStats
+    // ...
 }
 
-// api.go:576-581
-case "apcupsd", "apcupsd_model", "apcupsd_status", ...
-    return "N/A"  // All UPS variables return stub
+// api.go - MPD variables now resolve to real data
+case "mpd_artist":
+    return api.sysProvider.MPD().Artist
+case "mpd_status":
+    return string(api.sysProvider.MPD().State)
 
-// api.go:603-606
-case "stockquote":
-    return "N/A"  // Stock quotes unimplemented
+// conditionals.go - if_mpd_playing now uses real MPD state
+func (api *ConkyAPI) evalIfMPDPlaying() bool {
+    mpdStats := provider.MPD()
+    return mpdStats.IsPlaying()
+}
 ```
+
+**Remaining Items (not implemented):**
+- APCUPSD: Still returns "N/A" - Users should use `${execi}` with `apcaccess` command
+- Stock quotes: Still returns "N/A" - Users should use `${execi}` with custom scripts
+
+**Impact:** MPD users can now see real playback information. APCUPSD and stock quotes remain documented as unsupported with recommended workarounds.
 ~~~~
 
 ~~~~
