@@ -55,6 +55,16 @@ type Options struct {
 	// If nil, Linux-specific monitoring is used.
 	// Use cmd/conky-go platform wrapper to initialize this from internal/platform.
 	Platform monitor.PlatformInterface
+
+	// WatchConfig enables automatic configuration hot-reloading when the
+	// configuration file changes on disk. When enabled, file modifications
+	// trigger an in-place config reload (via ReloadConfig) without restarting.
+	WatchConfig bool
+
+	// WatchDebounce sets the debounce interval for file change events.
+	// Multiple rapid file modifications within this window trigger only
+	// a single reload. Zero means use the default (500ms).
+	WatchDebounce time.Duration
 }
 
 // DefaultOptions returns Options with sensible defaults.

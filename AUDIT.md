@@ -19,7 +19,7 @@ This audit compares the documented functionality in README.md against the actual
 |----------|-------|----------|
 | **CRITICAL BUG** | 5 (5 Resolved) | 🔴 Immediate |
 | **FUNCTIONAL MISMATCH** | 6 (6 Resolved) | 🟠 High |
-| **MISSING FEATURE** | 8 (3 Resolved) | 🟡 Medium |
+| **MISSING FEATURE** | 8 (4 Resolved) | 🟡 Medium |
 | **EDGE CASE BUG** | 8 (3 Resolved) | 🟢 Low |
 | **PERFORMANCE ISSUE** | 1 (Resolved) | ✅ N/A |
 
@@ -33,6 +33,7 @@ This audit compares the documented functionality in README.md against the actual
 - Gauge widget API has been connected to Lua variables ✅
 - Unsupported window hints now emit warnings ✅
 - Platform abstraction fully integrated with monitor package via PlatformWrapper ✅
+- Configuration hot-reloading now implemented with file watcher and SIGHUP support ✅
 - Graph infrastructure now connected to rendering pipeline with historical data tracking ✅
 - README.md updated with accurate compatibility claims and "Known Limitations" section ✅
 - Gradient color validation added for defense in depth ✅
@@ -560,18 +561,39 @@ lg.Draw(screen)            // Renders time-series
 ~~~~
 
 ~~~~
-### MISSING FEATURE: Configuration Hot-Reloading
+### MISSING FEATURE: Configuration Hot-Reloading (RESOLVED ✅)
 
-**File:** pkg/conky/impl.go (no reload mechanism)  
-**Severity:** Low
+**File:** pkg/conky/impl.go, pkg/conky/watcher.go, cmd/conky-go/main.go  
+**Severity:** Low (Previously) → N/A (Resolved)
 
-**Description:** README.md mentions "configuration hot-reloading is planned" but no mechanism exists to reload configuration files without restarting the process. The parser and config types support re-parsing, but the main implementation lacks a file watcher or signal handler.
+**Status:** **RESOLVED** - Fixed on 2026-02-24
 
-**Expected Behavior:** SIGHUP or configuration file change should trigger a reload without restart.
+**Description:** README.md mentions "configuration hot-reloading is planned" but no mechanism existed to reload configuration files without restarting the process.
 
-**Actual Behavior:** Configuration changes require full process restart.
+**Resolution:** Full configuration hot-reloading has been implemented:
+- Added `configWatcher` type using `fsnotify` for file system monitoring
+- Watcher monitors the configuration file's directory (handles atomic saves from vim, emacs, etc.)
+- Debouncing prevents multiple reloads on rapid file saves (default 500ms)
+- Added `-w` flag to enable file watching from command line
+- Added `WatchConfig` and `WatchDebounce` options in `Options` struct
+- SIGHUP now triggers `ReloadConfig()` for in-place reload (smoother than full restart)
+- File watcher automatically calls `ReloadConfig()` when changes detected
 
-**Impact:** Minor usability issue during development/customization.
+**Verification:**
+```go
+// Options struct now includes:
+WatchConfig   bool          // Enable file watching
+WatchDebounce time.Duration // Debounce interval (default 500ms)
+
+// CLI usage:
+conky-go -c config.lua -w  // Watch for file changes
+
+// SIGHUP handling:
+case syscall.SIGHUP:
+    c.ReloadConfig()  // In-place reload, keeps rendering running
+```
+
+**Impact:** Users can now modify configuration files and see changes immediately without restarting. Developers can iterate quickly on configurations during development.
 ~~~~
 
 ~~~~
@@ -947,7 +969,7 @@ README.md is comprehensive and well-structured. However, it makes strong compati
 
 ### Low Priority (Enhancements)
 
-12. **Add Config Hot-Reload:** Implement SIGHUP handler or file watcher for configuration reload
+12. ~~**Add Config Hot-Reload:** Implement SIGHUP handler or file watcher for configuration reload~~ ✅ RESOLVED - Added on 2026-02-24
 13. **Expose Lua Sandbox Limits:** Make CPU/memory limits configurable in config file
 14. ~~**Improve Error Aggregation:** Use structured error types instead of string concatenation~~ ✅ RESOLVED - Added on 2026-02-24
 15. ~~**Add Gradient Color Validation:** Validate colors in validator for defense in depth~~ ✅ RESOLVED - Added on 2026-02-24

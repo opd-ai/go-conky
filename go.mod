@@ -4,6 +4,7 @@ go 1.24.11
 
 require (
 	github.com/arnodel/golua v0.1.2
+	github.com/fsnotify/fsnotify v1.8.0
 	github.com/hajimehoshi/ebiten/v2 v2.8.8
 	github.com/jezek/xgb v1.1.1
 	golang.org/x/crypto v0.47.0

@@ -29,10 +29,11 @@ type conkyImpl struct {
 	configFormat  string // Format for reader-based configs
 
 	// Components
-	monitor      *monitor.SystemMonitor
-	gameRunner   *gameRunner   // For hot-reload support
-	metrics      *Metrics      // Metrics collector
-	errorTracker *ErrorTracker // Error tracking and alerting
+	monitor       *monitor.SystemMonitor
+	gameRunner    *gameRunner      // For hot-reload support
+	metrics       *Metrics         // Metrics collector
+	errorTracker  *ErrorTracker    // Error tracking and alerting
+	configWatcher *configWatcher   // File watcher for hot-reload
 
 	// State
 	running     atomic.Bool
@@ -354,6 +355,31 @@ func (c *conkyImpl) initComponents() error {
 		c.monitor = monitor.NewSystemMonitor(interval)
 	}
 
+	// Initialize config file watcher if enabled
+	if c.opts.WatchConfig && c.configSource != "" {
+		debounce := c.opts.WatchDebounce
+		if debounce <= 0 {
+			debounce = DefaultWatchDebounce
+		}
+
+		watcher, err := newConfigWatcher(
+			c.configSource,
+			debounce,
+			c.ReloadConfig,
+			func(err error) {
+				c.notifyError(fmt.Errorf("config watcher error: %w", err))
+			},
+		)
+		if err != nil {
+			// Log warning but don't fail startup - watching is optional
+			c.emitEvent(EventError, fmt.Sprintf("Failed to start config watcher: %v", err))
+		} else {
+			c.configWatcher = watcher
+			watcher.Start()
+			c.emitEvent(EventStarted, "Configuration file watcher started")
+		}
+	}
+
 	// Ensure the monitor is stopped when the conkyImpl context is cancelled.
 	// This avoids a situation where c.ctx is cancelled but the monitor's own
 	// internal context (created in NewSystemMonitor) remains active.
@@ -372,6 +398,9 @@ func (c *conkyImpl) initComponents() error {
 
 // cleanup releases all resources.
 func (c *conkyImpl) cleanup() {
+	if c.configWatcher != nil {
+		c.configWatcher.Stop()
+	}
 	if c.monitor != nil {
 		c.monitor.Stop()
 	}

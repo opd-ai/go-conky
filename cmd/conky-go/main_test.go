@@ -16,14 +16,15 @@ func TestVersion(t *testing.T) {
 
 func TestParseFlags(t *testing.T) {
 	tests := []struct {
-		name       string
-		args       []string
-		wantConfig string
-		wantVer    bool
-		wantCPU    string
-		wantMem    string
-		wantConv   string
-		wantErr    bool
+		name        string
+		args        []string
+		wantConfig  string
+		wantVer     bool
+		wantCPU     string
+		wantMem     string
+		wantConv    string
+		wantWatch   bool
+		wantErr     bool
 	}{
 		{
 			name:    "no flags",
@@ -56,12 +57,18 @@ func TestParseFlags(t *testing.T) {
 			wantConv: "old.conkyrc",
 		},
 		{
+			name:      "watch flag",
+			args:      []string{"-w"},
+			wantWatch: true,
+		},
+		{
 			name:       "all flags",
-			args:       []string{"-c", "cfg", "-v", "-cpuprofile", "c.prof", "-memprofile", "m.prof"},
+			args:       []string{"-c", "cfg", "-v", "-cpuprofile", "c.prof", "-memprofile", "m.prof", "-w"},
 			wantConfig: "cfg",
 			wantVer:    true,
 			wantCPU:    "c.prof",
 			wantMem:    "m.prof",
+			wantWatch:  true,
 		},
 		{
 			name:    "unknown flag",
@@ -96,6 +103,9 @@ func TestParseFlags(t *testing.T) {
 			}
 			if flags.convert != tt.wantConv {
 				t.Errorf("convert = %q, want %q", flags.convert, tt.wantConv)
+			}
+			if flags.watchConfig != tt.wantWatch {
+				t.Errorf("watchConfig = %v, want %v", flags.watchConfig, tt.wantWatch)
 			}
 		})
 	}

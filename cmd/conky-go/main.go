@@ -30,6 +30,7 @@ type parsedFlags struct {
 	cpuProfile string
 	memProfile string
 	convert    string
+	watchConfig bool
 }
 
 // parseFlags parses command-line arguments and returns the parsed flags.
@@ -43,17 +44,19 @@ func parseFlags(args []string) (*parsedFlags, error) {
 	cpuProfile := fs.String("cpuprofile", "", "Write CPU profile to file")
 	memProfile := fs.String("memprofile", "", "Write memory profile to file")
 	convert := fs.String("convert", "", "Convert legacy .conkyrc to Lua format and print to stdout")
+	watchConfig := fs.Bool("w", false, "Watch configuration file for changes and auto-reload")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
 
 	return &parsedFlags{
-		configPath: *configPath,
-		version:    *version,
-		cpuProfile: *cpuProfile,
-		memProfile: *memProfile,
-		convert:    *convert,
+		configPath:  *configPath,
+		version:     *version,
+		cpuProfile:  *cpuProfile,
+		memProfile:  *memProfile,
+		convert:     *convert,
+		watchConfig: *watchConfig,
 	}, nil
 }
 
@@ -124,11 +127,16 @@ func runWithArgs(args []string, stdout, stderr io.Writer) int {
 	ctx := context.Background()
 	platformWrapper := initializePlatform(ctx)
 
-	// Create options with platform support
-	opts := &conky.Options{}
+	// Create options with platform support and config watching
+	opts := &conky.Options{
+		WatchConfig: flags.watchConfig,
+	}
 	if platformWrapper != nil {
 		opts.Platform = platformWrapper
 		fmt.Fprintln(stdout, "Cross-platform monitoring enabled")
+	}
+	if flags.watchConfig {
+		fmt.Fprintln(stdout, "Configuration file watching enabled")
 	}
 
 	// Create and start using public API
@@ -161,9 +169,11 @@ func runWithArgs(args []string, stdout, stderr io.Writer) int {
 	for sig := range sigCh {
 		switch sig {
 		case syscall.SIGHUP:
+			// Use in-place reload (ReloadConfig) for smoother experience
+			// This keeps the rendering loop running while updating config
 			fmt.Fprintln(stdout, "Received SIGHUP, reloading configuration...")
-			if err := c.Restart(); err != nil {
-				fmt.Fprintf(stderr, "Restart failed: %v\n", err)
+			if err := c.ReloadConfig(); err != nil {
+				fmt.Fprintf(stderr, "Reload failed: %v\n", err)
 			}
 		default:
 			fmt.Fprintln(stdout, "Shutting down...")
