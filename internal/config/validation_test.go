@@ -756,3 +756,157 @@ func TestValidatorARGBSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestValidatorGradientValidation(t *testing.T) {
+	tests := []struct {
+		name         string
+		gradient     GradientConfig
+		expectErrors int
+		expectWarns  int
+		warnContains string
+	}{
+		{
+			name: "valid gradient with different colors",
+			gradient: GradientConfig{
+				StartColor: DefaultTextColor, // White
+				EndColor:   DefaultGrey,      // Grey
+				Direction:  GradientDirectionVertical,
+			},
+			expectErrors: 0,
+			expectWarns:  0,
+		},
+		{
+			name: "both colors unset - invisible gradient",
+			gradient: GradientConfig{
+				StartColor: TransparentColor,
+				EndColor:   TransparentColor,
+				Direction:  GradientDirectionVertical,
+			},
+			expectErrors: 0,
+			expectWarns:  1,
+			warnContains: "both start_color and end_color are unset",
+		},
+		{
+			name: "only start color unset",
+			gradient: GradientConfig{
+				StartColor: TransparentColor,
+				EndColor:   DefaultTextColor,
+				Direction:  GradientDirectionVertical,
+			},
+			expectErrors: 0,
+			expectWarns:  1,
+			warnContains: "start_color is unset",
+		},
+		{
+			name: "only end color unset",
+			gradient: GradientConfig{
+				StartColor: DefaultTextColor,
+				EndColor:   TransparentColor,
+				Direction:  GradientDirectionVertical,
+			},
+			expectErrors: 0,
+			expectWarns:  1,
+			warnContains: "end_color is unset",
+		},
+		{
+			name: "identical colors - effectively solid",
+			gradient: GradientConfig{
+				StartColor: DefaultTextColor,
+				EndColor:   DefaultTextColor,
+				Direction:  GradientDirectionHorizontal,
+			},
+			expectErrors: 0,
+			expectWarns:  1,
+			warnContains: "start_color and end_color are identical",
+		},
+		{
+			name: "unknown gradient direction",
+			gradient: GradientConfig{
+				StartColor: DefaultTextColor,
+				EndColor:   DefaultGrey,
+				Direction:  GradientDirection(99),
+			},
+			expectErrors: 1,
+			expectWarns:  0,
+		},
+		{
+			name: "valid radial gradient",
+			gradient: GradientConfig{
+				StartColor: DefaultTextColor,
+				EndColor:   DefaultBackgroundColour,
+				Direction:  GradientDirectionRadial,
+			},
+			expectErrors: 0,
+			expectWarns:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			result := &ValidationResult{}
+			v.validateGradient(&tt.gradient, result)
+
+			if len(result.Errors) != tt.expectErrors {
+				t.Errorf("expected %d errors, got %d: %v", tt.expectErrors, len(result.Errors), result.Errors)
+			}
+			if len(result.Warnings) != tt.expectWarns {
+				t.Errorf("expected %d warnings, got %d: %v", tt.expectWarns, len(result.Warnings), result.Warnings)
+			}
+
+			// Check warning contains expected text
+			if tt.warnContains != "" && len(result.Warnings) > 0 {
+				found := false
+				for _, w := range result.Warnings {
+					if strings.Contains(w.Message, tt.warnContains) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected warning to contain %q, got %v", tt.warnContains, result.Warnings)
+				}
+			}
+		})
+	}
+}
+
+func TestValidatorGradientModeTriggersValidation(t *testing.T) {
+	// Test that gradient validation is only triggered when background mode is gradient
+	tests := []struct {
+		name           string
+		backgroundMode BackgroundMode
+		expectWarns    int
+	}{
+		{
+			name:           "solid mode - no gradient validation",
+			backgroundMode: BackgroundModeSolid,
+			expectWarns:    0,
+		},
+		{
+			name:           "transparent mode - no gradient validation",
+			backgroundMode: BackgroundModeTransparent,
+			expectWarns:    0,
+		},
+		{
+			name:           "gradient mode - triggers validation with unset colors",
+			backgroundMode: BackgroundModeGradient,
+			expectWarns:    1, // Both colors are zero/unset in default config
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Window.BackgroundMode = tt.backgroundMode
+			// Default config has zero/unset gradient colors
+
+			v := NewValidator()
+			result := v.Validate(&cfg)
+
+			if len(result.Warnings) != tt.expectWarns {
+				t.Errorf("expected %d warnings, got %d: %v", tt.expectWarns, len(result.Warnings), result.Warnings)
+			}
+		})
+	}
+}

@@ -1,10 +1,10 @@
 # Conky-Go
 
-A 100% compatible reimplementation of [Conky](https://github.com/brndnmtthws/conky) system monitor in Go, built with modern architecture and cross-platform support.
+A highly compatible (~95%) reimplementation of [Conky](https://github.com/brndnmtthws/conky) system monitor in Go, built with modern architecture and cross-platform support.
 
 ## Why Conky-Go?
 
-- **Perfect Compatibility**: Run your existing `.conkyrc` and Lua configurations without modification
+- **High Compatibility**: Run most existing `.conkyrc` and Lua configurations with minimal or no modification
 - **Modern Architecture**: Built with Go for better memory safety, concurrency, and maintainability  
 - **Cross-Platform**: Native support for Linux, Windows, and macOS, plus remote monitoring via SSH
 - **Performance**: Leverages Ebiten's optimized 2D rendering pipeline for smooth 60fps updates
@@ -198,6 +198,27 @@ conky-go/
 - [Transparency Guide](docs/transparency.md) - Window transparency, compositors, and window hints
 - [SSH Remote Monitoring](docs/ssh-remote-monitoring.md) - Monitor remote systems without agent installation
 - [API Reference](docs/api.md) - Go packages and Lua API documentation
+
+## Known Limitations
+
+While Conky-Go is highly compatible with original Conky configurations, some features are not yet implemented or have limitations:
+
+### Not Yet Implemented
+- **MPD Integration**: `${mpd_*}` variables return stub values (always "N/A" or false)
+- **APCUPSD Integration**: UPS monitoring via `${apcupsd_*}` variables not implemented
+- **Stock Quotes**: `${stockquote}` returns "N/A"
+- **Darwin Disk I/O**: macOS disk read/write statistics not yet implemented
+
+### Ebiten Limitations
+- **Window Hints**: `below` and `sticky` hints are not supported by Ebiten and will emit warnings
+- **Skip Taskbar/Pager**: These hints are parsed but have no effect
+
+### Platform Support
+- **Linux**: Full support via `/proc` filesystem
+- **macOS/Windows**: Platform abstraction exists but requires integration wrapper
+- **Android**: Experimental, many features return stub values
+
+See the [Migration Guide](docs/migration.md) for detailed compatibility information.
 
 ## Contributing
 

@@ -148,6 +148,45 @@ func (v *Validator) validateWindow(wc *WindowConfig, result *ValidationResult) {
 		result.AddWarning("window.argb_value",
 			"ARGB value set but own_window_argb_visual is not enabled")
 	}
+
+	// Validate gradient configuration when gradient mode is enabled
+	if wc.BackgroundMode == BackgroundModeGradient {
+		v.validateGradient(&wc.Gradient, result)
+	}
+}
+
+// validateGradient validates GradientConfig settings for defense in depth.
+// Colors are already parsed during config loading, but we check for potential issues.
+func (v *Validator) validateGradient(gc *GradientConfig, result *ValidationResult) {
+	// Check if start color is essentially invisible (all zeros including alpha)
+	startIsZero := gc.StartColor.R == 0 && gc.StartColor.G == 0 &&
+		gc.StartColor.B == 0 && gc.StartColor.A == 0
+	endIsZero := gc.EndColor.R == 0 && gc.EndColor.G == 0 &&
+		gc.EndColor.B == 0 && gc.EndColor.A == 0
+
+	// Warn if both colors are fully transparent/unset
+	if startIsZero && endIsZero {
+		result.AddWarning("window.gradient",
+			"both start_color and end_color are unset or fully transparent; gradient will be invisible")
+	} else if startIsZero {
+		result.AddWarning("window.gradient.start_color",
+			"start_color is unset or fully transparent")
+	} else if endIsZero {
+		result.AddWarning("window.gradient.end_color",
+			"end_color is unset or fully transparent")
+	}
+
+	// Warn if gradient is effectively solid (same start and end color)
+	if gc.StartColor == gc.EndColor && !startIsZero {
+		result.AddWarning("window.gradient",
+			"start_color and end_color are identical; consider using solid background mode instead")
+	}
+
+	// Validate direction is known
+	if gc.Direction > GradientDirectionRadial {
+		result.AddError("window.gradient.direction",
+			fmt.Sprintf("unknown gradient direction: %d", gc.Direction))
+	}
 }
 
 // validateDisplay validates DisplayConfig settings.
