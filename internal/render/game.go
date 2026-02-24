@@ -54,8 +54,8 @@ type Game struct {
 	mu                 sync.RWMutex
 	running            bool
 	ctx                context.Context
-	imageCache         *ImageCache        // Cache for loaded images
-	backgroundRenderer BackgroundRenderer // Handles background drawing
+	imageCache         *ImageCache           // Cache for loaded images
+	backgroundRenderer BackgroundRenderer    // Handles background drawing
 	graphHistories     map[string]*LineGraph // Historical data for graph widgets
 }
 

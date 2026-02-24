@@ -443,12 +443,12 @@ func TestWidgetMarkerEncodeWithID(t *testing.T) {
 		ID:     "mem",
 	}
 	encoded := marker.Encode()
-	
+
 	// Should contain all parts including ID
 	if !containsString(encoded, "mem") {
 		t.Errorf("Encode() = %q, missing ID 'mem'", encoded)
 	}
-	
+
 	// Decode and verify round-trip
 	decoded := DecodeWidgetMarker(encoded)
 	if decoded == nil {

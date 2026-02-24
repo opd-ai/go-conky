@@ -2239,7 +2239,7 @@ func (api *ConkyAPI) resolveLoadGraph(args []string) string {
 // resolveCPUGraph returns a graphical representation of CPU usage with historical tracking.
 // Usage: ${cpugraph [height] [width]}
 func (api *ConkyAPI) resolveCPUGraph(args []string) string {
-	width := float64(100)  // Default width in pixels
+	width := float64(100) // Default width in pixels
 	height := float64(20) // Default height in pixels
 
 	if len(args) > 0 {
@@ -2260,7 +2260,7 @@ func (api *ConkyAPI) resolveCPUGraph(args []string) string {
 // resolveMemGraph returns a graphical representation of memory usage with historical tracking.
 // Usage: ${memgraph [height] [width]}
 func (api *ConkyAPI) resolveMemGraph(args []string) string {
-	width := float64(100)  // Default width in pixels
+	width := float64(100) // Default width in pixels
 	height := float64(20) // Default height in pixels
 
 	if len(args) > 0 {
@@ -2286,7 +2286,7 @@ func (api *ConkyAPI) resolveMemGraph(args []string) string {
 // Usage: ${downspeedgraph [interface] [height] [width]} or ${upspeedgraph [interface] [height] [width]}
 func (api *ConkyAPI) resolveNetworkSpeedGraph(args []string, isDown bool) string {
 	iface := ""
-	width := float64(100)  // Default width in pixels
+	width := float64(100) // Default width in pixels
 	height := float64(20) // Default height in pixels
 
 	// Parse arguments: first is interface, then height, then width
@@ -2305,7 +2305,7 @@ func (api *ConkyAPI) resolveNetworkSpeedGraph(args []string, isDown bool) string
 	}
 
 	netInfo := api.sysProvider.Network()
-	
+
 	// Find the requested interface or use default
 	for _, netIface := range netInfo.Interfaces {
 		if iface == "" || netIface.Name == iface {
@@ -2328,7 +2328,7 @@ func (api *ConkyAPI) resolveNetworkSpeedGraph(args []string, isDown bool) string
 			return render.EncodeGraphMarkerWithID(speedPerc, width, height, graphID)
 		}
 	}
-	
+
 	// No matching interface found
 	graphID := "net_unknown_down"
 	if !isDown {
