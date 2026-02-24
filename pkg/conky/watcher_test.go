@@ -14,7 +14,7 @@ func TestConfigWatcher_DetectsFileChange(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "test.conf")
 
 	// Create initial config file
-	if err := os.WriteFile(configPath, []byte("initial content"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("initial content"), 0o644); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
@@ -43,7 +43,7 @@ func TestConfigWatcher_DetectsFileChange(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Modify the file
-	if err := os.WriteFile(configPath, []byte("modified content"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("modified content"), 0o644); err != nil {
 		t.Fatalf("failed to modify config file: %v", err)
 	}
 
@@ -63,7 +63,7 @@ func TestConfigWatcher_DebounceMultipleWrites(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.conf")
 
-	if err := os.WriteFile(configPath, []byte("initial"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("initial"), 0o644); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
@@ -89,7 +89,7 @@ func TestConfigWatcher_DebounceMultipleWrites(t *testing.T) {
 
 	// Multiple rapid writes should be debounced to single reload
 	for i := 0; i < 5; i++ {
-		if err := os.WriteFile(configPath, []byte("content "+string(rune('0'+i))), 0644); err != nil {
+		if err := os.WriteFile(configPath, []byte("content "+string(rune('0'+i))), 0o644); err != nil {
 			t.Fatalf("failed to modify config file: %v", err)
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -108,7 +108,7 @@ func TestConfigWatcher_StopPreventsReload(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.conf")
 
-	if err := os.WriteFile(configPath, []byte("initial"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("initial"), 0o644); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
@@ -134,7 +134,7 @@ func TestConfigWatcher_StopPreventsReload(t *testing.T) {
 	watcher.Stop()
 
 	// Modify the file after stop
-	if err := os.WriteFile(configPath, []byte("modified"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("modified"), 0o644); err != nil {
 		t.Fatalf("failed to modify config file: %v", err)
 	}
 
@@ -152,7 +152,7 @@ func TestConfigWatcher_HandlesAtomicSave(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.conf")
 
-	if err := os.WriteFile(configPath, []byte("initial"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("initial"), 0o644); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestConfigWatcher_HandlesAtomicSave(t *testing.T) {
 
 	// Simulate atomic save: write to temp file, then rename
 	tempPath := configPath + ".tmp"
-	if err := os.WriteFile(tempPath, []byte("atomic save content"), 0644); err != nil {
+	if err := os.WriteFile(tempPath, []byte("atomic save content"), 0o644); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
 	if err := os.Rename(tempPath, configPath); err != nil {
@@ -198,7 +198,7 @@ func TestConfigWatcher_IgnoresOtherFiles(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "test.conf")
 	otherPath := filepath.Join(tmpDir, "other.txt")
 
-	if err := os.WriteFile(configPath, []byte("config"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("config"), 0o644); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
@@ -223,7 +223,7 @@ func TestConfigWatcher_IgnoresOtherFiles(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Create and modify a different file in the same directory
-	if err := os.WriteFile(otherPath, []byte("other content"), 0644); err != nil {
+	if err := os.WriteFile(otherPath, []byte("other content"), 0o644); err != nil {
 		t.Fatalf("failed to create other file: %v", err)
 	}
 
@@ -239,7 +239,7 @@ func TestConfigWatcher_ErrorCallback(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.conf")
 
-	if err := os.WriteFile(configPath, []byte("config"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("config"), 0o644); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
@@ -266,7 +266,7 @@ func TestConfigWatcher_ErrorCallback(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Trigger a reload that will fail
-	if err := os.WriteFile(configPath, []byte("modified"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("modified"), 0o644); err != nil {
 		t.Fatalf("failed to modify config file: %v", err)
 	}
 

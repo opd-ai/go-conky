@@ -30,10 +30,10 @@ type conkyImpl struct {
 
 	// Components
 	monitor       *monitor.SystemMonitor
-	gameRunner    *gameRunner      // For hot-reload support
-	metrics       *Metrics         // Metrics collector
-	errorTracker  *ErrorTracker    // Error tracking and alerting
-	configWatcher *configWatcher   // File watcher for hot-reload
+	gameRunner    *gameRunner    // For hot-reload support
+	metrics       *Metrics       // Metrics collector
+	errorTracker  *ErrorTracker  // Error tracking and alerting
+	configWatcher *configWatcher // File watcher for hot-reload
 
 	// State
 	running     atomic.Bool
