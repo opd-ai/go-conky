@@ -271,3 +271,9 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Original [Conky](https://github.com/brndnmtthws/conky) project and maintainers
 - [Ebiten](https://github.com/hajimehoshi/ebiten) game engine by Hajime Hoshi
 - [Golua](https://github.com/arnodel/golua) pure Go Lua implementation
+
+Donate Monero(The only good cryptocurrency) to support development
+==================================================================
+
+ - `monero:43H3Uqnc9rfEsJjUXZYmam45MbtWmREFSANAWY5hijY4aht8cqYaT2BCNhfBhua5XwNdx9Tb6BEdt4tjUHJDwNW5H7mTiwe`
+
